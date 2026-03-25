@@ -9,6 +9,7 @@ export default function Layout({ children, user, onLogout }) {
   const [leaveMenuOpen, setLeaveMenuOpen] = useState(location.pathname.includes('leave'));
   const [workingHoursMenuOpen, setWorkingHoursMenuOpen] = useState(location.pathname.includes('working-hours') || location.pathname.includes('weekend-approvals'));
   const [settingsMenuOpen, setSettingsMenuOpen] = useState(location.pathname.includes('admin-management') || location.pathname.includes('email-settings') || location.pathname.includes('departments') || location.pathname.includes('holidays') || location.pathname.includes('banks'));
+  const [salaryMenuOpen, setSalaryMenuOpen] = useState(location.pathname.includes('salary') || location.pathname.includes('late-marks'));
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
 
   const getMenuItems = () => {
@@ -33,8 +34,13 @@ export default function Layout({ children, user, onLogout }) {
           ]
         },
         { path: '/admin/attendance', label: 'Attendance', icon: CalendarCheck },
-        { path: '/admin/salary', label: 'Salary', icon: IndianRupee },
-        { path: '/admin/late-marks', label: 'Late Marks', icon: AlertTriangle },
+        {
+          type: 'submenu', id: 'salary', label: 'Salary', icon: IndianRupee,
+          children: [
+            { path: '/admin/salary', label: 'Salary Overview' },
+            { path: '/admin/late-marks', label: 'Late Marks' },
+          ]
+        },
         {
           type: 'submenu', id: 'settings', label: 'Settings', icon: Settings,
           children: [
@@ -85,12 +91,14 @@ export default function Layout({ children, user, onLogout }) {
     if (item.id === 'leave') return leaveMenuOpen;
     if (item.id === 'working-hours') return workingHoursMenuOpen;
     if (item.id === 'settings') return settingsMenuOpen;
+    if (item.id === 'salary') return salaryMenuOpen;
     return false;
   };
   const toggleSubMenu = (item) => {
     if (item.id === 'leave') setLeaveMenuOpen(!leaveMenuOpen);
     if (item.id === 'working-hours') setWorkingHoursMenuOpen(!workingHoursMenuOpen);
     if (item.id === 'settings') setSettingsMenuOpen(!settingsMenuOpen);
+    if (item.id === 'salary') setSalaryMenuOpen(!salaryMenuOpen);
   };
 
   const NavLink = ({ item, onItemClick }) => {
