@@ -338,7 +338,7 @@ export default function Salary({ user, onLogout }) {
                               </td>
                               <td className="py-2 px-2 text-right text-xs">
                                 <div className={(emp.late_coming_amount || 0) > 0 ? 'text-orange-600' : 'text-slate-400'}>{(emp.late_coming_amount || 0) > 0 ? `-${fmt(emp.late_coming_amount)}` : '0'}</div>
-                                {(emp.late_coming_count || 0) > 0 && <div className="text-[10px] text-orange-400">{emp.late_coming_count}×{emp.late_coming_deduction_days > 0 ? ` (${emp.late_coming_deduction_days}d)` : ' free'}</div>}
+                                {(emp.late_coming_count || 0) > 0 && <div className="text-[10px] text-orange-400">{emp.late_coming_count} late{emp.late_coming_deduction_days > 0 ? ` (-${emp.late_coming_deduction_days}d)` : ''}</div>}
                               </td>
                               <td className="py-2 px-2 text-right text-xs">
                                 <div className={emp.ot_amount > 0 ? 'text-green-600' : 'text-slate-400'}>{emp.ot_amount > 0 ? `+${fmt(emp.ot_amount)}` : '0'}</div>
