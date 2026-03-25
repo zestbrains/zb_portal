@@ -288,7 +288,7 @@ export default function LateMarks({ user, onLogout }) {
                         {emp.late_projects.map((proj, i) => (
                           <div key={i} className="bg-red-100 border border-red-200 rounded-lg px-3 py-1.5 text-sm">
                             <p className="font-medium text-red-800">{proj.project_name}</p>
-                            <p className="text-xs text-red-600">{proj.project_code}</p>
+                            <p className="text-xs text-red-600">{proj.client_name || 'No Client'}</p>
                           </div>
                         ))}
                       </div>
