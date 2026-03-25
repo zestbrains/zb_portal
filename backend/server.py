@@ -4560,58 +4560,126 @@ async def save_salary_adjustment(
     return {"message": "Adjustment saved"}
 
 
-# Late Marks - Get employees with late project assignments
+# Late Marks - Monthly late mark management with salary hold status
 @api_router.get("/late-marks")
-async def get_late_marks(user: dict = Depends(require_role(["admin", "hr"]))):
-    """Get all employees assigned to projects with 'late' status"""
+async def get_late_marks(year: int, month: int, user: dict = Depends(require_role(["admin", "hr"]))):
+    """Get all employees with their late mark status for a specific month"""
+    
     # Find all projects with status 'late'
     late_projects = await db.projects.find(
         {"status": "late"},
         {"_id": 0, "id": 1, "name": 1, "project_code": 1, "assigned_employees": 1, "client_username": 1, "start_date": 1, "end_date": 1}
     ).to_list(None)
     
-    # Get all employees for name lookup
-    employees = await db.employees.find({}, {"_id": 0, "employee_id": 1, "name": 1, "email": 1, "department_ids": 1}).to_list(None)
-    emp_map = {e["employee_id"]: e for e in employees}
+    # Build map of employee_id -> list of late projects
+    late_project_map = {}
+    for project in late_projects:
+        assigned_emps = project.get("assigned_employees", [])
+        for emp_id in assigned_emps:
+            if emp_id not in late_project_map:
+                late_project_map[emp_id] = []
+            late_project_map[emp_id].append({
+                "project_id": project.get("id"),
+                "project_name": project.get("name"),
+                "project_code": project.get("project_code"),
+                "client_name": project.get("client_username", ""),
+                "start_date": project.get("start_date", ""),
+                "end_date": project.get("end_date", "")
+            })
+    
+    # Get all active employees
+    employees = await db.employees.find(
+        {"status": "active"},
+        {"_id": 0, "employee_id": 1, "name": 1, "email": 1, "department_ids": 1}
+    ).sort("name", 1).to_list(None)
     
     # Get departments for lookup
     departments = await db.departments.find({}, {"_id": 0, "id": 1, "name": 1}).to_list(None)
     dept_map = {d["id"]: d["name"] for d in departments}
     
-    late_marks = []
-    for project in late_projects:
-        assigned_emps = project.get("assigned_employees", [])
-        for emp_id in assigned_emps:
-            emp = emp_map.get(emp_id)
-            if emp:
-                # Get department names
-                dept_names = [dept_map.get(d, "Unknown") for d in emp.get("department_ids", [])]
-                late_marks.append({
-                    "employee_id": emp_id,
-                    "employee_name": emp.get("name", "Unknown"),
-                    "employee_email": emp.get("email", ""),
-                    "departments": dept_names,
-                    "project_id": project.get("id"),
-                    "project_name": project.get("name"),
-                    "project_code": project.get("project_code"),
-                    "client_name": project.get("client_username", ""),
-                    "start_date": project.get("start_date", ""),
-                    "end_date": project.get("end_date", "")
-                })
+    # Get existing salary hold statuses for this month
+    month_key = f"{year}-{month:02d}"
+    salary_holds = await db.late_mark_salary_holds.find(
+        {"month_key": month_key},
+        {"_id": 0}
+    ).to_list(None)
+    salary_hold_map = {sh["employee_id"]: sh["salary_status"] for sh in salary_holds}
     
-    # Sort by employee name
-    late_marks.sort(key=lambda x: x["employee_name"].lower())
+    # Build employee list
+    employee_list = []
+    for emp in employees:
+        emp_id = emp["employee_id"]
+        has_late_mark = emp_id in late_project_map
+        late_projects_list = late_project_map.get(emp_id, [])
+        
+        # Get department names
+        dept_names = [dept_map.get(d, "Unknown") for d in emp.get("department_ids", [])]
+        
+        # Determine salary status
+        # If employee has late mark and no saved status, default to "hold"
+        # If no late mark and no saved status, default to "active"
+        if emp_id in salary_hold_map:
+            salary_status = salary_hold_map[emp_id]
+        else:
+            salary_status = "hold" if has_late_mark else "active"
+        
+        employee_list.append({
+            "employee_id": emp_id,
+            "employee_name": emp.get("name", "Unknown"),
+            "employee_email": emp.get("email", ""),
+            "departments": dept_names,
+            "has_late_mark": has_late_mark,
+            "late_projects": late_projects_list,
+            "late_project_count": len(late_projects_list),
+            "salary_status": salary_status
+        })
+    
+    # Sort: late mark employees first, then alphabetically
+    employee_list.sort(key=lambda x: (not x["has_late_mark"], x["employee_name"].lower()))
     
     # Summary stats
-    unique_employees = len(set(lm["employee_id"] for lm in late_marks))
-    unique_projects = len(late_projects)
+    employees_with_late_marks = sum(1 for e in employee_list if e["has_late_mark"])
+    employees_on_hold = sum(1 for e in employee_list if e["salary_status"] == "hold")
     
     return {
-        "late_marks": late_marks,
-        "total_late_marks": len(late_marks),
-        "unique_employees": unique_employees,
-        "unique_projects": unique_projects
+        "year": year,
+        "month": month,
+        "employees": employee_list,
+        "total_employees": len(employee_list),
+        "employees_with_late_marks": employees_with_late_marks,
+        "employees_on_hold": employees_on_hold,
+        "unique_late_projects": len(late_projects)
     }
+
+
+# Update salary hold status for an employee
+@api_router.put("/late-marks/salary-status")
+async def update_salary_status(
+    year: int,
+    month: int,
+    employee_id: str,
+    salary_status: str,
+    user: dict = Depends(require_role(["admin"]))
+):
+    """Update salary hold status for an employee for a specific month"""
+    if salary_status not in ["hold", "active"]:
+        raise HTTPException(status_code=400, detail="Status must be 'hold' or 'active'")
+    
+    month_key = f"{year}-{month:02d}"
+    
+    await db.late_mark_salary_holds.update_one(
+        {"month_key": month_key, "employee_id": employee_id},
+        {"$set": {
+            "month_key": month_key,
+            "employee_id": employee_id,
+            "salary_status": salary_status,
+            "updated_at": get_ist_now_iso(),
+            "updated_by": user.get("username", "admin")
+        }},
+        upsert=True
+    )
+    
+    return {"message": f"Salary status updated to {salary_status}"}
 
 
 # Employee Attendance - View own attendance only

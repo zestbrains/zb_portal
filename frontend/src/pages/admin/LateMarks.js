@@ -2,24 +2,54 @@ import { useState, useEffect } from 'react';
 import Layout from '../../components/layout/Layout';
 import { api } from '../../utils/api';
 import { Input } from '../../components/ui/input';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../../components/ui/select';
 import { toast } from 'sonner';
-import { AlertTriangle, Search, Users, FolderKanban, Download } from 'lucide-react';
+import { AlertTriangle, Search, Users, FolderKanban, Download, CheckCircle, PauseCircle } from 'lucide-react';
 import { Badge } from '../../components/ui/badge';
 import { Button } from '../../components/ui/button';
+import { Switch } from '../../components/ui/switch';
+
+const MONTHS = [
+  { value: '1', label: 'January' }, { value: '2', label: 'February' },
+  { value: '3', label: 'March' }, { value: '4', label: 'April' },
+  { value: '5', label: 'May' }, { value: '6', label: 'June' },
+  { value: '7', label: 'July' }, { value: '8', label: 'August' },
+  { value: '9', label: 'September' }, { value: '10', label: 'October' },
+  { value: '11', label: 'November' }, { value: '12', label: 'December' },
+];
+
+const START_YEAR = 2026;
+const START_MONTH = 3;
+
+function getAvailableMonths(year) {
+  if (parseInt(year) === START_YEAR) return MONTHS.filter(m => parseInt(m.value) >= START_MONTH);
+  return MONTHS;
+}
+
+function getAvailableYears() {
+  const currentYear = new Date().getFullYear();
+  const years = [];
+  for (let y = START_YEAR; y <= currentYear + 1; y++) years.push(y.toString());
+  return years;
+}
 
 export default function LateMarks({ user, onLogout }) {
+  const now = new Date();
+  const [month, setMonth] = useState(now.getMonth() + 1 < START_MONTH && now.getFullYear() === START_YEAR ? START_MONTH.toString() : (now.getMonth() + 1).toString());
+  const [year, setYear] = useState(now.getFullYear().toString());
   const [data, setData] = useState(null);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState('');
+  const [updating, setUpdating] = useState({});
 
   useEffect(() => {
     fetchLateMarks();
-  }, []);
+  }, [month, year]);
 
   const fetchLateMarks = async () => {
     setLoading(true);
     try {
-      const res = await api.get('/late-marks');
+      const res = await api.get(`/late-marks?year=${year}&month=${month}`);
       setData(res.data);
     } catch (error) {
       toast.error('Error fetching late marks data');
@@ -29,53 +59,53 @@ export default function LateMarks({ user, onLogout }) {
     }
   };
 
-  const filteredData = data?.late_marks?.filter(item => {
+  const handleSalaryStatusChange = async (employeeId, newStatus) => {
+    setUpdating(prev => ({ ...prev, [employeeId]: true }));
+    try {
+      await api.put(`/late-marks/salary-status?year=${year}&month=${month}&employee_id=${employeeId}&salary_status=${newStatus}`);
+      // Update local state
+      setData(prev => ({
+        ...prev,
+        employees: prev.employees.map(emp => 
+          emp.employee_id === employeeId ? { ...emp, salary_status: newStatus } : emp
+        ),
+        employees_on_hold: prev.employees.filter(e => 
+          e.employee_id === employeeId ? newStatus === 'hold' : e.salary_status === 'hold'
+        ).length
+      }));
+      toast.success(`Salary status updated to ${newStatus}`);
+    } catch (error) {
+      toast.error('Error updating salary status');
+    } finally {
+      setUpdating(prev => ({ ...prev, [employeeId]: false }));
+    }
+  };
+
+  const filteredEmployees = data?.employees?.filter(emp => {
     const searchLower = search.toLowerCase();
     return (
-      item.employee_name.toLowerCase().includes(searchLower) ||
-      item.employee_id.toLowerCase().includes(searchLower) ||
-      item.project_name.toLowerCase().includes(searchLower) ||
-      item.project_code.toLowerCase().includes(searchLower) ||
-      item.client_name?.toLowerCase().includes(searchLower)
+      emp.employee_name.toLowerCase().includes(searchLower) ||
+      emp.employee_id.toLowerCase().includes(searchLower) ||
+      emp.departments?.some(d => d.toLowerCase().includes(searchLower)) ||
+      emp.late_projects?.some(p => 
+        p.project_name.toLowerCase().includes(searchLower) ||
+        p.project_code.toLowerCase().includes(searchLower)
+      )
     );
   }) || [];
 
-  // Group by employee for better visualization
-  const groupedByEmployee = filteredData.reduce((acc, item) => {
-    if (!acc[item.employee_id]) {
-      acc[item.employee_id] = {
-        employee_id: item.employee_id,
-        employee_name: item.employee_name,
-        employee_email: item.employee_email,
-        departments: item.departments,
-        projects: []
-      };
-    }
-    acc[item.employee_id].projects.push({
-      project_id: item.project_id,
-      project_name: item.project_name,
-      project_code: item.project_code,
-      client_name: item.client_name,
-      start_date: item.start_date,
-      end_date: item.end_date
-    });
-    return acc;
-  }, {});
-
   const exportToCSV = () => {
-    if (!filteredData.length) return;
+    if (!filteredEmployees.length) return;
     
-    const headers = ['Employee ID', 'Employee Name', 'Email', 'Departments', 'Project Code', 'Project Name', 'Client', 'Start Date', 'End Date'];
-    const rows = filteredData.map(item => [
-      item.employee_id,
-      item.employee_name,
-      item.employee_email,
-      item.departments?.join('; ') || '',
-      item.project_code,
-      item.project_name,
-      item.client_name || '',
-      item.start_date || '',
-      item.end_date || ''
+    const headers = ['Employee ID', 'Employee Name', 'Email', 'Departments', 'Has Late Mark', 'Late Projects', 'Salary Status'];
+    const rows = filteredEmployees.map(emp => [
+      emp.employee_id,
+      emp.employee_name,
+      emp.employee_email,
+      emp.departments?.join('; ') || '',
+      emp.has_late_mark ? 'Yes' : 'No',
+      emp.late_projects?.map(p => p.project_name).join('; ') || 'None',
+      emp.salary_status?.toUpperCase() || ''
     ]);
     
     const csvContent = [headers, ...rows].map(row => row.map(cell => `"${cell}"`).join(',')).join('\n');
@@ -83,9 +113,19 @@ export default function LateMarks({ user, onLogout }) {
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
     a.href = url;
-    a.download = `late_marks_${new Date().toISOString().split('T')[0]}.csv`;
+    a.download = `late_marks_${year}_${month}.csv`;
     a.click();
     URL.revokeObjectURL(url);
+  };
+
+  const availableMonths = getAvailableMonths(year);
+
+  // Handle year change - adjust month if needed
+  const handleYearChange = (newYear) => {
+    setYear(newYear);
+    if (parseInt(newYear) === START_YEAR && parseInt(month) < START_MONTH) {
+      setMonth(START_MONTH.toString());
+    }
   };
 
   if (loading) {
@@ -108,36 +148,77 @@ export default function LateMarks({ user, onLogout }) {
               <AlertTriangle className="text-red-500" />
               Late Marks
             </h1>
-            <p className="text-sm text-slate-500 mt-1">Employees assigned to projects marked as late</p>
+            <p className="text-sm text-slate-500 mt-1">Monthly late mark management with salary hold status</p>
           </div>
-          <Button onClick={exportToCSV} variant="outline" className="flex items-center gap-2" disabled={!filteredData.length}>
+          <Button onClick={exportToCSV} variant="outline" className="flex items-center gap-2" disabled={!filteredEmployees.length}>
             <Download size={16} />
             Export CSV
           </Button>
         </div>
 
+        {/* Month/Year Filters */}
+        <div className="flex flex-wrap items-center gap-4 bg-white rounded-xl border border-slate-200 p-4 shadow-sm">
+          <div className="flex items-center gap-2">
+            <span className="text-sm font-medium text-slate-600">Month:</span>
+            <Select value={month} onValueChange={setMonth}>
+              <SelectTrigger className="w-[140px]">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                {availableMonths.map(m => (
+                  <SelectItem key={m.value} value={m.value}>{m.label}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+          <div className="flex items-center gap-2">
+            <span className="text-sm font-medium text-slate-600">Year:</span>
+            <Select value={year} onValueChange={handleYearChange}>
+              <SelectTrigger className="w-[100px]">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                {getAvailableYears().map(y => (
+                  <SelectItem key={y} value={y}>{y}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+        </div>
+
         {/* Summary Cards */}
         {data && (
-          <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+          <div className="grid grid-cols-1 sm:grid-cols-4 gap-4">
+            <div className="bg-white rounded-xl border border-slate-200 p-4 shadow-sm">
+              <div className="flex items-center gap-3">
+                <div className="p-2 bg-blue-100 rounded-lg">
+                  <Users className="text-blue-600" size={20} />
+                </div>
+                <div>
+                  <p className="text-xs text-slate-500 uppercase tracking-wider">Total Employees</p>
+                  <p className="text-2xl font-bold text-blue-600">{data.total_employees}</p>
+                </div>
+              </div>
+            </div>
             <div className="bg-white rounded-xl border border-slate-200 p-4 shadow-sm">
               <div className="flex items-center gap-3">
                 <div className="p-2 bg-red-100 rounded-lg">
                   <AlertTriangle className="text-red-600" size={20} />
                 </div>
                 <div>
-                  <p className="text-xs text-slate-500 uppercase tracking-wider">Total Late Marks</p>
-                  <p className="text-2xl font-bold text-red-600">{data.total_late_marks}</p>
+                  <p className="text-xs text-slate-500 uppercase tracking-wider">With Late Marks</p>
+                  <p className="text-2xl font-bold text-red-600">{data.employees_with_late_marks}</p>
                 </div>
               </div>
             </div>
             <div className="bg-white rounded-xl border border-slate-200 p-4 shadow-sm">
               <div className="flex items-center gap-3">
                 <div className="p-2 bg-orange-100 rounded-lg">
-                  <Users className="text-orange-600" size={20} />
+                  <PauseCircle className="text-orange-600" size={20} />
                 </div>
                 <div>
-                  <p className="text-xs text-slate-500 uppercase tracking-wider">Employees Affected</p>
-                  <p className="text-2xl font-bold text-orange-600">{data.unique_employees}</p>
+                  <p className="text-xs text-slate-500 uppercase tracking-wider">Salary On Hold</p>
+                  <p className="text-2xl font-bold text-orange-600">{data.employees_on_hold}</p>
                 </div>
               </div>
             </div>
@@ -148,7 +229,7 @@ export default function LateMarks({ user, onLogout }) {
                 </div>
                 <div>
                   <p className="text-xs text-slate-500 uppercase tracking-wider">Late Projects</p>
-                  <p className="text-2xl font-bold text-yellow-600">{data.unique_projects}</p>
+                  <p className="text-2xl font-bold text-yellow-600">{data.unique_late_projects}</p>
                 </div>
               </div>
             </div>
@@ -159,107 +240,91 @@ export default function LateMarks({ user, onLogout }) {
         <div className="relative max-w-md">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" size={18} />
           <Input
-            placeholder="Search by employee, project, or client..."
+            placeholder="Search by employee, department, or project..."
             value={search}
             onChange={(e) => setSearch(e.target.value)}
             className="pl-10"
           />
         </div>
 
-        {/* Late Marks Table */}
-        <div className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
-          {filteredData.length === 0 ? (
-            <div className="p-8 text-center text-slate-500">
-              <AlertTriangle className="mx-auto mb-2 text-slate-300" size={40} />
-              <p className="font-medium">No late marks found</p>
-              <p className="text-sm">All projects are on track!</p>
+        {/* Employee List - Grouped View */}
+        <div className="space-y-3">
+          {filteredEmployees.length === 0 ? (
+            <div className="bg-white rounded-xl border border-slate-200 p-8 text-center text-slate-500 shadow-sm">
+              <Users className="mx-auto mb-2 text-slate-300" size={40} />
+              <p className="font-medium">No employees found</p>
             </div>
           ) : (
-            <div className="overflow-x-auto">
-              <table className="w-full text-sm">
-                <thead className="bg-slate-50 border-b border-slate-200">
-                  <tr>
-                    <th className="text-left p-4 font-semibold text-slate-700">Employee</th>
-                    <th className="text-left p-4 font-semibold text-slate-700">Department</th>
-                    <th className="text-left p-4 font-semibold text-slate-700">Project</th>
-                    <th className="text-left p-4 font-semibold text-slate-700">Client</th>
-                    <th className="text-left p-4 font-semibold text-slate-700">Timeline</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-slate-100">
-                  {filteredData.map((item, idx) => (
-                    <tr key={`${item.employee_id}-${item.project_code}-${idx}`} className="hover:bg-slate-50 transition-colors">
-                      <td className="p-4">
-                        <div>
-                          <p className="font-medium text-slate-900">{item.employee_name}</p>
-                          <p className="text-xs text-slate-500">{item.employee_id}</p>
-                        </div>
-                      </td>
-                      <td className="p-4">
-                        <div className="flex flex-wrap gap-1">
-                          {item.departments?.map((dept, i) => (
-                            <Badge key={i} variant="secondary" className="text-xs">{dept}</Badge>
-                          ))}
-                        </div>
-                      </td>
-                      <td className="p-4">
-                        <div>
-                          <p className="font-medium text-slate-900">{item.project_name}</p>
-                          <p className="text-xs text-blue-600 font-mono">{item.project_code}</p>
-                        </div>
-                      </td>
-                      <td className="p-4">
-                        <p className="text-slate-700">{item.client_name || '-'}</p>
-                      </td>
-                      <td className="p-4">
-                        <div className="text-xs text-slate-500">
-                          {item.start_date && (
-                            <p>Start: {new Date(item.start_date).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' })}</p>
-                          )}
-                          {item.end_date && item.end_date !== 'NULL' && (
-                            <p>End: {new Date(item.end_date).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' })}</p>
-                          )}
-                          {!item.start_date && (!item.end_date || item.end_date === 'NULL') && <p>-</p>}
-                        </div>
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          )}
-        </div>
-
-        {/* Grouped View by Employee */}
-        {Object.keys(groupedByEmployee).length > 0 && (
-          <div className="mt-8">
-            <h2 className="text-lg font-semibold text-slate-800 mb-4">Grouped by Employee</h2>
-            <div className="grid gap-4">
-              {Object.values(groupedByEmployee).map(emp => (
-                <div key={emp.employee_id} className="bg-white rounded-xl border border-slate-200 p-4 shadow-sm">
-                  <div className="flex flex-col sm:flex-row justify-between items-start gap-2 mb-3">
-                    <div>
+            filteredEmployees.map(emp => (
+              <div 
+                key={emp.employee_id} 
+                className={`bg-white rounded-xl border p-4 shadow-sm transition-all ${
+                  emp.has_late_mark ? 'border-red-200 bg-red-50/30' : 'border-slate-200'
+                }`}
+              >
+                <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4">
+                  {/* Employee Info */}
+                  <div className="flex-1">
+                    <div className="flex items-center gap-3 mb-2">
                       <h3 className="font-semibold text-slate-900">{emp.employee_name}</h3>
-                      <p className="text-xs text-slate-500">{emp.employee_id} • {emp.employee_email}</p>
+                      <span className="text-xs text-slate-500 bg-slate-100 px-2 py-0.5 rounded">{emp.employee_id}</span>
+                      {emp.has_late_mark && (
+                        <Badge variant="destructive" className="text-xs">
+                          <AlertTriangle size={10} className="mr-1" />
+                          Late Mark
+                        </Badge>
+                      )}
                     </div>
-                    <Badge variant="destructive" className="flex items-center gap-1">
-                      <AlertTriangle size={12} />
-                      {emp.projects.length} Late Project{emp.projects.length > 1 ? 's' : ''}
-                    </Badge>
-                  </div>
-                  <div className="flex flex-wrap gap-2">
-                    {emp.projects.map((proj, i) => (
-                      <div key={i} className="bg-red-50 border border-red-200 rounded-lg px-3 py-2 text-sm">
-                        <p className="font-medium text-red-800">{proj.project_name}</p>
-                        <p className="text-xs text-red-600">{proj.project_code}</p>
+                    <p className="text-xs text-slate-500 mb-2">{emp.employee_email}</p>
+                    <div className="flex flex-wrap gap-1 mb-3">
+                      {emp.departments?.map((dept, i) => (
+                        <Badge key={i} variant="secondary" className="text-xs">{dept}</Badge>
+                      ))}
+                    </div>
+                    
+                    {/* Late Projects */}
+                    {emp.has_late_mark ? (
+                      <div className="flex flex-wrap gap-2">
+                        {emp.late_projects.map((proj, i) => (
+                          <div key={i} className="bg-red-100 border border-red-200 rounded-lg px-3 py-1.5 text-sm">
+                            <p className="font-medium text-red-800">{proj.project_name}</p>
+                            <p className="text-xs text-red-600">{proj.project_code}</p>
+                          </div>
+                        ))}
                       </div>
-                    ))}
+                    ) : (
+                      <div className="text-sm text-green-600 flex items-center gap-1">
+                        <CheckCircle size={14} />
+                        No late project
+                      </div>
+                    )}
+                  </div>
+                  
+                  {/* Salary Status Toggle */}
+                  <div className="flex items-center gap-3 lg:border-l lg:pl-4 lg:ml-4">
+                    <div className="text-right">
+                      <p className="text-xs text-slate-500 uppercase tracking-wider mb-1">Salary Status</p>
+                      <p className={`text-sm font-semibold ${emp.salary_status === 'hold' ? 'text-orange-600' : 'text-green-600'}`}>
+                        {emp.salary_status === 'hold' ? 'HOLD' : 'ACTIVE'}
+                      </p>
+                    </div>
+                    <div className="flex flex-col items-center gap-1">
+                      <Switch
+                        checked={emp.salary_status === 'active'}
+                        onCheckedChange={(checked) => handleSalaryStatusChange(emp.employee_id, checked ? 'active' : 'hold')}
+                        disabled={updating[emp.employee_id]}
+                        className="data-[state=checked]:bg-green-500"
+                      />
+                      <span className="text-[10px] text-slate-400">
+                        {emp.salary_status === 'hold' ? 'Hold' : 'Active'}
+                      </span>
+                    </div>
                   </div>
                 </div>
-              ))}
-            </div>
-          </div>
-        )}
+              </div>
+            ))
+          )}
+        </div>
       </div>
     </Layout>
   );
