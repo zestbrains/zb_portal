@@ -4491,6 +4491,16 @@ async def get_salary(year: int, month: int, user: dict = Depends(require_role(["
     }, {"_id": 0}).to_list(None)
     adjustments_map = {a["employee_id"]: a for a in adjustments_list}
 
+    # Load late coming marks for this month
+    month_key = f"{year}-{month:02d}"
+    late_coming_list = await db.late_coming.find({"month_key": month_key}, {"_id": 0}).to_list(None)
+    late_coming_map = {}
+    for lc in late_coming_list:
+        emp_id = lc.get("employee_id")
+        if emp_id not in late_coming_map:
+            late_coming_map[emp_id] = []
+        late_coming_map[emp_id].append(lc.get("day"))
+
     salary_data = []
     for emp in employees:
         emp_id = emp["employee_id"]
@@ -4601,13 +4611,20 @@ async def get_salary(year: int, month: int, user: dict = Depends(require_role(["
 
         sandwich_count = len(sandwich_indices)
 
+        # Late coming calculation: first 2 are free, every 3 = 0.5 day deduction
+        late_coming_days = late_coming_map.get(emp_id, [])
+        late_coming_count = len(late_coming_days)
+        # Deduction kicks in after 2 free late marks, then every 3 = 0.5 day
+        late_coming_deduction_days = (late_coming_count // 3) * 0.5 if late_coming_count >= 3 else 0
+
         per_day = salary / num_days if num_days > 0 and salary > 0 else 0
         cl_amount = round(per_day * cl_count, 2)
         ot_amount = round(per_day * ot_count, 2)
         sandwich_amount = round(per_day * sandwich_count, 2)
+        late_coming_amount = round(per_day * late_coming_deduction_days, 2)
         per_hour = (per_day / 8.5) if per_day > 0 else 0
         extra_hours_amount = round(per_hour * extra_hours, 2)
-        gross_salary = round(salary - pt - esic - epf - cpf - cl_amount - sandwich_amount + ot_amount + other_income + extra_hours_amount, 2)
+        gross_salary = round(salary - pt - esic - epf - cpf - cl_amount - sandwich_amount - late_coming_amount + ot_amount + other_income + extra_hours_amount, 2)
 
         # Till Date Salary: what to pay if employee leaves today
         if is_current_month:
@@ -4635,6 +4652,9 @@ async def get_salary(year: int, month: int, user: dict = Depends(require_role(["
             "ot_amount": ot_amount,
             "sandwich_days": sandwich_count,
             "sandwich_amount": sandwich_amount,
+            "late_coming_count": late_coming_count,
+            "late_coming_deduction_days": late_coming_deduction_days,
+            "late_coming_amount": late_coming_amount,
             "other_income": other_income,
             "extra_hours": extra_hours,
             "extra_hours_amount": extra_hours_amount,
@@ -5020,6 +5040,12 @@ async def get_my_salary(year: int, month: int, user: dict = Depends(require_role
     other_income = float((adj or {}).get("other_income", 0) or 0)
     extra_hours = float((adj or {}).get("extra_hours", 0) or 0)
 
+    # Load late coming marks for this employee
+    month_key = f"{year}-{month:02d}"
+    late_coming_list = await db.late_coming.find({"month_key": month_key, "employee_id": emp_id}, {"_id": 0, "day": 1}).to_list(None)
+    late_coming_days = sorted([lc["day"] for lc in late_coming_list])
+    late_coming_count = len(late_coming_days)
+
     cl_count = 0
     ot_count = 0
     pl_count = 0
@@ -5097,13 +5123,17 @@ async def get_my_salary(year: int, month: int, user: dict = Depends(require_role
     sandwich_count = len(sandwich_indices)
     sandwich_dates = sorted([day_types[j][0] for j in sandwich_indices])
 
+    # Late coming calculation: first 2 are free, every 3 = 0.5 day deduction
+    late_coming_deduction_days = (late_coming_count // 3) * 0.5 if late_coming_count >= 3 else 0
+
     per_day = salary / num_days if num_days > 0 and salary > 0 else 0
     cl_amount = round(per_day * cl_count, 2)
     ot_amount = round(per_day * ot_count, 2)
     sandwich_amount = round(per_day * sandwich_count, 2)
+    late_coming_amount = round(per_day * late_coming_deduction_days, 2)
     per_hour = (per_day / 8.5) if per_day > 0 else 0
     extra_hours_amount = round(per_hour * extra_hours, 2)
-    gross_salary = round(salary - pt - esic - epf - cpf - cl_amount - sandwich_amount + ot_amount + other_income + extra_hours_amount, 2)
+    gross_salary = round(salary - pt - esic - epf - cpf - cl_amount - sandwich_amount - late_coming_amount + ot_amount + other_income + extra_hours_amount, 2)
 
     if is_current_month:
         future_days = num_days - today.day
@@ -5121,6 +5151,10 @@ async def get_my_salary(year: int, month: int, user: dict = Depends(require_role
         "cl_dates": sorted(cl_dates),
         "sandwich_days": sandwich_count, "sandwich_amount": sandwich_amount,
         "sandwich_dates": sandwich_dates,
+        "late_coming_count": late_coming_count,
+        "late_coming_days": late_coming_days,
+        "late_coming_deduction_days": late_coming_deduction_days,
+        "late_coming_amount": late_coming_amount,
         "other_income": other_income, "extra_hours": extra_hours,
         "extra_hours_amount": extra_hours_amount,
         "gross_salary": gross_salary,
