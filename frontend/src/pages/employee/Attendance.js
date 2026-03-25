@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react';
 import Layout from '../../components/layout/Layout';
 import { api } from '../../utils/api';
 import { Button } from '../../components/ui/button';
-import { ChevronLeft, ChevronRight, Calendar, IndianRupee } from 'lucide-react';
+import { ChevronLeft, ChevronRight, Calendar, IndianRupee, AlertTriangle, CheckCircle, MessageCircle } from 'lucide-react';
 import { toast } from 'sonner';
 
 function fmt(num) {
@@ -17,11 +17,12 @@ export default function EmployeeAttendance({ user, onLogout }) {
   const [loading, setLoading] = useState(true);
   const [attendanceData, setAttendanceData] = useState(null);
   const [salaryData, setSalaryData] = useState(null);
+  const [lateMarkStatus, setLateMarkStatus] = useState(null);
 
   const months = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
   const years = Array.from({ length: 5 }, (_, i) => currentDate.getFullYear() - 2 + i);
 
-  useEffect(() => { fetchAttendance(); fetchSalary(); }, [year, month]);
+  useEffect(() => { fetchAttendance(); fetchSalary(); fetchLateMarkStatus(); }, [year, month]);
 
   const fetchAttendance = async () => {
     try {
@@ -41,6 +42,15 @@ export default function EmployeeAttendance({ user, onLogout }) {
       setSalaryData(response.data);
     } catch (error) {
       setSalaryData(null);
+    }
+  };
+
+  const fetchLateMarkStatus = async () => {
+    try {
+      const response = await api.get(`/late-marks/my-status?year=${year}&month=${month}`);
+      setLateMarkStatus(response.data);
+    } catch (error) {
+      setLateMarkStatus(null);
     }
   };
 
@@ -125,6 +135,69 @@ export default function EmployeeAttendance({ user, onLogout }) {
             <Button variant="outline" size="sm" onClick={() => { setYear(currentDate.getFullYear()); setMonth(currentDate.getMonth() + 1); }} className="ml-auto text-xs border-slate-200" data-testid="today-btn">Today</Button>
           </div>
         </div>
+
+        {/* Salary Status Banner */}
+        {lateMarkStatus && (
+          <div className={`rounded-xl border-2 p-4 shadow-sm ${
+            lateMarkStatus.salary_status === 'hold' 
+              ? 'bg-red-50 border-red-300' 
+              : 'bg-green-50 border-green-300'
+          }`} data-testid="salary-status-banner">
+            <div className="flex items-start gap-4">
+              <div className={`p-2 rounded-full ${
+                lateMarkStatus.salary_status === 'hold' 
+                  ? 'bg-red-100' 
+                  : 'bg-green-100'
+              }`}>
+                {lateMarkStatus.salary_status === 'hold' ? (
+                  <AlertTriangle className="w-6 h-6 text-red-600" />
+                ) : (
+                  <CheckCircle className="w-6 h-6 text-green-600" />
+                )}
+              </div>
+              <div className="flex-1">
+                <div className="flex items-center gap-2 mb-1">
+                  <h3 className={`font-bold text-lg ${
+                    lateMarkStatus.salary_status === 'hold' 
+                      ? 'text-red-800' 
+                      : 'text-green-800'
+                  }`}>
+                    Salary Status: {lateMarkStatus.salary_status === 'hold' ? 'ON HOLD' : 'ACTIVE'}
+                  </h3>
+                </div>
+                
+                {lateMarkStatus.salary_status === 'hold' ? (
+                  <div className="space-y-2">
+                    {lateMarkStatus.has_late_mark && lateMarkStatus.late_projects?.length > 0 && (
+                      <div>
+                        <p className="text-sm text-red-700 font-medium mb-1">Late Project(s):</p>
+                        <div className="flex flex-wrap gap-2">
+                          {lateMarkStatus.late_projects.map((proj, idx) => (
+                            <span key={idx} className="inline-flex items-center bg-red-100 text-red-800 text-xs font-medium px-2.5 py-1 rounded-full">
+                              {proj.project_name} ({proj.project_code})
+                            </span>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+                    <div className="flex items-start gap-2 mt-3 p-3 bg-red-100/50 rounded-lg border border-red-200">
+                      <MessageCircle className="w-5 h-5 text-red-600 flex-shrink-0 mt-0.5" />
+                      <p className="text-sm text-red-800">
+                        <strong>Important:</strong> Your salary is currently on hold due to late project delivery. 
+                        Please contact your respective <strong>Project Manager</strong> to discuss and resolve this status. 
+                        Once the project status is updated, your salary hold will be reviewed by the admin team.
+                      </p>
+                    </div>
+                  </div>
+                ) : (
+                  <p className="text-sm text-green-700">
+                    Your salary for {months[month - 1]} {year} is active. No issues found.
+                  </p>
+                )}
+              </div>
+            </div>
+          </div>
+        )}
 
         {/* Stats */}
         <div className="grid grid-cols-2 sm:grid-cols-5 gap-4">

@@ -4682,6 +4682,57 @@ async def update_salary_status(
     return {"message": f"Salary status updated to {salary_status}"}
 
 
+# Employee - Get my salary hold status
+@api_router.get("/late-marks/my-status")
+async def get_my_late_mark_status(year: int, month: int, user: dict = Depends(require_role(["employee"]))):
+    """Get employee's own late mark and salary hold status for a specific month"""
+    
+    # Get employee data
+    employee = await db.employees.find_one({"email": user["email"]}, {"_id": 0})
+    if not employee:
+        raise HTTPException(status_code=404, detail="Employee not found")
+    
+    emp_id = employee["employee_id"]
+    
+    # Find all projects with status 'late' that this employee is assigned to
+    late_projects = await db.projects.find(
+        {"status": "late", "assigned_employees": emp_id},
+        {"_id": 0, "id": 1, "name": 1, "project_code": 1, "client_username": 1}
+    ).to_list(None)
+    
+    has_late_mark = len(late_projects) > 0
+    
+    # Get salary hold status for this month
+    month_key = f"{year}-{month:02d}"
+    salary_hold = await db.late_mark_salary_holds.find_one(
+        {"month_key": month_key, "employee_id": emp_id},
+        {"_id": 0}
+    )
+    
+    # Determine salary status
+    if salary_hold:
+        salary_status = salary_hold.get("salary_status", "active")
+    else:
+        # Default: hold if has late mark, active otherwise
+        salary_status = "hold" if has_late_mark else "active"
+    
+    return {
+        "employee_id": emp_id,
+        "employee_name": employee.get("name", ""),
+        "year": year,
+        "month": month,
+        "has_late_mark": has_late_mark,
+        "late_projects": [
+            {
+                "project_name": p.get("name"),
+                "project_code": p.get("project_code"),
+                "client_name": p.get("client_username", "")
+            } for p in late_projects
+        ],
+        "salary_status": salary_status
+    }
+
+
 # Employee Attendance - View own attendance only
 @api_router.get("/attendance/my")
 async def get_my_attendance(year: int, month: int, user: dict = Depends(require_role(["employee"]))):
