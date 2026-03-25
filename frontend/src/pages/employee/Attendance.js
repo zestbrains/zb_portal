@@ -346,9 +346,7 @@ export default function EmployeeAttendance({ user, onLogout }) {
                         <td className="py-2.5 px-3 text-sm text-orange-600">Late Coming Deduction</td>
                         <td className="py-2.5 px-3 text-center text-xs text-orange-400">
                           {salaryData.late_coming_count} late{salaryData.late_coming_count !== 1 ? 's' : ''} 
-                          {salaryData.late_coming_deduction_days > 0 
-                            ? ` (${salaryData.late_coming_deduction_days} day${salaryData.late_coming_deduction_days !== 1 ? 's' : ''} deducted)` 
-                            : ' (2 free, no deduction)'}
+                          ({salaryData.late_coming_days?.join(', ')})
                         </td>
                         <td className="py-2.5 px-3 text-right text-sm text-orange-600">
                           {salaryData.late_coming_amount > 0 ? `-${fmt(salaryData.late_coming_amount)}` : '0'}
