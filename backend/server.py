@@ -4327,6 +4327,10 @@ async def get_salary(year: int, month: int, user: dict = Depends(require_role(["
 
     employees = await db.employees.find({"status": "active"}, {"_id": 0}).sort("name", 1).to_list(None)
 
+    # Load banks for mapping
+    banks_list = await db.banks.find({}, {"_id": 0}).to_list(None)
+    banks_map = {b["id"]: b["name"] for b in banks_list}
+
     holidays_list = await db.holidays.find({
         "date": {"$gte": start_date, "$lte": end_date}
     }, {"_id": 0}).to_list(None)
@@ -4503,6 +4507,8 @@ async def get_salary(year: int, month: int, user: dict = Depends(require_role(["
         salary_data.append({
             "employee_id": emp_id,
             "employee_name": emp.get("name", "Unknown"),
+            "bank_id": emp.get("bank_id", ""),
+            "bank_name": banks_map.get(emp.get("bank_id", ""), "No Bank"),
             "salary": salary,
             "pt": pt,
             "esic": esic,

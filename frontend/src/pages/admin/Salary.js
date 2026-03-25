@@ -139,6 +139,23 @@ export default function Salary({ user, onLogout }) {
     ? data.filter(e => e.employee_name.toLowerCase().includes(search.toLowerCase()) || e.employee_id.toLowerCase().includes(search.toLowerCase()))
     : data;
 
+  // Group employees by bank
+  const groupedByBank = filtered.reduce((acc, emp) => {
+    const bankName = emp.bank_name || 'No Bank';
+    if (!acc[bankName]) {
+      acc[bankName] = [];
+    }
+    acc[bankName].push(emp);
+    return acc;
+  }, {});
+
+  // Sort bank names (No Bank at the end)
+  const sortedBankNames = Object.keys(groupedByBank).sort((a, b) => {
+    if (a === 'No Bank') return 1;
+    if (b === 'No Bank') return -1;
+    return a.localeCompare(b);
+  });
+
   const totalGross = filtered.reduce((sum, e) => sum + computeLocal(e).gross, 0);
 
   const handleExport = () => {
@@ -216,138 +233,183 @@ export default function Salary({ user, onLogout }) {
           </div>
         </div>
 
-        {/* Table */}
-        <div className="bg-white border border-slate-200 rounded-xl shadow-sm overflow-hidden">
-          <div className="flex items-center justify-between p-4 border-b border-slate-200">
-            <h3 className="text-sm font-semibold text-slate-700">Salary Breakdown ({filtered.length} employees)</h3>
+        {/* Grouped Tables by Bank */}
+        {loading ? (
+          <div className="bg-white border border-slate-200 rounded-xl shadow-sm p-8 text-center text-slate-400 text-sm">Calculating salaries...</div>
+        ) : filtered.length === 0 ? (
+          <div className="bg-white border border-slate-200 rounded-xl shadow-sm p-12 text-center">
+            <IndianRupee size={36} className="mx-auto mb-3 text-slate-300" />
+            <p className="text-sm text-slate-400">No salary data found</p>
           </div>
-          {loading ? (
-            <div className="p-8 text-center text-slate-400 text-sm">Calculating salaries...</div>
-          ) : filtered.length === 0 ? (
-            <div className="p-12 text-center">
-              <IndianRupee size={36} className="mx-auto mb-3 text-slate-300" />
-              <p className="text-sm text-slate-400">No salary data found</p>
+        ) : (
+          <div className="space-y-6">
+            {sortedBankNames.map((bankName) => {
+              const bankEmployees = groupedByBank[bankName];
+              const bankTotal = bankEmployees.reduce((sum, e) => sum + computeLocal(e).gross, 0);
+              let rowNum = 0;
+              
+              return (
+                <div key={bankName} className="bg-white border border-slate-200 rounded-xl shadow-sm overflow-hidden">
+                  {/* Bank Header */}
+                  <div className="flex items-center justify-between p-4 border-b border-slate-200 bg-gradient-to-r from-slate-50 to-white">
+                    <div className="flex items-center gap-3">
+                      <div className="w-8 h-8 rounded-lg flex items-center justify-center bg-blue-100 text-blue-600">
+                        <IndianRupee size={16} />
+                      </div>
+                      <div>
+                        <h3 className="text-sm font-bold text-slate-800">{bankName}</h3>
+                        <p className="text-xs text-slate-500">{bankEmployees.length} employee{bankEmployees.length > 1 ? 's' : ''}</p>
+                      </div>
+                    </div>
+                    <div className="text-right">
+                      <p className="text-xs text-slate-500">Bank Total</p>
+                      <p className="text-lg font-bold text-blue-600">{fmt(bankTotal)}</p>
+                    </div>
+                  </div>
+                  
+                  {/* Table */}
+                  <div className="overflow-x-auto">
+                    <table className="w-full">
+                      <thead>
+                        <tr className="border-b border-slate-200 bg-slate-50/50">
+                          <th className="text-left text-[10px] font-semibold text-slate-500 uppercase tracking-wider py-3 px-2">#</th>
+                          <th className="text-left text-[10px] font-semibold text-slate-500 uppercase tracking-wider py-3 px-2">Employee</th>
+                          <th className="text-center text-[10px] font-semibold text-slate-500 uppercase tracking-wider py-3 px-2">Status</th>
+                          <th className="text-right text-[10px] font-semibold text-slate-500 uppercase tracking-wider py-3 px-2">Salary</th>
+                          <th className="text-right text-[10px] font-semibold text-slate-500 uppercase tracking-wider py-3 px-2">PT</th>
+                          <th className="text-right text-[10px] font-semibold text-slate-500 uppercase tracking-wider py-3 px-2">ESIC</th>
+                          <th className="text-right text-[10px] font-semibold text-slate-500 uppercase tracking-wider py-3 px-2">EPF</th>
+                          <th className="text-right text-[10px] font-semibold text-slate-500 uppercase tracking-wider py-3 px-2">CPF</th>
+                          <th className="text-right text-[10px] font-semibold text-slate-500 uppercase tracking-wider py-3 px-2">CLs Amt</th>
+                          <th className="text-right text-[10px] font-semibold text-slate-500 uppercase tracking-wider py-3 px-2">Sandwich</th>
+                          <th className="text-right text-[10px] font-semibold text-slate-500 uppercase tracking-wider py-3 px-2">OT Amt</th>
+                          <th className="text-center text-[10px] font-semibold text-slate-500 uppercase tracking-wider py-3 px-2">Other Inc</th>
+                          <th className="text-center text-[10px] font-semibold text-slate-500 uppercase tracking-wider py-3 px-2">Extra Hrs</th>
+                          <th className="text-right text-[10px] font-semibold text-slate-500 uppercase tracking-wider py-3 px-2">Extra Amt</th>
+                          <th className="text-right text-[10px] font-semibold text-slate-500 uppercase tracking-wider py-3 px-2">Gross</th>
+                          <th className="text-right text-[10px] font-semibold text-slate-500 uppercase tracking-wider py-3 px-2">TD Salary</th>
+                          <th className="text-center text-[10px] font-semibold text-slate-500 uppercase tracking-wider py-3 px-2"></th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {bankEmployees.map((emp) => {
+                          rowNum++;
+                          const c = computeLocal(emp);
+                          const edited = hasEdits(emp.employee_id);
+                          const salaryInfo = getSalaryStatus(emp.employee_id);
+                          return (
+                            <tr key={emp.employee_id} className={`border-b border-slate-100 last:border-0 hover:bg-slate-50/80 transition-colors ${edited ? 'bg-amber-50/40' : ''} ${salaryInfo?.salary_status === 'hold' ? 'bg-red-50/30' : ''}`} data-testid={`salary-row-${emp.employee_id}`}>
+                              <td className="py-2 px-2 text-xs text-slate-400">{rowNum}</td>
+                              <td className="py-2 px-2">
+                                <div className="font-medium text-xs text-slate-800">{emp.employee_name}</div>
+                                <div className="text-[10px] text-slate-400">{emp.employee_id}</div>
+                              </td>
+                              <td className="py-2 px-2 text-center">
+                                {salaryInfo ? (
+                                  <div className={`inline-flex items-center gap-1 px-2 py-1 rounded-full text-[10px] font-bold ${
+                                    salaryInfo.salary_status === 'hold' 
+                                      ? 'bg-red-100 text-red-700 border border-red-200' 
+                                      : 'bg-green-100 text-green-700 border border-green-200'
+                                  }`}>
+                                    {salaryInfo.salary_status === 'hold' ? (
+                                      <><AlertTriangle size={10} /> HOLD</>
+                                    ) : (
+                                      <><CheckCircle size={10} /> ACTIVE</>
+                                    )}
+                                  </div>
+                                ) : (
+                                  <span className="text-slate-300 text-xs">-</span>
+                                )}
+                              </td>
+                              <td className="py-2 px-2 text-right text-xs text-slate-700 font-medium">{fmt(emp.salary)}</td>
+                              <td className="py-2 px-2 text-right text-xs text-red-600">{emp.pt > 0 ? `-${fmt(emp.pt)}` : '0'}</td>
+                              <td className="py-2 px-2 text-right text-xs text-red-600">{emp.esic > 0 ? `-${fmt(emp.esic)}` : '0'}</td>
+                              <td className="py-2 px-2 text-right text-xs text-red-600">{emp.epf > 0 ? `-${fmt(emp.epf)}` : '0'}</td>
+                              <td className="py-2 px-2 text-right text-xs text-red-600">{emp.cpf > 0 ? `-${fmt(emp.cpf)}` : '0'}</td>
+                              <td className="py-2 px-2 text-right text-xs">
+                                <div className={emp.cl_amount > 0 ? 'text-red-600' : 'text-slate-400'}>{emp.cl_amount > 0 ? `-${fmt(emp.cl_amount)}` : '0'}</div>
+                                {emp.cl_count > 0 && <div className="text-[10px] text-slate-400">{emp.cl_count}d</div>}
+                              </td>
+                              <td className="py-2 px-2 text-right text-xs">
+                                <div className={(emp.sandwich_amount || 0) > 0 ? 'text-orange-600' : 'text-slate-400'}>{(emp.sandwich_amount || 0) > 0 ? `-${fmt(emp.sandwich_amount)}` : '0'}</div>
+                                {(emp.sandwich_days || 0) > 0 && <div className="text-[10px] text-orange-400">{emp.sandwich_days}d</div>}
+                              </td>
+                              <td className="py-2 px-2 text-right text-xs">
+                                <div className={emp.ot_amount > 0 ? 'text-green-600' : 'text-slate-400'}>{emp.ot_amount > 0 ? `+${fmt(emp.ot_amount)}` : '0'}</div>
+                                {emp.ot_count > 0 && <div className="text-[10px] text-slate-400">{emp.ot_count}d</div>}
+                              </td>
+                              <td className="py-2 px-2">
+                                <Input type="number" step="0.01" min="0" value={getEditValue(emp.employee_id, 'other_income')} onChange={(e) => handleEditChange(emp.employee_id, 'other_income', e.target.value)} className="h-7 w-20 text-xs text-right border-slate-200 mx-auto" placeholder="0" data-testid={`other-income-${emp.employee_id}`} />
+                              </td>
+                              <td className="py-2 px-2">
+                                <Input type="number" step="0.5" min="0" value={getEditValue(emp.employee_id, 'extra_hours')} onChange={(e) => handleEditChange(emp.employee_id, 'extra_hours', e.target.value)} className="h-7 w-16 text-xs text-right border-slate-200 mx-auto" placeholder="0" data-testid={`extra-hours-${emp.employee_id}`} />
+                              </td>
+                              <td className="py-2 px-2 text-right text-xs">
+                                <span className={c.ehAmt > 0 ? 'text-green-600' : 'text-slate-400'}>{c.ehAmt > 0 ? `+${fmt(c.ehAmt)}` : '0'}</span>
+                              </td>
+                              <td className="py-2 px-2 text-right">
+                                <span className="text-xs font-bold text-blue-600">{fmt(c.gross)}</span>
+                              </td>
+                              <td className="py-2 px-2 text-right">
+                                <span className="text-xs font-bold text-violet-600">{fmt(emp.td_salary || 0)}</span>
+                                {(emp.future_days || 0) > 0 && <div className="text-[10px] text-slate-400">-{emp.future_days}d</div>}
+                              </td>
+                              <td className="py-2 px-2 text-center">
+                                {edited && (
+                                  <Button size="sm" onClick={() => handleSave(emp.employee_id)} disabled={saving[emp.employee_id]} className="h-6 w-6 p-0 bg-slate-900 hover:bg-slate-800" title="Save" data-testid={`save-adj-${emp.employee_id}`}>
+                                    <Save size={10} />
+                                  </Button>
+                                )}
+                              </td>
+                            </tr>
+                          );
+                        })}
+                      </tbody>
+                      <tfoot>
+                        <tr className="border-t-2 border-slate-200 bg-slate-50">
+                          <td colSpan={3} className="py-3 px-2 text-xs font-bold text-slate-700">{bankName} Total</td>
+                          <td className="py-3 px-2 text-right text-xs font-bold text-slate-700">{fmt(bankEmployees.reduce((s, e) => s + e.salary, 0))}</td>
+                          <td className="py-3 px-2 text-right text-xs font-bold text-red-600">-{fmt(bankEmployees.reduce((s, e) => s + e.pt, 0))}</td>
+                          <td className="py-3 px-2 text-right text-xs font-bold text-red-600">-{fmt(bankEmployees.reduce((s, e) => s + e.esic, 0))}</td>
+                          <td className="py-3 px-2 text-right text-xs font-bold text-red-600">-{fmt(bankEmployees.reduce((s, e) => s + e.epf, 0))}</td>
+                          <td className="py-3 px-2 text-right text-xs font-bold text-red-600">-{fmt(bankEmployees.reduce((s, e) => s + e.cpf, 0))}</td>
+                          <td className="py-3 px-2 text-right text-xs font-bold text-red-600">-{fmt(bankEmployees.reduce((s, e) => s + e.cl_amount, 0))}</td>
+                          <td className="py-3 px-2 text-right text-xs font-bold text-orange-600">-{fmt(bankEmployees.reduce((s, e) => s + (e.sandwich_amount || 0), 0))}</td>
+                          <td className="py-3 px-2 text-right text-xs font-bold text-green-600">+{fmt(bankEmployees.reduce((s, e) => s + e.ot_amount, 0))}</td>
+                          <td className="py-3 px-2 text-right text-xs font-bold text-green-600">+{fmt(bankEmployees.reduce((s, e) => s + computeLocal(e).oi, 0))}</td>
+                          <td className="py-3 px-2"></td>
+                          <td className="py-3 px-2 text-right text-xs font-bold text-green-600">+{fmt(bankEmployees.reduce((s, e) => s + computeLocal(e).ehAmt, 0))}</td>
+                          <td className="py-3 px-2 text-right text-xs font-bold text-blue-600">{fmt(bankTotal)}</td>
+                          <td className="py-3 px-2 text-right text-xs font-bold text-violet-600">{fmt(bankEmployees.reduce((s, e) => s + (e.td_salary || 0), 0))}</td>
+                          <td className="py-3 px-2"></td>
+                        </tr>
+                      </tfoot>
+                    </table>
+                  </div>
+                </div>
+              );
+            })}
+
+            {/* Grand Total */}
+            <div className="bg-gradient-to-r from-slate-800 to-slate-900 rounded-xl p-5 shadow-lg">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-3">
+                  <div className="w-10 h-10 rounded-lg flex items-center justify-center bg-white/10 text-white">
+                    <IndianRupee size={20} />
+                  </div>
+                  <div>
+                    <p className="text-xs font-medium text-slate-400 uppercase tracking-wider">Grand Total</p>
+                    <p className="text-sm text-slate-300">{filtered.length} employees across {sortedBankNames.length} bank{sortedBankNames.length > 1 ? 's' : ''}</p>
+                  </div>
+                </div>
+                <div className="text-right">
+                  <p className="text-3xl font-bold text-white">{fmt(totalGross)}</p>
+                  <p className="text-xs text-slate-400">Gross Salary</p>
+                </div>
+              </div>
             </div>
-          ) : (
-            <div className="overflow-x-auto">
-              <table className="w-full">
-                <thead>
-                  <tr className="border-b border-slate-200 bg-slate-50/50">
-                    <th className="text-left text-[10px] font-semibold text-slate-500 uppercase tracking-wider py-3 px-2">#</th>
-                    <th className="text-left text-[10px] font-semibold text-slate-500 uppercase tracking-wider py-3 px-2">Employee</th>
-                    <th className="text-center text-[10px] font-semibold text-slate-500 uppercase tracking-wider py-3 px-2">Status</th>
-                    <th className="text-right text-[10px] font-semibold text-slate-500 uppercase tracking-wider py-3 px-2">Salary</th>
-                    <th className="text-right text-[10px] font-semibold text-slate-500 uppercase tracking-wider py-3 px-2">PT</th>
-                    <th className="text-right text-[10px] font-semibold text-slate-500 uppercase tracking-wider py-3 px-2">ESIC</th>
-                    <th className="text-right text-[10px] font-semibold text-slate-500 uppercase tracking-wider py-3 px-2">EPF</th>
-                    <th className="text-right text-[10px] font-semibold text-slate-500 uppercase tracking-wider py-3 px-2">CPF</th>
-                    <th className="text-right text-[10px] font-semibold text-slate-500 uppercase tracking-wider py-3 px-2">CLs Amt</th>
-                    <th className="text-right text-[10px] font-semibold text-slate-500 uppercase tracking-wider py-3 px-2">Sandwich</th>
-                    <th className="text-right text-[10px] font-semibold text-slate-500 uppercase tracking-wider py-3 px-2">OT Amt</th>
-                    <th className="text-center text-[10px] font-semibold text-slate-500 uppercase tracking-wider py-3 px-2">Other Inc</th>
-                    <th className="text-center text-[10px] font-semibold text-slate-500 uppercase tracking-wider py-3 px-2">Extra Hrs</th>
-                    <th className="text-right text-[10px] font-semibold text-slate-500 uppercase tracking-wider py-3 px-2">Extra Amt</th>
-                    <th className="text-right text-[10px] font-semibold text-slate-500 uppercase tracking-wider py-3 px-2">Gross</th>
-                    <th className="text-right text-[10px] font-semibold text-slate-500 uppercase tracking-wider py-3 px-2">TD Salary</th>
-                    <th className="text-center text-[10px] font-semibold text-slate-500 uppercase tracking-wider py-3 px-2"></th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {filtered.map((emp, idx) => {
-                    const c = computeLocal(emp);
-                    const edited = hasEdits(emp.employee_id);
-                    const salaryInfo = getSalaryStatus(emp.employee_id);
-                    return (
-                      <tr key={emp.employee_id} className={`border-b border-slate-100 last:border-0 hover:bg-slate-50/80 transition-colors ${edited ? 'bg-amber-50/40' : ''} ${salaryInfo?.salary_status === 'hold' ? 'bg-red-50/30' : ''}`} data-testid={`salary-row-${emp.employee_id}`}>
-                        <td className="py-2 px-2 text-xs text-slate-400">{idx + 1}</td>
-                        <td className="py-2 px-2">
-                          <div className="font-medium text-xs text-slate-800">{emp.employee_name}</div>
-                          <div className="text-[10px] text-slate-400">{emp.employee_id}</div>
-                        </td>
-                        <td className="py-2 px-2 text-center">
-                          {salaryInfo ? (
-                            <div className={`inline-flex items-center gap-1 px-2 py-1 rounded-full text-[10px] font-bold ${
-                              salaryInfo.salary_status === 'hold' 
-                                ? 'bg-red-100 text-red-700 border border-red-200' 
-                                : 'bg-green-100 text-green-700 border border-green-200'
-                            }`}>
-                              {salaryInfo.salary_status === 'hold' ? (
-                                <><AlertTriangle size={10} /> HOLD</>
-                              ) : (
-                                <><CheckCircle size={10} /> ACTIVE</>
-                              )}
-                            </div>
-                          ) : (
-                            <span className="text-slate-300 text-xs">-</span>
-                          )}
-                        </td>
-                        <td className="py-2 px-2 text-right text-xs text-slate-700 font-medium">{fmt(emp.salary)}</td>
-                        <td className="py-2 px-2 text-right text-xs text-red-600">{emp.pt > 0 ? `-${fmt(emp.pt)}` : '0'}</td>
-                        <td className="py-2 px-2 text-right text-xs text-red-600">{emp.esic > 0 ? `-${fmt(emp.esic)}` : '0'}</td>
-                        <td className="py-2 px-2 text-right text-xs text-red-600">{emp.epf > 0 ? `-${fmt(emp.epf)}` : '0'}</td>
-                        <td className="py-2 px-2 text-right text-xs text-red-600">{emp.cpf > 0 ? `-${fmt(emp.cpf)}` : '0'}</td>
-                        <td className="py-2 px-2 text-right text-xs">
-                          <div className={emp.cl_amount > 0 ? 'text-red-600' : 'text-slate-400'}>{emp.cl_amount > 0 ? `-${fmt(emp.cl_amount)}` : '0'}</div>
-                          {emp.cl_count > 0 && <div className="text-[10px] text-slate-400">{emp.cl_count}d</div>}
-                        </td>
-                        <td className="py-2 px-2 text-right text-xs">
-                          <div className={(emp.sandwich_amount || 0) > 0 ? 'text-orange-600' : 'text-slate-400'}>{(emp.sandwich_amount || 0) > 0 ? `-${fmt(emp.sandwich_amount)}` : '0'}</div>
-                          {(emp.sandwich_days || 0) > 0 && <div className="text-[10px] text-orange-400">{emp.sandwich_days}d</div>}
-                        </td>
-                        <td className="py-2 px-2 text-right text-xs">
-                          <div className={emp.ot_amount > 0 ? 'text-green-600' : 'text-slate-400'}>{emp.ot_amount > 0 ? `+${fmt(emp.ot_amount)}` : '0'}</div>
-                          {emp.ot_count > 0 && <div className="text-[10px] text-slate-400">{emp.ot_count}d</div>}
-                        </td>
-                        <td className="py-2 px-2">
-                          <Input type="number" step="0.01" min="0" value={getEditValue(emp.employee_id, 'other_income')} onChange={(e) => handleEditChange(emp.employee_id, 'other_income', e.target.value)} className="h-7 w-20 text-xs text-right border-slate-200 mx-auto" placeholder="0" data-testid={`other-income-${emp.employee_id}`} />
-                        </td>
-                        <td className="py-2 px-2">
-                          <Input type="number" step="0.5" min="0" value={getEditValue(emp.employee_id, 'extra_hours')} onChange={(e) => handleEditChange(emp.employee_id, 'extra_hours', e.target.value)} className="h-7 w-16 text-xs text-right border-slate-200 mx-auto" placeholder="0" data-testid={`extra-hours-${emp.employee_id}`} />
-                        </td>
-                        <td className="py-2 px-2 text-right text-xs">
-                          <span className={c.ehAmt > 0 ? 'text-green-600' : 'text-slate-400'}>{c.ehAmt > 0 ? `+${fmt(c.ehAmt)}` : '0'}</span>
-                        </td>
-                        <td className="py-2 px-2 text-right">
-                          <span className="text-xs font-bold text-blue-600">{fmt(c.gross)}</span>
-                        </td>
-                        <td className="py-2 px-2 text-right">
-                          <span className="text-xs font-bold text-violet-600">{fmt(emp.td_salary || 0)}</span>
-                          {(emp.future_days || 0) > 0 && <div className="text-[10px] text-slate-400">-{emp.future_days}d</div>}
-                        </td>
-                        <td className="py-2 px-2 text-center">
-                          {edited && (
-                            <Button size="sm" onClick={() => handleSave(emp.employee_id)} disabled={saving[emp.employee_id]} className="h-6 w-6 p-0 bg-slate-900 hover:bg-slate-800" title="Save" data-testid={`save-adj-${emp.employee_id}`}>
-                              <Save size={10} />
-                            </Button>
-                          )}
-                        </td>
-                      </tr>
-                    );
-                  })}
-                </tbody>
-                <tfoot>
-                  <tr className="border-t-2 border-slate-200 bg-slate-50">
-                    <td colSpan={2} className="py-3 px-2 text-xs font-bold text-slate-700">Total</td>
-                    <td className="py-3 px-2 text-right text-xs font-bold text-slate-700">{fmt(filtered.reduce((s, e) => s + e.salary, 0))}</td>
-                    <td className="py-3 px-2 text-right text-xs font-bold text-red-600">-{fmt(filtered.reduce((s, e) => s + e.pt, 0))}</td>
-                    <td className="py-3 px-2 text-right text-xs font-bold text-red-600">-{fmt(filtered.reduce((s, e) => s + e.esic, 0))}</td>
-                    <td className="py-3 px-2 text-right text-xs font-bold text-red-600">-{fmt(filtered.reduce((s, e) => s + e.epf, 0))}</td>
-                    <td className="py-3 px-2 text-right text-xs font-bold text-red-600">-{fmt(filtered.reduce((s, e) => s + e.cpf, 0))}</td>
-                    <td className="py-3 px-2 text-right text-xs font-bold text-red-600">-{fmt(filtered.reduce((s, e) => s + e.cl_amount, 0))}</td>
-                    <td className="py-3 px-2 text-right text-xs font-bold text-orange-600">-{fmt(filtered.reduce((s, e) => s + (e.sandwich_amount || 0), 0))}</td>
-                    <td className="py-3 px-2 text-right text-xs font-bold text-green-600">+{fmt(filtered.reduce((s, e) => s + e.ot_amount, 0))}</td>
-                    <td className="py-3 px-2 text-right text-xs font-bold text-green-600">+{fmt(filtered.reduce((s, e) => s + computeLocal(e).oi, 0))}</td>
-                    <td className="py-3 px-2"></td>
-                    <td className="py-3 px-2 text-right text-xs font-bold text-green-600">+{fmt(filtered.reduce((s, e) => s + computeLocal(e).ehAmt, 0))}</td>
-                    <td className="py-3 px-2 text-right text-xs font-bold text-blue-600">{fmt(totalGross)}</td>
-                    <td className="py-3 px-2 text-right text-xs font-bold text-violet-600">{fmt(filtered.reduce((s, e) => s + (e.td_salary || 0), 0))}</td>
-                    <td className="py-3 px-2"></td>
-                  </tr>
-                </tfoot>
-              </table>
-            </div>
-          )}
-        </div>
+          </div>
+        )}
       </div>
     </Layout>
   );
