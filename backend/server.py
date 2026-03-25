@@ -4104,9 +4104,7 @@ async def get_upcoming_birthdays(user: dict = Depends(get_current_user)):
     upcoming.sort(key=lambda x: x["days_until"])
     return upcoming
 
-# Include router
-app.include_router(api_router)
-
+# Middleware added here, router included at end of file
 app.add_middleware(
     CORSMiddleware,
     allow_credentials=True,
@@ -4861,3 +4859,6 @@ async def startup_db():
         }
         await db.users.insert_one(admin_user)
         logger.info("Default admin user created: username=renish, password=Zb@0075588")
+
+# Include router at the END after all routes are defined
+app.include_router(api_router)
