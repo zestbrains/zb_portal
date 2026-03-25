@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { Link, useLocation } from 'react-router-dom';
-import { LogOut, LayoutDashboard, Users, FolderKanban, Clock, Calendar, ChevronDown, ChevronRight, Menu, Settings, CalendarCheck, PartyPopper, IndianRupee } from 'lucide-react';
+import { LogOut, LayoutDashboard, Users, FolderKanban, Clock, Calendar, ChevronDown, ChevronRight, Menu, Settings, CalendarCheck, PartyPopper, IndianRupee, AlertTriangle } from 'lucide-react';
 import { Button } from '../ui/button';
 import { Sheet, SheetContent, SheetTrigger } from '../ui/sheet';
 
@@ -34,6 +34,7 @@ export default function Layout({ children, user, onLogout }) {
         },
         { path: '/admin/attendance', label: 'Attendance', icon: CalendarCheck },
         { path: '/admin/salary', label: 'Salary', icon: IndianRupee },
+        { path: '/admin/late-marks', label: 'Late Marks', icon: AlertTriangle },
         {
           type: 'submenu', id: 'settings', label: 'Settings', icon: Settings,
           children: [

@@ -17,6 +17,7 @@ import AdminEmailSettings from './pages/admin/EmailSettings';
 import AdminBanks from './pages/admin/Banks';
 import AdminAttendance from './pages/admin/Attendance';
 import AdminSalary from './pages/admin/Salary';
+import AdminLateMarks from './pages/admin/LateMarks';
 import HRDashboard from './pages/hr/Dashboard';
 import HREmployees from './pages/hr/Employees';
 import HRWorkingHours from './pages/hr/WorkingHours';
@@ -107,6 +108,7 @@ function App() {
           <Route path="/admin/banks" element={user?.role === 'admin' ? <AdminBanks user={user} onLogout={handleLogout} /> : <Navigate to="/" />} />
           <Route path="/admin/attendance" element={user?.role === 'admin' ? <AdminAttendance user={user} onLogout={handleLogout} /> : <Navigate to="/" />} />
           <Route path="/admin/salary" element={user?.role === 'admin' ? <AdminSalary user={user} onLogout={handleLogout} /> : <Navigate to="/" />} />
+          <Route path="/admin/late-marks" element={user?.role === 'admin' ? <AdminLateMarks user={user} onLogout={handleLogout} /> : <Navigate to="/" />} />
           
           {/* HR Routes */}
           <Route path="/hr/dashboard" element={user?.role === 'hr' ? <HRDashboard user={user} onLogout={handleLogout} /> : <Navigate to="/" />} />
