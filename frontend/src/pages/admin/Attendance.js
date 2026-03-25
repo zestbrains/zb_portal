@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import Layout from '../../components/layout/Layout';
 import { api } from '../../utils/api';
-import { ChevronLeft, ChevronRight, Calendar } from 'lucide-react';
+import { ChevronLeft, ChevronRight, Calendar, Clock } from 'lucide-react';
 import { toast } from 'sonner';
 
 export default function Attendance({ user, onLogout }) {
@@ -10,6 +10,8 @@ export default function Attendance({ user, onLogout }) {
   const [month, setMonth] = useState(currentDate.getMonth() + 1);
   const [loading, setLoading] = useState(true);
   const [attendanceData, setAttendanceData] = useState(null);
+  const [lateComingData, setLateComingData] = useState({});
+  const [toggling, setToggling] = useState({});
 
   const months = [
     'January', 'February', 'March', 'April', 'May', 'June',
@@ -20,6 +22,7 @@ export default function Attendance({ user, onLogout }) {
 
   useEffect(() => {
     fetchAttendance();
+    fetchLateComing();
   }, [year, month]);
 
   const fetchAttendance = async () => {
@@ -32,6 +35,50 @@ export default function Attendance({ user, onLogout }) {
       console.error(error);
     } finally {
       setLoading(false);
+    }
+  };
+
+  const fetchLateComing = async () => {
+    try {
+      const response = await api.get(`/late-coming?year=${year}&month=${month}`);
+      const lateMap = {};
+      response.data.employees?.forEach(emp => {
+        lateMap[emp.employee_id] = emp.late_days || [];
+      });
+      setLateComingData(lateMap);
+    } catch (error) {
+      setLateComingData({});
+    }
+  };
+
+  const isLate = (employeeId, day) => {
+    return lateComingData[employeeId]?.includes(day);
+  };
+
+  const handleToggleLate = async (employeeId, day, status) => {
+    // Only allow toggling late for Present status
+    if (status !== 'P') return;
+    
+    const key = `${employeeId}-${day}`;
+    setToggling(prev => ({ ...prev, [key]: true }));
+    
+    try {
+      const res = await api.post(`/late-coming?year=${year}&month=${month}&employee_id=${employeeId}&day=${day}`);
+      
+      // Update local state
+      setLateComingData(prev => {
+        const empLateDays = prev[employeeId] || [];
+        const newLateDays = res.data.action === 'added'
+          ? [...empLateDays, day].sort((a, b) => a - b)
+          : empLateDays.filter(d => d !== day);
+        return { ...prev, [employeeId]: newLateDays };
+      });
+      
+      toast.success(res.data.message);
+    } catch (error) {
+      toast.error('Error updating late mark');
+    } finally {
+      setToggling(prev => ({ ...prev, [key]: false }));
     }
   };
 
@@ -149,9 +196,24 @@ export default function Attendance({ user, onLogout }) {
                 <div className="text-2xl font-bold text-amber-600">{(() => { const t = new Date(); if (year === t.getFullYear() && month === t.getMonth() + 1 && t.getDate() <= attendanceData.num_days) { return Object.values(attendanceData.attendance).filter(emp => { const s = emp[t.getDate()]; return ['PL','CL','PL/2','CL/2','PL/2 & CL/2'].includes(s); }).length; } return '-'; })()}</div>
                 <div className="text-xs text-amber-500 mt-1">Today's Leaves</div>
               </div>
+              <div className="text-center p-3 bg-orange-50 rounded-xl border border-orange-100">
+                <div className="text-2xl font-bold text-orange-600">{Object.values(lateComingData).reduce((sum, days) => sum + days.length, 0)}</div>
+                <div className="text-xs text-orange-500 mt-1">Late Coming</div>
+              </div>
             </div>
           </div>
         )}
+
+        {/* Late Coming Instruction */}
+        <div className="bg-orange-50 border border-orange-200 rounded-lg p-3 mb-4">
+          <div className="flex items-center gap-2">
+            <Clock size={16} className="text-orange-600" />
+            <p className="text-sm text-orange-800">
+              <strong>Late Coming:</strong> Click on any <span className="inline-flex items-center justify-center w-6 h-6 bg-green-100 text-green-700 text-[10px] font-bold rounded border border-green-200">P</span> cell to mark/unmark late coming. 
+              Late marks show as <span className="inline-flex items-center justify-center w-4 h-4 bg-orange-500 rounded-full"><Clock size={8} className="text-white" /></span> indicator.
+            </p>
+          </div>
+        </div>
 
         {/* Attendance Matrix */}
         {attendanceData && (
@@ -177,9 +239,34 @@ export default function Attendance({ user, onLogout }) {
                       </td>
                       {attendanceData.dates.map((day) => {
                         const status = attendanceData.attendance[employee.employee_id]?.[day] || '-';
+                        const late = isLate(employee.employee_id, day);
+                        const key = `${employee.employee_id}-${day}`;
+                        const isToggling = toggling[key];
+                        const canToggle = status === 'P';
+                        
                         return (
-                          <td key={day} className="px-2 py-3 text-center border-b border-slate-100" title={`${employee.name} - ${day} ${months[month - 1]}: ${status === '-' ? 'Future' : getStatusLabel(status)}`}>
-                            <div className={`inline-flex items-center justify-center w-9 h-9 rounded-lg border text-[10px] font-bold ${status === '-' ? 'bg-slate-50 text-slate-300 border-slate-100' : getStatusColor(status)}`}>{status}</div>
+                          <td key={day} className="px-2 py-3 text-center border-b border-slate-100">
+                            <div 
+                              className="relative inline-flex items-center justify-center"
+                              title={`${employee.name} - ${day} ${months[month - 1]}: ${status === '-' ? 'Future' : getStatusLabel(status)}${late ? ' (Late)' : ''}${canToggle ? '\nClick to toggle late mark' : ''}`}
+                            >
+                              <button
+                                onClick={() => canToggle && handleToggleLate(employee.employee_id, day, status)}
+                                disabled={!canToggle || isToggling}
+                                className={`w-9 h-9 rounded-lg border text-[10px] font-bold flex items-center justify-center transition-all
+                                  ${status === '-' ? 'bg-slate-50 text-slate-300 border-slate-100 cursor-default' : getStatusColor(status)}
+                                  ${canToggle ? 'cursor-pointer hover:ring-2 hover:ring-orange-300 hover:ring-offset-1' : 'cursor-default'}
+                                  ${isToggling ? 'opacity-50' : ''}
+                                `}
+                              >
+                                {status}
+                              </button>
+                              {late && status === 'P' && (
+                                <div className="absolute -top-1 -right-1 w-4 h-4 bg-orange-500 rounded-full flex items-center justify-center border border-white shadow-sm" title="Late Coming">
+                                  <Clock size={8} className="text-white" />
+                                </div>
+                              )}
+                            </div>
                           </td>
                         );
                       })}

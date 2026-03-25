@@ -4312,6 +4312,121 @@ async def get_attendance(year: int, month: int, user: dict = Depends(require_rol
     }
 
 # Salary Calculation
+# Late Coming - Admin marks employees who came late
+@api_router.get("/late-coming")
+async def get_late_coming(year: int, month: int, user: dict = Depends(require_role(["admin", "hr"]))):
+    """Get late coming marks for all employees for a specific month"""
+    from calendar import monthrange
+    
+    num_days = monthrange(year, month)[1]
+    
+    # Get all active employees
+    employees = await db.employees.find({"status": "active"}, {"_id": 0, "employee_id": 1, "name": 1, "email": 1}).sort("name", 1).to_list(None)
+    
+    # Get late coming marks for this month
+    month_key = f"{year}-{month:02d}"
+    late_marks = await db.late_coming.find({"month_key": month_key}, {"_id": 0}).to_list(None)
+    
+    # Create a map: employee_id -> list of late dates
+    late_map = {}
+    for mark in late_marks:
+        emp_id = mark.get("employee_id")
+        if emp_id not in late_map:
+            late_map[emp_id] = []
+        late_map[emp_id].append(mark.get("day"))
+    
+    # Build response
+    employee_data = []
+    for emp in employees:
+        emp_id = emp["employee_id"]
+        employee_data.append({
+            "employee_id": emp_id,
+            "employee_name": emp.get("name", "Unknown"),
+            "late_days": sorted(late_map.get(emp_id, []))
+        })
+    
+    return {
+        "year": year,
+        "month": month,
+        "num_days": num_days,
+        "employees": employee_data,
+        "total_late_marks": sum(len(e["late_days"]) for e in employee_data)
+    }
+
+
+@api_router.post("/late-coming")
+async def toggle_late_coming(
+    year: int,
+    month: int,
+    employee_id: str,
+    day: int,
+    user: dict = Depends(require_role(["admin"]))
+):
+    """Toggle late coming mark for an employee on a specific day"""
+    from calendar import monthrange
+    
+    num_days = monthrange(year, month)[1]
+    if day < 1 or day > num_days:
+        raise HTTPException(status_code=400, detail=f"Invalid day: {day}")
+    
+    month_key = f"{year}-{month:02d}"
+    
+    # Check if mark exists
+    existing = await db.late_coming.find_one({
+        "month_key": month_key,
+        "employee_id": employee_id,
+        "day": day
+    })
+    
+    if existing:
+        # Remove the mark
+        await db.late_coming.delete_one({
+            "month_key": month_key,
+            "employee_id": employee_id,
+            "day": day
+        })
+        return {"action": "removed", "message": f"Late mark removed for day {day}"}
+    else:
+        # Add the mark
+        await db.late_coming.insert_one({
+            "month_key": month_key,
+            "employee_id": employee_id,
+            "day": day,
+            "year": year,
+            "month": month,
+            "marked_by": user.get("username", "admin"),
+            "marked_at": get_ist_now_iso()
+        })
+        return {"action": "added", "message": f"Late mark added for day {day}"}
+
+
+@api_router.get("/late-coming/my")
+async def get_my_late_coming(year: int, month: int, user: dict = Depends(require_role(["employee"]))):
+    """Get employee's own late coming marks for a specific month"""
+    # Get employee data
+    employee = await db.employees.find_one({"email": user["email"]}, {"_id": 0})
+    if not employee:
+        raise HTTPException(status_code=404, detail="Employee not found")
+    
+    emp_id = employee["employee_id"]
+    month_key = f"{year}-{month:02d}"
+    
+    # Get late marks for this employee
+    late_marks = await db.late_coming.find({
+        "month_key": month_key,
+        "employee_id": emp_id
+    }, {"_id": 0, "day": 1}).to_list(None)
+    
+    late_days = sorted([m["day"] for m in late_marks])
+    
+    return {
+        "year": year,
+        "month": month,
+        "late_days": late_days,
+        "total_late": len(late_days)
+    }
+
+
 @api_router.get("/salary")
 async def get_salary(year: int, month: int, user: dict = Depends(require_role(["admin", "hr"]))):
     """Calculate monthly salary for all active employees"""

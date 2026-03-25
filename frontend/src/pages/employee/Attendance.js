@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react';
 import Layout from '../../components/layout/Layout';
 import { api } from '../../utils/api';
 import { Button } from '../../components/ui/button';
-import { ChevronLeft, ChevronRight, Calendar, IndianRupee, AlertTriangle, CheckCircle, MessageCircle } from 'lucide-react';
+import { ChevronLeft, ChevronRight, Calendar, IndianRupee, AlertTriangle, CheckCircle, MessageCircle, Clock } from 'lucide-react';
 import { toast } from 'sonner';
 
 function fmt(num) {
@@ -18,11 +18,12 @@ export default function EmployeeAttendance({ user, onLogout }) {
   const [attendanceData, setAttendanceData] = useState(null);
   const [salaryData, setSalaryData] = useState(null);
   const [lateMarkStatus, setLateMarkStatus] = useState(null);
+  const [lateComingData, setLateComingData] = useState(null);
 
   const months = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
   const years = Array.from({ length: 5 }, (_, i) => currentDate.getFullYear() - 2 + i);
 
-  useEffect(() => { fetchAttendance(); fetchSalary(); fetchLateMarkStatus(); }, [year, month]);
+  useEffect(() => { fetchAttendance(); fetchSalary(); fetchLateMarkStatus(); fetchLateComing(); }, [year, month]);
 
   const fetchAttendance = async () => {
     try {
@@ -53,6 +54,17 @@ export default function EmployeeAttendance({ user, onLogout }) {
       setLateMarkStatus(null);
     }
   };
+
+  const fetchLateComing = async () => {
+    try {
+      const response = await api.get(`/late-coming/my?year=${year}&month=${month}`);
+      setLateComingData(response.data);
+    } catch (error) {
+      setLateComingData(null);
+    }
+  };
+
+  const isLate = (day) => lateComingData?.late_days?.includes(day);
 
   const handlePreviousMonth = () => { if (month === 1) { setMonth(12); setYear(year - 1); } else { setMonth(month - 1); } };
   const handleNextMonth = () => { if (month === 12) { setMonth(1); setYear(year + 1); } else { setMonth(month + 1); } };
@@ -229,11 +241,17 @@ export default function EmployeeAttendance({ user, onLogout }) {
                 const status = attendanceData.attendance[day] || '-';
                 const isToday = day === currentDate.getDate() && month === currentDate.getMonth() + 1 && year === currentDate.getFullYear();
                 const isCompensation = attendanceData.compensation_dates?.includes(day);
+                const late = isLate(day);
                 return (
-                  <div key={day} className={`aspect-square rounded-lg flex flex-col items-center justify-center p-1 border transition-colors ${isToday ? 'border-slate-900 bg-slate-50 ring-1 ring-slate-900' : isCompensation ? 'border-emerald-300 bg-emerald-50/50' : 'border-slate-100'}`} data-testid={`day-${day}`} title={`${getStatusLabel(status)}${isCompensation ? ' (Compensation)' : ''}`}>
+                  <div key={day} className={`aspect-square rounded-lg flex flex-col items-center justify-center p-1 border transition-colors relative ${isToday ? 'border-slate-900 bg-slate-50 ring-1 ring-slate-900' : isCompensation ? 'border-emerald-300 bg-emerald-50/50' : 'border-slate-100'}`} data-testid={`day-${day}`} title={`${getStatusLabel(status)}${isCompensation ? ' (Compensation)' : ''}${late ? ' - Late Coming' : ''}`}>
                     <div className={`text-xs font-semibold ${isToday ? 'text-slate-900' : 'text-slate-500'}`}>{day}</div>
                     <div className={`text-[10px] font-bold mt-0.5 px-1.5 py-0.5 rounded border ${getStatusColor(status)}`}>{status}</div>
                     {isCompensation && <div className="text-[8px] font-bold text-emerald-700 mt-0.5 leading-none" data-testid={`comp-${day}`}>COMP</div>}
+                    {late && status === 'P' && (
+                      <div className="absolute -top-1 -right-1 w-4 h-4 bg-orange-500 rounded-full flex items-center justify-center border border-white shadow-sm" title="Late Coming">
+                        <Clock size={8} className="text-white" />
+                      </div>
+                    )}
                   </div>
                 );
               })}
@@ -383,8 +401,32 @@ export default function EmployeeAttendance({ user, onLogout }) {
               <div className="w-7 h-7 flex items-center justify-center rounded border border-emerald-300 bg-emerald-50 text-[8px] font-bold text-emerald-700">COMP</div>
               <span className="text-xs text-slate-500">Compensation</span>
             </div>
+            <div className="flex items-center gap-2">
+              <div className="w-7 h-7 flex items-center justify-center rounded-full bg-orange-500 border border-orange-600">
+                <Clock size={12} className="text-white" />
+              </div>
+              <span className="text-xs text-slate-500">Late Coming</span>
+            </div>
           </div>
         </div>
+
+        {/* Late Coming Warning */}
+        {lateComingData && lateComingData.total_late > 0 && (
+          <div className="bg-orange-50 border border-orange-200 rounded-xl p-4 shadow-sm">
+            <div className="flex items-start gap-3">
+              <div className="p-2 bg-orange-100 rounded-full">
+                <Clock className="text-orange-600" size={20} />
+              </div>
+              <div>
+                <h3 className="font-semibold text-orange-800">Late Coming: {lateComingData.total_late} day{lateComingData.total_late > 1 ? 's' : ''}</h3>
+                <p className="text-sm text-orange-700 mt-1">
+                  You have been marked late on: <strong>{lateComingData.late_days?.join(', ')}</strong> of this month.
+                </p>
+                <p className="text-xs text-orange-600 mt-2">Please ensure timely attendance to avoid any impact on your records.</p>
+              </div>
+            </div>
+          </div>
+        )}
       </div>
     </Layout>
   );
