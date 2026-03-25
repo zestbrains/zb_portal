@@ -5,7 +5,7 @@ import { Button } from '../../components/ui/button';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../../components/ui/select';
 import { Input } from '../../components/ui/input';
 import { toast } from 'sonner';
-import { IndianRupee, Search, Download, Save } from 'lucide-react';
+import { IndianRupee, Search, Download, Save, AlertTriangle, CheckCircle } from 'lucide-react';
 
 const MONTHS = [
   { value: '1', label: 'January' }, { value: '2', label: 'February' },
@@ -41,6 +41,7 @@ export default function Salary({ user, onLogout }) {
   const [month, setMonth] = useState(now.getMonth() + 1 < START_MONTH && now.getFullYear() === START_YEAR ? START_MONTH.toString() : (now.getMonth() + 1).toString());
   const [year, setYear] = useState(now.getFullYear().toString());
   const [data, setData] = useState([]);
+  const [lateMarksData, setLateMarksData] = useState({});
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState('');
   const [edits, setEdits] = useState({});
@@ -48,6 +49,7 @@ export default function Salary({ user, onLogout }) {
 
   useEffect(() => {
     fetchSalary();
+    fetchLateMarks();
     setEdits({});
   }, [month, year]);
 
@@ -63,6 +65,24 @@ export default function Salary({ user, onLogout }) {
       setLoading(false);
     }
   };
+
+  const fetchLateMarks = async () => {
+    try {
+      const res = await api.get(`/late-marks?year=${year}&month=${month}`);
+      const statusMap = {};
+      res.data.employees?.forEach(emp => {
+        statusMap[emp.employee_id] = {
+          salary_status: emp.salary_status,
+          has_late_mark: emp.has_late_mark
+        };
+      });
+      setLateMarksData(statusMap);
+    } catch (error) {
+      setLateMarksData({});
+    }
+  };
+
+  const getSalaryStatus = (empId) => lateMarksData[empId] || null;
 
   const getEditValue = (empId, field) => {
     if (edits[empId] && edits[empId][field] !== undefined) return edits[empId][field];
@@ -215,6 +235,7 @@ export default function Salary({ user, onLogout }) {
                   <tr className="border-b border-slate-200 bg-slate-50/50">
                     <th className="text-left text-[10px] font-semibold text-slate-500 uppercase tracking-wider py-3 px-2">#</th>
                     <th className="text-left text-[10px] font-semibold text-slate-500 uppercase tracking-wider py-3 px-2">Employee</th>
+                    <th className="text-center text-[10px] font-semibold text-slate-500 uppercase tracking-wider py-3 px-2">Status</th>
                     <th className="text-right text-[10px] font-semibold text-slate-500 uppercase tracking-wider py-3 px-2">Salary</th>
                     <th className="text-right text-[10px] font-semibold text-slate-500 uppercase tracking-wider py-3 px-2">PT</th>
                     <th className="text-right text-[10px] font-semibold text-slate-500 uppercase tracking-wider py-3 px-2">ESIC</th>
@@ -235,12 +256,30 @@ export default function Salary({ user, onLogout }) {
                   {filtered.map((emp, idx) => {
                     const c = computeLocal(emp);
                     const edited = hasEdits(emp.employee_id);
+                    const salaryInfo = getSalaryStatus(emp.employee_id);
                     return (
-                      <tr key={emp.employee_id} className={`border-b border-slate-100 last:border-0 hover:bg-slate-50/80 transition-colors ${edited ? 'bg-amber-50/40' : ''}`} data-testid={`salary-row-${emp.employee_id}`}>
+                      <tr key={emp.employee_id} className={`border-b border-slate-100 last:border-0 hover:bg-slate-50/80 transition-colors ${edited ? 'bg-amber-50/40' : ''} ${salaryInfo?.salary_status === 'hold' ? 'bg-red-50/30' : ''}`} data-testid={`salary-row-${emp.employee_id}`}>
                         <td className="py-2 px-2 text-xs text-slate-400">{idx + 1}</td>
                         <td className="py-2 px-2">
                           <div className="font-medium text-xs text-slate-800">{emp.employee_name}</div>
                           <div className="text-[10px] text-slate-400">{emp.employee_id}</div>
+                        </td>
+                        <td className="py-2 px-2 text-center">
+                          {salaryInfo ? (
+                            <div className={`inline-flex items-center gap-1 px-2 py-1 rounded-full text-[10px] font-bold ${
+                              salaryInfo.salary_status === 'hold' 
+                                ? 'bg-red-100 text-red-700 border border-red-200' 
+                                : 'bg-green-100 text-green-700 border border-green-200'
+                            }`}>
+                              {salaryInfo.salary_status === 'hold' ? (
+                                <><AlertTriangle size={10} /> HOLD</>
+                              ) : (
+                                <><CheckCircle size={10} /> ACTIVE</>
+                              )}
+                            </div>
+                          ) : (
+                            <span className="text-slate-300 text-xs">-</span>
+                          )}
                         </td>
                         <td className="py-2 px-2 text-right text-xs text-slate-700 font-medium">{fmt(emp.salary)}</td>
                         <td className="py-2 px-2 text-right text-xs text-red-600">{emp.pt > 0 ? `-${fmt(emp.pt)}` : '0'}</td>

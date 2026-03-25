@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import Layout from '../../components/layout/Layout';
 import { api } from '../../utils/api';
-import { ChevronLeft, ChevronRight, Calendar, AlertTriangle, CheckCircle } from 'lucide-react';
+import { ChevronLeft, ChevronRight, Calendar } from 'lucide-react';
 import { toast } from 'sonner';
 
 export default function Attendance({ user, onLogout }) {
@@ -10,7 +10,6 @@ export default function Attendance({ user, onLogout }) {
   const [month, setMonth] = useState(currentDate.getMonth() + 1);
   const [loading, setLoading] = useState(true);
   const [attendanceData, setAttendanceData] = useState(null);
-  const [lateMarksData, setLateMarksData] = useState(null);
 
   const months = [
     'January', 'February', 'March', 'April', 'May', 'June',
@@ -21,7 +20,6 @@ export default function Attendance({ user, onLogout }) {
 
   useEffect(() => {
     fetchAttendance();
-    fetchLateMarks();
   }, [year, month]);
 
   const fetchAttendance = async () => {
@@ -35,28 +33,6 @@ export default function Attendance({ user, onLogout }) {
     } finally {
       setLoading(false);
     }
-  };
-
-  const fetchLateMarks = async () => {
-    try {
-      const response = await api.get(`/late-marks?year=${year}&month=${month}`);
-      // Create a map of employee_id -> salary_status
-      const statusMap = {};
-      response.data.employees?.forEach(emp => {
-        statusMap[emp.employee_id] = {
-          salary_status: emp.salary_status,
-          has_late_mark: emp.has_late_mark
-        };
-      });
-      setLateMarksData(statusMap);
-    } catch (error) {
-      setLateMarksData(null);
-    }
-  };
-
-  const getSalaryStatus = (employeeId) => {
-    if (!lateMarksData || !lateMarksData[employeeId]) return null;
-    return lateMarksData[employeeId];
   };
 
   const handlePreviousMonth = () => {
@@ -185,7 +161,6 @@ export default function Attendance({ user, onLogout }) {
                 <thead className="bg-slate-50 sticky top-0 z-10">
                   <tr>
                     <th className="px-4 py-3 text-left text-xs font-semibold text-slate-500 uppercase tracking-wider border-b border-r border-slate-200 bg-slate-50 sticky left-0 z-20 w-48">Employee</th>
-                    <th className="px-3 py-3 text-center text-xs font-semibold text-slate-500 uppercase tracking-wider border-b border-r border-slate-200 bg-slate-50 w-20">Salary</th>
                     {attendanceData.dates.map((day) => (
                       <th key={day} className="px-3 py-3 text-center text-xs font-medium text-slate-400 border-b border-slate-200 w-14">
                         <div className="font-semibold text-slate-500">{day}</div>
@@ -195,29 +170,10 @@ export default function Attendance({ user, onLogout }) {
                   </tr>
                 </thead>
                 <tbody>
-                  {attendanceData.employees.map((employee, idx) => {
-                    const salaryInfo = getSalaryStatus(employee.employee_id);
-                    return (
+                  {attendanceData.employees.map((employee, idx) => (
                     <tr key={employee.employee_id} className={idx % 2 === 0 ? 'bg-white hover:bg-slate-50' : 'bg-slate-50/30 hover:bg-slate-50'}>
                       <td className="px-4 py-3 text-sm border-b border-r border-slate-100 font-medium sticky left-0 z-10 bg-inherit w-48">
                         <div className="flex flex-col"><span className="font-semibold text-slate-800 truncate">{employee.name}</span><span className="text-xs text-slate-400">{employee.employee_id}</span></div>
-                      </td>
-                      <td className="px-2 py-3 text-center border-b border-r border-slate-100 w-20">
-                        {salaryInfo ? (
-                          <div className={`inline-flex items-center gap-1 px-2 py-1 rounded-full text-[10px] font-bold ${
-                            salaryInfo.salary_status === 'hold' 
-                              ? 'bg-red-100 text-red-700 border border-red-200' 
-                              : 'bg-green-100 text-green-700 border border-green-200'
-                          }`}>
-                            {salaryInfo.salary_status === 'hold' ? (
-                              <><AlertTriangle size={10} /> HOLD</>
-                            ) : (
-                              <><CheckCircle size={10} /> ACTIVE</>
-                            )}
-                          </div>
-                        ) : (
-                          <span className="text-slate-300 text-xs">-</span>
-                        )}
                       </td>
                       {attendanceData.dates.map((day) => {
                         const status = attendanceData.attendance[employee.employee_id]?.[day] || '-';
@@ -228,7 +184,7 @@ export default function Attendance({ user, onLogout }) {
                         );
                       })}
                     </tr>
-                  );})}
+                  ))}
                 </tbody>
               </table>
             </div>
