@@ -1,4 +1,4 @@
-from fastapi import FastAPI, APIRouter, HTTPException, Depends, status, UploadFile, File, Query
+from fastapi import FastAPI, APIRouter, HTTPException, Depends, status, UploadFile, File, Query, Body
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from dotenv import load_dotenv
 from starlette.middleware.cors import CORSMiddleware
@@ -83,7 +83,13 @@ class EmployeeCreate(BaseModel):
     password: str
     joining_date: str
     birth_date: Optional[str] = None  # New field
-    team_leader_ids: Optional[List[str]] = []  # Assigned team leaders
+    team_leader_ids: Optional[List[str]] = []  # Team leaders (fixed per employee)
+    bank_id: Optional[str] = None  # Bank selection
+    pt: Optional[str] = None  # PT field
+    esic: Optional[str] = None  # ESIC field
+    epf: Optional[str] = None  # EPF field
+    cpf: Optional[str] = None  # CPF field
+    salary: Optional[str] = None  # Salary field
 
 class EmployeeUpdate(BaseModel):
     employee_id: Optional[str] = None  # Now editable
@@ -95,7 +101,13 @@ class EmployeeUpdate(BaseModel):
     password: Optional[str] = None
     birth_date: Optional[str] = None  # New field
     joining_date: Optional[str] = None  # Now editable
-    team_leader_ids: Optional[List[str]] = None  # Assigned team leaders
+    team_leader_ids: Optional[List[str]] = None  # Team leaders (fixed per employee)
+    bank_id: Optional[str] = None  # Bank selection
+    pt: Optional[str] = None  # PT field
+    esic: Optional[str] = None  # ESIC field
+    epf: Optional[str] = None  # EPF field
+    cpf: Optional[str] = None  # CPF field
+    salary: Optional[str] = None  # Salary field
 
 class Employee(BaseModel):
     model_config = ConfigDict(extra="ignore")
@@ -110,7 +122,6 @@ class Employee(BaseModel):
     experience: Optional[str] = ""
     joining_date: str
     birth_date: Optional[str] = None  # New field
-    team_leader_ids: List[str] = []  # Assigned team leaders
     status: str
     probation_end_date: str
     annual_pl_allocation: int
@@ -118,6 +129,12 @@ class Employee(BaseModel):
     cl_taken: float
     created_at: str
     updated_at: str
+    bank_id: Optional[str] = None  # Bank selection
+    pt: Optional[str] = None  # PT field
+    esic: Optional[str] = None  # ESIC field
+    epf: Optional[str] = None  # EPF field
+    cpf: Optional[str] = None  # CPF field
+    salary: Optional[str] = None  # Salary field
 
 class ProjectCreate(BaseModel):
     name: str
@@ -409,7 +426,7 @@ async def get_current_user(credentials: HTTPAuthorizationCredentials = Depends(s
         return user
     except jwt.ExpiredSignatureError:
         raise HTTPException(status_code=401, detail="Token expired")
-    except jwt.JWTError:
+    except (jwt.PyJWTError, jwt.DecodeError, jwt.ExpiredSignatureError, Exception):
         raise HTTPException(status_code=401, detail="Invalid token")
 
 def require_role(allowed_roles: List[str]):
@@ -636,6 +653,12 @@ async def create_employee(emp: EmployeeCreate, user: dict = Depends(require_role
         "annual_pl_allocation": 16,
         "pl_taken": 0.0,
         "cl_taken": 0.0,
+        "bank_id": emp.bank_id,  # Bank ID
+        "pt": emp.pt,  # PT
+        "esic": emp.esic,  # ESIC
+        "epf": emp.epf,  # EPF
+        "cpf": emp.cpf,  # CPF
+        "salary": emp.salary,  # Salary
         "created_at": now,
         "updated_at": now
     }
@@ -679,6 +702,18 @@ async def update_employee(emp_id: str, emp: EmployeeUpdate, user: dict = Depends
         update_data["joining_date"] = emp.joining_date
     if emp.team_leader_ids is not None:
         update_data["team_leader_ids"] = emp.team_leader_ids
+    if emp.bank_id is not None:
+        update_data["bank_id"] = emp.bank_id
+    if emp.pt is not None:
+        update_data["pt"] = emp.pt
+    if emp.esic is not None:
+        update_data["esic"] = emp.esic
+    if emp.epf is not None:
+        update_data["epf"] = emp.epf
+    if emp.cpf is not None:
+        update_data["cpf"] = emp.cpf
+    if emp.salary is not None:
+        update_data["salary"] = emp.salary
     
     result = await db.employees.update_one({"id": emp_id}, {"$set": update_data})
     
@@ -904,11 +939,10 @@ async def get_team_projects_view(user: dict = Depends(get_current_user)):
     
     # Get team member employee IDs
     team_member_ids = [m["employee_id"] for m in team_members]
-    all_member_ids = team_member_ids + [emp_id]  # Include self
     
-    # Get all projects assigned to team leader or any team member
+    # Get all projects assigned to team members ONLY (not team leader's own projects)
     projects = await db.projects.find(
-        {"assigned_employees": {"$in": all_member_ids}},
+        {"assigned_employees": {"$in": team_member_ids}},
         {"_id": 0}
     ).to_list(1000)
     
@@ -1211,7 +1245,7 @@ async def check_if_team_leader(user: dict = Depends(get_current_user)):
     ).to_list(1000)
     
     return {
-        "is_team_leader": len(team_members) > 0,
+        "is_team_leader": True,  # If we reach here, employee is in at least one project's team_leader_ids
         "employee_id": emp_id,
         "employee_name": employee.get("name"),
         "team_members": team_members
@@ -1306,6 +1340,7 @@ async def import_projects(file: UploadFile = File(...), user: dict = Depends(req
 @api_router.get("/work-entries")
 async def get_work_entries(
     employee_id: Optional[str] = None,
+    project_code: Optional[str] = None,
     date: Optional[str] = None,
     from_date: Optional[str] = None,
     to_date: Optional[str] = None,
@@ -1313,7 +1348,13 @@ async def get_work_entries(
 ):
     query = {}
     
-    if user["role"] == "employee":
+    # If project_code is provided, get all entries for that project (for team leader view)
+    if project_code:
+        query["project_code"] = project_code
+        # If employee_id is also provided, filter by specific employee within that project
+        if employee_id:
+            query["employee_id"] = employee_id
+    elif user["role"] == "employee":
         employee = await db.employees.find_one({"email": user["email"]})
         if not employee:
             raise HTTPException(status_code=404, detail="Employee profile not found. Please contact admin.")
@@ -1877,7 +1918,8 @@ async def get_detailed_work_summary(
             "project_code": proj_code,
             "project_name": project.get("name", proj_code or "Unknown"),
             "hours": entry["hours"],
-            "work_details": entry.get("work_details", "")
+            "work_details": entry.get("work_details", ""),
+            "is_compensation": entry.get("is_compensation", False)
         })
         grouped[key]["total_hours"] += entry["hours"]
     
@@ -4077,6 +4119,725 @@ logging.basicConfig(
     level=logging.INFO,
     format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
 )
+
+# ==================== BANKS MANAGEMENT ====================
+# Banks CRUD - Admin Only
+
+class BankCreate(BaseModel):
+    name: str
+
+class Bank(BaseModel):
+    model_config = ConfigDict(extra="ignore")
+    id: str
+    name: str
+    is_active: bool = True
+    created_at: str
+    updated_at: str
+
+@api_router.get("/banks")
+async def get_banks(user: dict = Depends(require_role(["admin"]))):
+    """Get all banks"""
+    banks = await db.banks.find({}, {"_id": 0}).to_list(None)
+    # Sort by name
+    banks.sort(key=lambda x: x['name'].lower())
+    return banks
+
+@api_router.post("/banks", response_model=Bank)
+async def create_bank(bank: BankCreate, user: dict = Depends(require_role(["admin"]))):
+    """Create a new bank"""
+    # Check if bank name already exists
+    existing = await db.banks.find_one({"name": {"$regex": f"^{bank.name}$", "$options": "i"}})
+    if existing:
+        raise HTTPException(status_code=400, detail="Bank with this name already exists")
+    
+    new_bank = {
+        "id": str(uuid.uuid4()),
+        "name": bank.name.strip(),
+        "is_active": True,
+        "created_at": get_ist_now_iso(),
+        "updated_at": get_ist_now_iso()
+    }
+    await db.banks.insert_one(new_bank)
+    return new_bank
+
+@api_router.put("/banks/{bank_id}", response_model=Bank)
+async def update_bank(bank_id: str, bank: BankCreate, user: dict = Depends(require_role(["admin"]))):
+    """Update a bank"""
+    existing_bank = await db.banks.find_one({"id": bank_id})
+    if not existing_bank:
+        raise HTTPException(status_code=404, detail="Bank not found")
+    
+    # Check if new name conflicts with another bank
+    name_conflict = await db.banks.find_one({
+        "name": {"$regex": f"^{bank.name}$", "$options": "i"},
+        "id": {"$ne": bank_id}
+    })
+    if name_conflict:
+        raise HTTPException(status_code=400, detail="Bank with this name already exists")
+    
+    await db.banks.update_one(
+        {"id": bank_id},
+        {"$set": {
+            "name": bank.name.strip(),
+            "updated_at": get_ist_now_iso()
+        }}
+    )
+    updated_bank = await db.banks.find_one({"id": bank_id}, {"_id": 0})
+    return updated_bank
+
+@api_router.put("/banks/{bank_id}/status")
+async def toggle_bank_status(bank_id: str, user: dict = Depends(require_role(["admin"]))):
+    """Toggle bank active/inactive status"""
+    bank = await db.banks.find_one({"id": bank_id})
+
+
+# ==================== ATTENDANCE MODULE ====================
+# Attendance - Get monthly attendance matrix
+
+@api_router.get("/attendance")
+async def get_attendance(year: int, month: int, user: dict = Depends(require_role(["admin", "hr"]))):
+    """Get attendance matrix for a specific month - OPTIMIZED"""
+    from calendar import monthrange
+    
+    # Get all active employees
+    employees = await db.employees.find({"status": "active"}, {"_id": 0}).sort("name", 1).to_list(None)
+    
+    # Get number of days in the month
+    num_days = monthrange(year, month)[1]
+    dates = list(range(1, num_days + 1))
+    
+    # Check if this is a future month or current month
+    today = datetime.now(IST)
+    is_future_month = year > today.year or (year == today.year and month > today.month)
+    is_current_month = year == today.year and month == today.month
+    
+    # OPTIMIZATION: Fetch all data at once
+    # 1. Get all holidays for this month
+    start_date = f"{year}-{month:02d}-01"
+    end_date = f"{year}-{month:02d}-{num_days:02d}"
+    holidays_cursor = db.holidays.find({
+        "date": {"$gte": start_date, "$lte": end_date}
+    }, {"_id": 0})
+    holidays_list = await holidays_cursor.to_list(None)
+    holiday_dates = {h["date"] for h in holidays_list}
+    
+    # 2. Get all approved leave applications for all employees
+    leave_apps = await db.leave_applications.find({
+        "status": "approved"
+    }, {"_id": 0, "employee_id": 1, "leave_dates": 1}).to_list(None)
+    
+    # Build leave map: {employee_id: {date: leave_type}}
+    leave_map = {}
+    for leave_app in leave_apps:
+        emp_id = leave_app.get("employee_id")
+        if emp_id not in leave_map:
+            leave_map[emp_id] = {}
+        
+        if leave_app.get("leave_dates"):
+            for leave_date_entry in leave_app["leave_dates"]:
+                date = leave_date_entry.get("date")
+                leave_type = leave_date_entry.get("leave_type", "PL")
+                if leave_type != "Rejected" and date >= start_date and date <= end_date:
+                    leave_map[emp_id][date] = leave_type
+    
+    # 3. Get all work entries for this month (for OT calculation)
+    work_entries = await db.work_entries.find({
+        "date": {"$gte": start_date, "$lte": end_date}
+    }, {"_id": 0, "employee_id": 1, "date": 1, "hours": 1}).to_list(None)
+    
+    # Build work hours map: {employee_id: {date: total_hours}}
+    work_hours_map = {}
+    for entry in work_entries:
+        emp_id = entry.get("employee_id")
+        date = entry.get("date")
+        hours = entry.get("hours", 0)
+        
+        if emp_id not in work_hours_map:
+            work_hours_map[emp_id] = {}
+        if date not in work_hours_map[emp_id]:
+            work_hours_map[emp_id][date] = 0
+        
+        work_hours_map[emp_id][date] += hours
+    
+    # Now build attendance matrix
+    attendance = {}
+    
+    for emp in employees:
+        emp_id = emp["employee_id"]
+        attendance[emp_id] = {}
+        
+        for day in dates:
+            date_str = f"{year}-{month:02d}-{day:02d}"
+            day_of_week = datetime(year, month, day).weekday()
+            
+            is_holiday = date_str in holiday_dates
+            is_weekend = day_of_week >= 5
+            
+            # Check for future dates
+            is_future_date = False
+            if is_current_month:
+                is_future_date = day > today.day
+            elif is_future_month:
+                is_future_date = True
+            
+            # Check if employee has leave on this date
+            if emp_id in leave_map and date_str in leave_map[emp_id]:
+                attendance[emp_id][day] = leave_map[emp_id][date_str]
+            elif (is_weekend or is_holiday) and not is_future_date:
+                # Check if employee worked (OT)
+                total_hours = work_hours_map.get(emp_id, {}).get(date_str, 0)
+                
+                if total_hours >= 8.5:
+                    attendance[emp_id][day] = "OT"
+                elif total_hours >= 4.5:
+                    attendance[emp_id][day] = "OT/2"
+                elif is_holiday:
+                    attendance[emp_id][day] = "H"
+                else:
+                    attendance[emp_id][day] = "WO"
+            elif is_weekend:
+                attendance[emp_id][day] = "WO"
+            elif is_holiday:
+                attendance[emp_id][day] = "H"
+            elif is_future_date:
+                attendance[emp_id][day] = "-"
+            else:
+                attendance[emp_id][day] = "P"
+    
+    return {
+        "year": year,
+        "month": month,
+        "num_days": num_days,
+        "dates": dates,
+        "employees": employees,
+        "attendance": attendance
+    }
+
+# Salary Calculation
+@api_router.get("/salary")
+async def get_salary(year: int, month: int, user: dict = Depends(require_role(["admin", "hr"]))):
+    """Calculate monthly salary for all active employees"""
+    from calendar import monthrange
+
+    num_days = monthrange(year, month)[1]
+    start_date = f"{year}-{month:02d}-01"
+    end_date = f"{year}-{month:02d}-{num_days:02d}"
+
+    today = datetime.now(IST)
+    is_future_month = year > today.year or (year == today.year and month > today.month)
+    is_current_month = year == today.year and month == today.month
+
+    employees = await db.employees.find({"status": "active"}, {"_id": 0}).sort("name", 1).to_list(None)
+
+    holidays_list = await db.holidays.find({
+        "date": {"$gte": start_date, "$lte": end_date}
+    }, {"_id": 0}).to_list(None)
+    holiday_dates = {h["date"] for h in holidays_list}
+
+    leave_apps = await db.leave_applications.find({
+        "status": "approved"
+    }, {"_id": 0, "employee_id": 1, "leave_dates": 1}).to_list(None)
+
+    leave_map = {}
+    for leave_app in leave_apps:
+        emp_id = leave_app.get("employee_id")
+        if emp_id not in leave_map:
+            leave_map[emp_id] = {}
+        if leave_app.get("leave_dates"):
+            for ld in leave_app["leave_dates"]:
+                date = ld.get("date")
+                leave_type = ld.get("leave_type", "PL")
+                if leave_type != "Rejected" and date >= start_date and date <= end_date:
+                    leave_map[emp_id][date] = leave_type
+
+    work_entries = await db.work_entries.find({
+        "date": {"$gte": start_date, "$lte": end_date}
+    }, {"_id": 0, "employee_id": 1, "date": 1, "hours": 1, "is_compensation": 1}).to_list(None)
+
+    work_hours_map = {}
+    for entry in work_entries:
+        # Skip compensation entries - they don't count as OT
+        if entry.get("is_compensation", False):
+            continue
+        emp_id = entry.get("employee_id")
+        date = entry.get("date")
+        hours = entry.get("hours", 0)
+        if emp_id not in work_hours_map:
+            work_hours_map[emp_id] = {}
+        if date not in work_hours_map[emp_id]:
+            work_hours_map[emp_id][date] = 0
+        work_hours_map[emp_id][date] += hours
+
+    # Load salary adjustments for this month
+    adjustments_list = await db.salary_adjustments.find({
+        "year": year, "month": month
+    }, {"_id": 0}).to_list(None)
+    adjustments_map = {a["employee_id"]: a for a in adjustments_list}
+
+    salary_data = []
+    for emp in employees:
+        emp_id = emp["employee_id"]
+        salary_str = emp.get("salary", "") or ""
+        pt_str = emp.get("pt", "") or ""
+        esic_str = emp.get("esic", "") or ""
+        epf_str = emp.get("epf", "") or ""
+        cpf_str = emp.get("cpf", "") or ""
+
+        try:
+            salary = float(salary_str) if salary_str else 0
+        except (ValueError, TypeError):
+            salary = 0
+        try:
+            pt = float(pt_str) if pt_str else 0
+        except (ValueError, TypeError):
+            pt = 0
+        try:
+            esic = float(esic_str) if esic_str else 0
+        except (ValueError, TypeError):
+            esic = 0
+        try:
+            epf = float(epf_str) if epf_str else 0
+        except (ValueError, TypeError):
+            epf = 0
+        try:
+            cpf = float(cpf_str) if cpf_str else 0
+        except (ValueError, TypeError):
+            cpf = 0
+
+        adj = adjustments_map.get(emp_id, {})
+        other_income = float(adj.get("other_income", 0) or 0)
+        extra_hours = float(adj.get("extra_hours", 0) or 0)
+
+        cl_count = 0
+        ot_count = 0
+
+        # Build day classification for sandwich leave detection
+        day_types = []  # (day_num, date_str, status)
+        for day in range(1, num_days + 1):
+            date_str = f"{year}-{month:02d}-{day:02d}"
+            day_of_week = datetime(year, month, day).weekday()
+            is_holiday = date_str in holiday_dates
+            is_weekend = day_of_week >= 5
+
+            is_future_date = False
+            if is_current_month:
+                is_future_date = day > today.day
+            elif is_future_month:
+                is_future_date = True
+
+            # Check leave FIRST - approved leaves for future dates still count
+            if emp_id in leave_map and date_str in leave_map[emp_id]:
+                lt = leave_map[emp_id][date_str]
+                if lt == "CL":
+                    cl_count += 1
+                elif lt == "Half CL":
+                    cl_count += 0.5
+                elif lt == "PL/2 & CL/2":
+                    cl_count += 0.5
+                day_types.append((day, date_str, 'leave'))
+            elif is_weekend or is_holiday:
+                if not is_future_date:
+                    total_hours = work_hours_map.get(emp_id, {}).get(date_str, 0)
+                    if total_hours >= 8.5:
+                        ot_count += 1
+                        day_types.append((day, date_str, 'present'))
+                    elif total_hours >= 4.5:
+                        ot_count += 0.5
+                        day_types.append((day, date_str, 'present'))
+                    else:
+                        day_types.append((day, date_str, 'nonworking'))
+                else:
+                    # Future weekends/holidays still count as nonworking for sandwich detection
+                    day_types.append((day, date_str, 'nonworking'))
+            elif is_future_date:
+                day_types.append((day, date_str, 'future'))
+            else:
+                day_types.append((day, date_str, 'present'))
+
+        # Sandwich leave: find non-working groups and check if all
+        # working days between adjacent groups are on leave
+        nw_groups = []
+        i = 0
+        while i < len(day_types):
+            if day_types[i][2] == 'nonworking':
+                start = i
+                while i < len(day_types) and day_types[i][2] == 'nonworking':
+                    i += 1
+                nw_groups.append((start, i - 1))
+            else:
+                i += 1
+
+        sandwich_indices = set()
+        for g in range(len(nw_groups) - 1):
+            end_first = nw_groups[g][1]
+            start_second = nw_groups[g + 1][0]
+            between_start = end_first + 1
+            between_end = start_second - 1
+            if between_start > between_end:
+                continue
+            all_leave = all(day_types[j][2] == 'leave' for j in range(between_start, between_end + 1))
+            if all_leave:
+                for j in range(nw_groups[g][0], nw_groups[g][1] + 1):
+                    sandwich_indices.add(j)
+                for j in range(nw_groups[g + 1][0], nw_groups[g + 1][1] + 1):
+                    sandwich_indices.add(j)
+
+        sandwich_count = len(sandwich_indices)
+
+        per_day = salary / num_days if num_days > 0 and salary > 0 else 0
+        cl_amount = round(per_day * cl_count, 2)
+        ot_amount = round(per_day * ot_count, 2)
+        sandwich_amount = round(per_day * sandwich_count, 2)
+        per_hour = (per_day / 8.5) if per_day > 0 else 0
+        extra_hours_amount = round(per_hour * extra_hours, 2)
+        gross_salary = round(salary - pt - esic - epf - cpf - cl_amount - sandwich_amount + ot_amount + other_income + extra_hours_amount, 2)
+
+        # Till Date Salary: what to pay if employee leaves today
+        if is_current_month:
+            future_days = num_days - today.day
+        elif is_future_month:
+            future_days = num_days
+        else:
+            future_days = 0
+        future_amount = round(per_day * future_days, 2)
+        td_salary = round(gross_salary - future_amount, 2)
+
+        salary_data.append({
+            "employee_id": emp_id,
+            "employee_name": emp.get("name", "Unknown"),
+            "salary": salary,
+            "pt": pt,
+            "esic": esic,
+            "epf": epf,
+            "cpf": cpf,
+            "cl_count": cl_count,
+            "ot_count": ot_count,
+            "cl_amount": cl_amount,
+            "ot_amount": ot_amount,
+            "sandwich_days": sandwich_count,
+            "sandwich_amount": sandwich_amount,
+            "other_income": other_income,
+            "extra_hours": extra_hours,
+            "extra_hours_amount": extra_hours_amount,
+            "gross_salary": gross_salary,
+            "td_salary": td_salary,
+            "future_days": future_days,
+            "future_amount": future_amount,
+            "num_days": num_days
+        })
+
+    return {
+        "year": year,
+        "month": month,
+        "num_days": num_days,
+        "salary_data": salary_data
+    }
+
+@api_router.put("/salary/adjustments")
+async def save_salary_adjustment(
+    data: dict = Body(...),
+    user: dict = Depends(require_role(["admin"]))
+):
+    """Save other_income and extra_hours for an employee for a specific month"""
+    emp_id = data.get("employee_id")
+    year = data.get("year")
+    month = data.get("month")
+    other_income = data.get("other_income", 0)
+    extra_hours = data.get("extra_hours", 0)
+
+    if not emp_id or not year or not month:
+        raise HTTPException(status_code=400, detail="employee_id, year, month required")
+
+    await db.salary_adjustments.update_one(
+        {"employee_id": emp_id, "year": year, "month": month},
+        {"$set": {
+            "employee_id": emp_id,
+            "year": year,
+            "month": month,
+            "other_income": other_income,
+            "extra_hours": extra_hours
+        }},
+        upsert=True
+    )
+    return {"message": "Adjustment saved"}
+
+
+# Employee Attendance - View own attendance only
+@api_router.get("/attendance/my")
+async def get_my_attendance(year: int, month: int, user: dict = Depends(require_role(["employee"]))):
+    """Get employee's own attendance for a specific month"""
+    from calendar import monthrange
+    
+    # Get employee data
+    employee = await db.employees.find_one({"email": user["email"]}, {"_id": 0})
+    if not employee:
+        raise HTTPException(status_code=404, detail="Employee not found")
+    
+    emp_id = employee["employee_id"]
+    
+    # Get number of days in the month
+    num_days = monthrange(year, month)[1]
+    dates = list(range(1, num_days + 1))
+    
+    # Check if this is a future month or current month
+    today = datetime.now(IST)
+    is_future_month = year > today.year or (year == today.year and month > today.month)
+    is_current_month = year == today.year and month == today.month
+    
+    # Initialize attendance
+    attendance = {}
+    compensation_dates = []
+    
+    for day in dates:
+        date_str = f"{year}-{month:02d}-{day:02d}"
+        day_of_week = datetime(year, month, day).weekday()
+        
+        # Check if it's a holiday
+        holiday = await db.holidays.find_one({"date": date_str})
+        is_holiday = holiday is not None
+        is_weekend = day_of_week >= 5
+        
+        # Check for future dates
+        is_future_date = False
+        if is_current_month:
+            is_future_date = day > today.day
+        elif is_future_month:
+            is_future_date = True
+        
+        # Check approved leave applications
+        leave_found = False
+        leave_apps = await db.leave_applications.find({
+            "employee_id": emp_id,
+            "status": "approved"
+        }).to_list(None)
+        
+        for leave_app in leave_apps:
+            if leave_app.get("leave_dates"):
+                for leave_date_entry in leave_app["leave_dates"]:
+                    if leave_date_entry.get("date") == date_str:
+                        leave_type = leave_date_entry.get("leave_type", "PL")
+                        if leave_type != "Rejected":
+                            attendance[day] = leave_type
+                            leave_found = True
+                            break
+            if leave_found:
+                break
+        
+        if not leave_found:
+            if (is_weekend or is_holiday) and not is_future_date:
+                work_entries = await db.work_entries.find({
+                    "employee_id": emp_id,
+                    "date": date_str
+                }).to_list(None)
+                
+                total_hours = sum(entry.get("hours", 0) for entry in work_entries)
+                has_compensation = any(entry.get("is_compensation", False) for entry in work_entries)
+                
+                if total_hours >= 8.5:
+                    attendance[day] = "OT"
+                elif total_hours >= 4.5:
+                    attendance[day] = "OT/2"
+                elif is_holiday:
+                    attendance[day] = "H"
+                else:
+                    attendance[day] = "WO"
+                
+                if has_compensation:
+                    compensation_dates.append(day)
+            elif is_weekend:
+                attendance[day] = "WO"
+            elif is_holiday:
+                attendance[day] = "H"
+            elif is_future_date:
+                attendance[day] = "-"
+            else:
+                attendance[day] = "P"
+    
+    return {
+        "year": year,
+        "month": month,
+        "num_days": num_days,
+        "dates": dates,
+        "employee": employee,
+        "attendance": attendance,
+        "compensation_dates": compensation_dates
+    }
+
+@api_router.get("/salary/my")
+async def get_my_salary(year: int, month: int, user: dict = Depends(require_role(["employee"]))):
+    """Get employee's own salary calculation for a specific month"""
+    from calendar import monthrange
+
+    employee = await db.employees.find_one({"email": user["email"]}, {"_id": 0})
+    if not employee:
+        raise HTTPException(status_code=404, detail="Employee not found")
+
+    emp_id = employee["employee_id"]
+    num_days = monthrange(year, month)[1]
+    start_date = f"{year}-{month:02d}-01"
+    end_date = f"{year}-{month:02d}-{num_days:02d}"
+
+    today = datetime.now(IST)
+    is_future_month = year > today.year or (year == today.year and month > today.month)
+    is_current_month = year == today.year and month == today.month
+
+    holidays_list = await db.holidays.find({"date": {"$gte": start_date, "$lte": end_date}}, {"_id": 0}).to_list(None)
+    holiday_dates = {h["date"] for h in holidays_list}
+
+    leave_apps = await db.leave_applications.find({"employee_id": emp_id, "status": "approved"}, {"_id": 0, "leave_dates": 1}).to_list(None)
+    leave_map = {}
+    for la in leave_apps:
+        for ld in (la.get("leave_dates") or []):
+            date = ld.get("date")
+            lt = ld.get("leave_type", "PL")
+            if lt != "Rejected" and date >= start_date and date <= end_date:
+                leave_map[date] = lt
+
+    work_entries = await db.work_entries.find({"employee_id": emp_id, "date": {"$gte": start_date, "$lte": end_date}}, {"_id": 0, "date": 1, "hours": 1, "is_compensation": 1}).to_list(None)
+    work_hours_map = {}
+    for entry in work_entries:
+        if entry.get("is_compensation", False):
+            continue
+        d = entry.get("date")
+        if d not in work_hours_map:
+            work_hours_map[d] = 0
+        work_hours_map[d] += entry.get("hours", 0)
+
+    try:
+        salary = float(employee.get("salary") or 0)
+    except (ValueError, TypeError):
+        salary = 0
+    try:
+        pt = float(employee.get("pt") or 0)
+    except (ValueError, TypeError):
+        pt = 0
+    try:
+        esic = float(employee.get("esic") or 0)
+    except (ValueError, TypeError):
+        esic = 0
+    try:
+        epf = float(employee.get("epf") or 0)
+    except (ValueError, TypeError):
+        epf = 0
+    try:
+        cpf = float(employee.get("cpf") or 0)
+    except (ValueError, TypeError):
+        cpf = 0
+
+    adj = await db.salary_adjustments.find_one({"employee_id": emp_id, "year": year, "month": month}, {"_id": 0})
+    other_income = float((adj or {}).get("other_income", 0) or 0)
+    extra_hours = float((adj or {}).get("extra_hours", 0) or 0)
+
+    cl_count = 0
+    ot_count = 0
+    pl_count = 0
+    cl_dates = []
+    day_types = []
+
+    for day in range(1, num_days + 1):
+        date_str = f"{year}-{month:02d}-{day:02d}"
+        day_of_week = datetime(year, month, day).weekday()
+        is_holiday = date_str in holiday_dates
+        is_weekend = day_of_week >= 5
+        is_future_date = (is_current_month and day > today.day) or is_future_month
+
+        if date_str in leave_map:
+            lt = leave_map[date_str]
+            if lt == "CL":
+                cl_count += 1
+                cl_dates.append(day)
+            elif lt == "Half CL":
+                cl_count += 0.5
+                cl_dates.append(day)
+            elif lt == "PL/2 & CL/2":
+                cl_count += 0.5
+                cl_dates.append(day)
+                pl_count += 0.5
+            elif lt == "PL":
+                pl_count += 1
+            elif lt == "PL/2":
+                pl_count += 0.5
+            day_types.append((day, date_str, 'leave'))
+        elif is_weekend or is_holiday:
+            if not is_future_date:
+                total_hours = work_hours_map.get(date_str, 0)
+                if total_hours >= 8.5:
+                    ot_count += 1
+                    day_types.append((day, date_str, 'present'))
+                elif total_hours >= 4.5:
+                    ot_count += 0.5
+                    day_types.append((day, date_str, 'present'))
+                else:
+                    day_types.append((day, date_str, 'nonworking'))
+            else:
+                day_types.append((day, date_str, 'nonworking'))
+        elif is_future_date:
+            day_types.append((day, date_str, 'future'))
+        else:
+            day_types.append((day, date_str, 'present'))
+
+    # Sandwich leave detection
+    nw_groups = []
+    i = 0
+    while i < len(day_types):
+        if day_types[i][2] == 'nonworking':
+            start = i
+            while i < len(day_types) and day_types[i][2] == 'nonworking':
+                i += 1
+            nw_groups.append((start, i - 1))
+        else:
+            i += 1
+
+    sandwich_indices = set()
+    for g in range(len(nw_groups) - 1):
+        end_first = nw_groups[g][1]
+        start_second = nw_groups[g + 1][0]
+        between_start = end_first + 1
+        between_end = start_second - 1
+        if between_start > between_end:
+            continue
+        if all(day_types[j][2] == 'leave' for j in range(between_start, between_end + 1)):
+            for j in range(nw_groups[g][0], nw_groups[g][1] + 1):
+                sandwich_indices.add(j)
+            for j in range(nw_groups[g + 1][0], nw_groups[g + 1][1] + 1):
+                sandwich_indices.add(j)
+
+    sandwich_count = len(sandwich_indices)
+    sandwich_dates = sorted([day_types[j][0] for j in sandwich_indices])
+
+    per_day = salary / num_days if num_days > 0 and salary > 0 else 0
+    cl_amount = round(per_day * cl_count, 2)
+    ot_amount = round(per_day * ot_count, 2)
+    sandwich_amount = round(per_day * sandwich_count, 2)
+    per_hour = (per_day / 8.5) if per_day > 0 else 0
+    extra_hours_amount = round(per_hour * extra_hours, 2)
+    gross_salary = round(salary - pt - esic - epf - cpf - cl_amount - sandwich_amount + ot_amount + other_income + extra_hours_amount, 2)
+
+    if is_current_month:
+        future_days = num_days - today.day
+    elif is_future_month:
+        future_days = num_days
+    else:
+        future_days = 0
+    future_amount = round(per_day * future_days, 2)
+    td_salary = round(gross_salary - future_amount, 2)
+
+    return {
+        "salary": salary, "pt": pt, "esic": esic, "epf": epf, "cpf": cpf,
+        "cl_count": cl_count, "pl_count": pl_count, "ot_count": ot_count,
+        "cl_amount": cl_amount, "ot_amount": ot_amount,
+        "cl_dates": sorted(cl_dates),
+        "sandwich_days": sandwich_count, "sandwich_amount": sandwich_amount,
+        "sandwich_dates": sandwich_dates,
+        "other_income": other_income, "extra_hours": extra_hours,
+        "extra_hours_amount": extra_hours_amount,
+        "gross_salary": gross_salary,
+        "td_salary": td_salary, "future_days": future_days, "future_amount": future_amount,
+        "num_days": num_days
+    }
+
+
+
 logger = logging.getLogger(__name__)
 
 @app.on_event("shutdown")

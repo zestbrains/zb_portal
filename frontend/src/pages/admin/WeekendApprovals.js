@@ -218,29 +218,29 @@ export default function WeekendApprovals({ user, onLogout }) {
     const date = new Date(approval.original_date);
     if (date.getDay() === 0) return { type: 'Sunday', color: 'bg-red-100 text-red-800' };
     if (date.getDay() === 6) return { type: 'Saturday', color: 'bg-orange-100 text-orange-800' };
-    return { type: 'Weekday', color: 'bg-gray-100 text-gray-800' };
+    return { type: 'Weekday', color: 'bg-slate-100 text-slate-800' };
   };
 
   const getStatusBadge = (status) => {
     switch (status) {
-      case 'pending': return 'bg-yellow-100 text-yellow-800';
+      case 'pending': return 'bg-amber-100 text-amber-700 border-amber-200';
       case 'approved': return 'bg-green-100 text-green-800';
       case 'rejected': return 'bg-red-100 text-red-800';
-      default: return 'bg-gray-100 text-gray-800';
+      default: return 'bg-slate-100 text-slate-800';
     }
   };
 
   return (
     <Layout user={user} onLogout={onLogout}>
-      <div className="p-4 sm:p-6 lg:p-8" data-testid="weekend-approvals-page">
+      <div className="p-4 md:p-8 lg:p-10 max-w-7xl mx-auto" data-testid="weekend-approvals-page">
         {/* Header */}
         <div className="flex flex-col sm:flex-row sm:justify-between sm:items-center gap-4 mb-6">
           <div>
-            <h1 className="text-2xl sm:text-3xl lg:text-4xl font-bold text-gray-900 mb-1">Weekend/Holiday Approvals</h1>
-            <p className="text-sm sm:text-base text-gray-600">Review and approve weekend & holiday work entries</p>
+            <h1 className="text-2xl md:text-3xl font-bold text-slate-900 tracking-tight">Weekend/Holiday Approvals</h1>
+            <p className="text-sm text-slate-500 mt-1">Review and approve weekend & holiday work entries</p>
           </div>
           {pendingCount > 0 && (
-            <div className="bg-yellow-100 text-yellow-800 px-4 py-2 rounded-lg text-sm font-semibold">
+            <div className="bg-amber-100 text-amber-700 border-amber-200 px-4 py-2 rounded-lg text-sm font-semibold">
               {pendingCount} Pending Approval{pendingCount > 1 ? 's' : ''}
             </div>
           )}
@@ -251,16 +251,18 @@ export default function WeekendApprovals({ user, onLogout }) {
           <Button
             variant={activeTab === 'pending' ? 'default' : 'outline'}
             onClick={() => setActiveTab('pending')}
-            className={activeTab === 'pending' ? 'bg-indigo-600 hover:bg-indigo-700' : ''}
+            className={`text-xs ${activeTab === 'pending' ? 'bg-slate-900 hover:bg-slate-800' : 'border-slate-200'}`}
+            size="sm"
             data-testid="tab-pending"
           >
-            <Clock size={16} className="mr-2" />
+            <Clock size={14} className="mr-1.5" />
             Pending ({pendingCount})
           </Button>
           <Button
             variant={activeTab === 'history' ? 'default' : 'outline'}
             onClick={() => setActiveTab('history')}
-            className={activeTab === 'history' ? 'bg-indigo-600 hover:bg-indigo-700' : ''}
+            className={`text-xs ${activeTab === 'history' ? 'bg-slate-900 hover:bg-slate-800' : 'border-slate-200'}`}
+            size="sm"
             data-testid="tab-history"
           >
             <History size={16} className="mr-2" />
@@ -318,11 +320,11 @@ export default function WeekendApprovals({ user, onLogout }) {
         <Card>
           <CardContent className="p-0">
             {loading ? (
-              <div className="p-8 text-center text-gray-500">Loading...</div>
+              <div className="p-8 text-center text-slate-500">Loading...</div>
             ) : activeTab === 'pending' ? (
               pendingApprovals.length === 0 ? (
-                <div className="p-8 text-center text-gray-500">
-                  <Clock size={48} className="mx-auto mb-4 text-gray-300" />
+                <div className="p-8 text-center text-slate-500">
+                  <Clock size={48} className="mx-auto mb-4 text-slate-300" />
                   <p>No pending approvals</p>
                 </div>
               ) : (
@@ -330,12 +332,12 @@ export default function WeekendApprovals({ user, onLogout }) {
                   {pendingApprovals.map((approval) => {
                     const dayType = getDayType(approval);
                     return (
-                      <div key={approval.id} className="p-4 hover:bg-gray-50" data-testid={`approval-${approval.id}`}>
+                      <div key={approval.id} className="p-4 hover:bg-slate-50" data-testid={`approval-${approval.id}`}>
                         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
                           <div className="flex-1">
                             <div className="flex items-center gap-2 flex-wrap mb-2">
                               <span className="font-semibold">{approval.employee_name}</span>
-                              <span className="text-gray-500 text-sm">({approval.employee_id})</span>
+                              <span className="text-slate-500 text-sm">({approval.employee_id})</span>
                               <span className={`px-2 py-0.5 rounded text-xs font-medium ${dayType.color}`}>
                                 {dayType.type}
                                 {approval.holiday_name && ` - ${approval.holiday_name}`}
@@ -343,15 +345,15 @@ export default function WeekendApprovals({ user, onLogout }) {
                             </div>
                             <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 text-sm">
                               <div>
-                                <span className="text-gray-500">Date:</span>
+                                <span className="text-slate-500">Date:</span>
                                 <span className="ml-1 font-medium">{formatDate(approval.original_date)}</span>
                               </div>
                               <div>
-                                <span className="text-gray-500">Hours:</span>
+                                <span className="text-slate-500">Hours:</span>
                                 <span className="ml-1 font-medium text-blue-600">{approval.original_hours}h</span>
                               </div>
                               <div className="col-span-2">
-                                <span className="text-gray-500">Project:</span>
+                                <span className="text-slate-500">Project:</span>
                                 <span className="ml-1 font-medium">{approval.project_name}</span>
                               </div>
                             </div>
@@ -363,7 +365,7 @@ export default function WeekendApprovals({ user, onLogout }) {
                             <Button size="sm" className="bg-green-600 hover:bg-green-700" onClick={() => openActionDialog(approval, 'approve')} data-testid={`approve-${approval.id}`}>
                               <Check size={16} className="mr-1" /> Approve
                             </Button>
-                            <Button size="sm" variant="destructive" onClick={() => openActionDialog(approval, 'reject')} data-testid={`reject-${approval.id}`}>
+                            <Button size="sm" variant="outline" className="text-red-600 border-red-200 hover:bg-red-50" onClick={() => openActionDialog(approval, 'reject')} data-testid={`reject-${approval.id}`}>
                               <X size={16} className="mr-1" /> Reject
                             </Button>
                           </div>
@@ -375,8 +377,8 @@ export default function WeekendApprovals({ user, onLogout }) {
               )
             ) : (
               history.length === 0 ? (
-                <div className="p-8 text-center text-gray-500">
-                  <History size={48} className="mx-auto mb-4 text-gray-300" />
+                <div className="p-8 text-center text-slate-500">
+                  <History size={48} className="mx-auto mb-4 text-slate-300" />
                   <p>No approval history found</p>
                 </div>
               ) : (
@@ -386,7 +388,7 @@ export default function WeekendApprovals({ user, onLogout }) {
                     const hasChanges = record.approved_date !== record.original_date || 
                                        record.approved_hours !== record.original_hours;
                     return (
-                      <div key={record.id} className="p-4 hover:bg-gray-50" data-testid={`history-${record.id}`}>
+                      <div key={record.id} className="p-4 hover:bg-slate-50" data-testid={`history-${record.id}`}>
                         <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-3">
                           <div className="flex-1">
                             <div className="flex items-center gap-2 flex-wrap mb-2">
@@ -405,28 +407,28 @@ export default function WeekendApprovals({ user, onLogout }) {
                             </div>
                             <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 text-sm">
                               <div>
-                                <span className="text-gray-500">Original Date:</span>
+                                <span className="text-slate-500">Original Date:</span>
                                 <span className="ml-1">{formatDate(record.original_date)}</span>
                               </div>
                               <div>
-                                <span className="text-gray-500">Original Hours:</span>
+                                <span className="text-slate-500">Original Hours:</span>
                                 <span className="ml-1">{record.original_hours}h</span>
                               </div>
                               {record.status === 'approved' && (
                                 <>
                                   <div>
-                                    <span className="text-gray-500">Approved Date:</span>
+                                    <span className="text-slate-500">Approved Date:</span>
                                     <span className="ml-1 font-medium text-green-600">{formatDate(record.approved_date)}</span>
                                   </div>
                                   <div>
-                                    <span className="text-gray-500">Approved Hours:</span>
+                                    <span className="text-slate-500">Approved Hours:</span>
                                     <span className="ml-1 font-medium text-green-600">{record.approved_hours}h</span>
                                   </div>
                                 </>
                               )}
                             </div>
                             <div className="mt-2 text-sm">
-                              <span className="text-gray-500">Project:</span>
+                              <span className="text-slate-500">Project:</span>
                               <span className="ml-1">{record.project_name}</span>
                             </div>
                             {record.status === 'rejected' && record.rejection_reason && (
@@ -434,7 +436,7 @@ export default function WeekendApprovals({ user, onLogout }) {
                                 <span className="font-medium">Rejection Reason:</span> {record.rejection_reason}
                               </div>
                             )}
-                            <div className="mt-2 text-xs text-gray-400">
+                            <div className="mt-2 text-xs text-slate-400">
                               {record.status === 'approved' ? 'Approved' : 'Rejected'} by {record.approved_by} on {formatDate(record.approved_at)}
                             </div>
                           </div>
@@ -443,7 +445,7 @@ export default function WeekendApprovals({ user, onLogout }) {
                               <Eye size={16} />
                             </Button>
                             {(record.status === 'approved' || record.status === 'rejected') && user.role === 'admin' && (
-                              <Button size="sm" variant="destructive" onClick={() => openDeleteDialog(record)} data-testid={`delete-${record.id}`}>
+                              <Button size="sm" variant="outline" className="text-red-600 border-red-200 hover:bg-red-50" onClick={() => openDeleteDialog(record)} data-testid={`delete-${record.id}`}>
                                 <Trash2 size={16} />
                               </Button>
                             )}
@@ -468,51 +470,51 @@ export default function WeekendApprovals({ user, onLogout }) {
               <div className="space-y-4">
                 <div className="grid grid-cols-2 gap-3 text-sm">
                   <div>
-                    <span className="text-gray-500">Employee</span>
+                    <span className="text-slate-500">Employee</span>
                     <p className="font-medium">{selectedApproval.employee_name}</p>
                   </div>
                   <div>
-                    <span className="text-gray-500">Employee ID</span>
+                    <span className="text-slate-500">Employee ID</span>
                     <p className="font-medium">{selectedApproval.employee_id}</p>
                   </div>
                   <div>
-                    <span className="text-gray-500">Project</span>
+                    <span className="text-slate-500">Project</span>
                     <p className="font-medium">{selectedApproval.project_name}</p>
                   </div>
                   <div>
-                    <span className="text-gray-500">Status</span>
+                    <span className="text-slate-500">Status</span>
                     <p className={`font-medium px-2 py-0.5 rounded text-xs inline-block ${getStatusBadge(selectedApproval.status)}`}>
                       {selectedApproval.status.toUpperCase()}
                     </p>
                   </div>
                   <div>
-                    <span className="text-gray-500">Original Date</span>
+                    <span className="text-slate-500">Original Date</span>
                     <p className="font-medium">{formatDate(selectedApproval.original_date)}</p>
                   </div>
                   <div>
-                    <span className="text-gray-500">Original Hours</span>
+                    <span className="text-slate-500">Original Hours</span>
                     <p className="font-medium">{selectedApproval.original_hours}h</p>
                   </div>
                   {selectedApproval.status === 'approved' && (
                     <>
                       <div>
-                        <span className="text-gray-500">Approved Date</span>
+                        <span className="text-slate-500">Approved Date</span>
                         <p className="font-medium text-green-600">{formatDate(selectedApproval.approved_date)}</p>
                       </div>
                       <div>
-                        <span className="text-gray-500">Approved Hours</span>
+                        <span className="text-slate-500">Approved Hours</span>
                         <p className="font-medium text-green-600">{selectedApproval.approved_hours}h</p>
                       </div>
                     </>
                   )}
                 </div>
                 <div>
-                  <span className="text-gray-500 text-sm">Work Details</span>
-                  <p className="mt-1 p-3 bg-gray-50 rounded text-sm">{selectedApproval.original_work_details}</p>
+                  <span className="text-slate-500 text-sm">Work Details</span>
+                  <p className="mt-1 p-3 bg-slate-50 rounded text-sm">{selectedApproval.original_work_details}</p>
                 </div>
                 {selectedApproval.rejection_reason && (
                   <div>
-                    <span className="text-gray-500 text-sm">Rejection Reason</span>
+                    <span className="text-slate-500 text-sm">Rejection Reason</span>
                     <p className="mt-1 p-3 bg-red-50 rounded text-sm text-red-700">{selectedApproval.rejection_reason}</p>
                   </div>
                 )}
@@ -531,7 +533,7 @@ export default function WeekendApprovals({ user, onLogout }) {
             </DialogHeader>
             {selectedApproval && (
               <div className="space-y-4">
-                <div className="p-3 bg-gray-50 rounded text-sm">
+                <div className="p-3 bg-slate-50 rounded text-sm">
                   <p><strong>Employee:</strong> {selectedApproval.employee_name}</p>
                   <p><strong>Project:</strong> {selectedApproval.project_name}</p>
                 </div>
@@ -568,7 +570,7 @@ export default function WeekendApprovals({ user, onLogout }) {
                         <p className="text-xs text-orange-600 mt-1">Changed from {selectedApproval.original_hours}h</p>
                       )}
                     </div>
-                    <div className="flex items-center space-x-2 p-3 bg-yellow-50 rounded border border-yellow-200">
+                    <div className="flex items-center space-x-2 p-3 bg-amber-50 rounded border border-amber-200">
                       <Checkbox 
                         id="compensation" 
                         checked={isCompensation}
@@ -595,7 +597,7 @@ export default function WeekendApprovals({ user, onLogout }) {
                         data-testid="rejection-reason"
                       />
                     </div>
-                    <Button className="w-full" variant="destructive" onClick={handleReject} data-testid="confirm-reject">
+                    <Button className="w-full" variant="outline" className="text-red-600 border-red-200 hover:bg-red-50" onClick={handleReject} data-testid="confirm-reject">
                       <X size={16} className="mr-2" /> Reject Entry
                     </Button>
                   </>
@@ -626,7 +628,7 @@ export default function WeekendApprovals({ user, onLogout }) {
                   </ul>
                 </div>
                 
-                <div className="p-3 bg-gray-50 rounded text-sm">
+                <div className="p-3 bg-slate-50 rounded text-sm">
                   <p><strong>Employee:</strong> {selectedApproval.employee_name}</p>
                   <p><strong>Date:</strong> {formatDate(selectedApproval.approved_date)}</p>
                   <p><strong>Hours:</strong> {selectedApproval.approved_hours}h</p>
@@ -637,7 +639,7 @@ export default function WeekendApprovals({ user, onLogout }) {
                   <Button variant="outline" onClick={() => setDeleteDialogOpen(false)} className="flex-1">
                     Cancel
                   </Button>
-                  <Button variant="destructive" onClick={handleDelete} className="flex-1" data-testid="confirm-delete">
+                  <Button variant="outline" className="text-red-600 border-red-200 hover:bg-red-50" onClick={handleDelete} className="flex-1" data-testid="confirm-delete">
                     <Trash2 size={16} className="mr-2" /> Delete
                   </Button>
                 </div>

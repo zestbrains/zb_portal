@@ -4,8 +4,10 @@ import Layout from '../../components/layout/Layout';
 import { api } from '../../utils/api';
 import { Card, CardContent, CardHeader, CardTitle } from '../../components/ui/card';
 import { Button } from '../../components/ui/button';
+import { Input } from '../../components/ui/input';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '../../components/ui/dialog';
-import { FolderKanban, Clock, CheckCircle, AlertCircle, Eye, Users, UsersRound } from 'lucide-react';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '../../components/ui/tabs';
+import { FolderKanban, Clock, CheckCircle, AlertCircle, Eye, Users, UsersRound, Search } from 'lucide-react';
 
 export default function EmployeeProjects({ user, onLogout }) {
   const navigate = useNavigate();
@@ -19,548 +21,224 @@ export default function EmployeeProjects({ user, onLogout }) {
   const [teamMembers, setTeamMembers] = useState([]);
   const [viewDialogOpen, setViewDialogOpen] = useState(false);
   const [selectedProject, setSelectedProject] = useState(null);
+  const [myProjectsSearch, setMyProjectsSearch] = useState('');
+  const [teamProjectsSearch, setTeamProjectsSearch] = useState('');
 
-  useEffect(() => {
-    checkIfPM();
-    checkIfTeamLeader();
-    fetchProjects();
-    fetchWorkEntries();
-  }, []);
+  useEffect(() => { checkIfPM(); checkIfTeamLeader(); fetchProjects(); fetchWorkEntries(); }, []);
 
-  const checkIfPM = async () => {
-    try {
-      const response = await api.get('/employee/is-pm');
-      setIsPM(response.data.is_pm);
-      if (response.data.is_pm) {
-        fetchPMProjects();
-      }
-    } catch (error) {
-      console.error('Error checking PM status');
-    }
-  };
+  const checkIfPM = async () => { try { const r = await api.get('/employee/is-pm'); setIsPM(r.data.is_pm); if (r.data.is_pm) fetchPMProjects(); } catch (e) {} };
+  const checkIfTeamLeader = async () => { try { const r = await api.get('/employee/is-team-leader'); setIsTeamLeader(r.data.is_team_leader); setTeamMembers(r.data.team_members || []); if (r.data.is_team_leader) fetchTeamProjects(); } catch (e) {} };
+  const fetchPMProjects = async () => { try { const r = await api.get('/projects/pm-view'); setPmProjects(r.data); } catch (e) {} };
+  const fetchTeamProjects = async () => { try { const r = await api.get('/projects/team-view'); setTeamProjects(r.data); } catch (e) {} };
+  const fetchProjects = async () => { try { const r = await api.get('/projects'); setProjects(r.data); } catch (e) {} finally { setLoading(false); } };
+  const fetchWorkEntries = async () => { try { const r = await api.get('/work-entries'); setWorkEntries(r.data); } catch (e) {} };
 
-  const checkIfTeamLeader = async () => {
-    try {
-      const response = await api.get('/employee/is-team-leader');
-      setIsTeamLeader(response.data.is_team_leader);
-      setTeamMembers(response.data.team_members || []);
-      if (response.data.is_team_leader) {
-        fetchTeamProjects();
-      }
-    } catch (error) {
-      console.error('Error checking team leader status');
-    }
-  };
-
-  const fetchPMProjects = async () => {
-    try {
-      const response = await api.get('/projects/pm-view');
-      setPmProjects(response.data);
-    } catch (error) {
-      console.error('Error fetching PM projects');
-    }
-  };
-
-  const fetchTeamProjects = async () => {
-    try {
-      const response = await api.get('/projects/team-view');
-      setTeamProjects(response.data);
-    } catch (error) {
-      console.error('Error fetching team projects');
-    }
-  };
-
-  const fetchProjects = async () => {
-    try {
-      const response = await api.get('/projects');
-      setProjects(response.data);
-    } catch (error) {
-      console.error('Error fetching projects');
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const fetchWorkEntries = async () => {
-    try {
-      const response = await api.get('/work-entries');
-      setWorkEntries(response.data);
-    } catch (error) {
-      console.error('Error fetching work entries');
-    }
-  };
-
-  // Calculate hours spent per project using project_code
-  const getProjectHours = (projectCode) => {
-    return workEntries
-      .filter(e => e.project_code === projectCode)
-      .reduce((sum, e) => sum + (e.hours || 0), 0);
-  };
-
+  const getProjectHours = (code) => workEntries.filter(e => e.project_code === code).reduce((s, e) => s + (e.hours || 0), 0);
   const getStatusBadge = (status) => {
-    switch(status?.toLowerCase()) {
-      case 'completed': return 'bg-green-100 text-green-800';
-      case 'late': return 'bg-red-500 text-white';
-      case 'active':
-      case 'ongoing': return 'bg-blue-100 text-blue-800';
-      default: return 'bg-gray-100 text-gray-800';
-    }
+    const s = status?.toLowerCase();
+    if (s === 'completed') return 'bg-green-100 text-green-700 border-green-200';
+    if (s === 'late') return 'bg-red-500 text-white border-red-500';
+    if (s === 'active' || s === 'ongoing') return 'bg-blue-100 text-blue-700 border-blue-200';
+    return 'bg-slate-100 text-slate-700 border-slate-200';
   };
+  const formatDate = (d) => d ? new Date(d).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' }) : 'N/A';
+  const handleViewProject = (p) => navigate(`/employee/work-entry?project=${p.project_code}&source=projects&status=${p.status}&name=${encodeURIComponent(p.name)}`);
+  const handleViewDetails = (p) => { setSelectedProject(p); setViewDialogOpen(true); };
 
-  const getStatusIcon = (status) => {
-    switch(status?.toLowerCase()) {
-      case 'completed': return <CheckCircle size={16} className="text-green-600" />;
-      case 'late': return <AlertCircle size={16} className="text-white" />;
-      default: return <Clock size={16} className="text-blue-600" />;
-    }
-  };
+  const filteredMyProjects = projects.filter(p => p.name.toLowerCase().includes(myProjectsSearch.toLowerCase()) || p.project_code.toLowerCase().includes(myProjectsSearch.toLowerCase()));
+  const filteredTeamProjects = teamProjects.filter(p => p.name.toLowerCase().includes(teamProjectsSearch.toLowerCase()) || p.project_code.toLowerCase().includes(teamProjectsSearch.toLowerCase()) || (p.developers && p.developers.some(d => d.name.toLowerCase().includes(teamProjectsSearch.toLowerCase()))));
 
-  const formatDate = (dateStr) => {
-    if (!dateStr) return 'N/A';
-    return new Date(dateStr).toLocaleDateString('en-IN', {
-      day: '2-digit',
-      month: 'short',
-      year: 'numeric'
-    });
-  };
+  const myTotalHours = workEntries.reduce((s, e) => s + e.hours, 0);
+  const myCompletedProjects = projects.filter(p => p.status?.toLowerCase() === 'completed').length;
+  const myOngoingProjects = projects.filter(p => ['active', 'ongoing'].includes(p.status?.toLowerCase())).length;
+  const teamTotalProjects = teamProjects.length;
+  const teamCompletedProjects = teamProjects.filter(p => p.status?.toLowerCase() === 'completed').length;
+  const teamOngoingProjects = teamProjects.filter(p => ['active', 'ongoing'].includes(p.status?.toLowerCase())).length;
+  const teamTotalHours = teamProjects.reduce((s, p) => s + (p.total_hours || p.completed_hours || 0), 0);
 
-  // Handle View button - redirect to Working Hours filtered by project
-  const handleViewProject = (project) => {
-    navigate(`/employee/work-entry?project=${project.project_code}`);
-  };
+  const StatCard = ({ icon: Icon, label, value, color }) => (
+    <div className="bg-white border border-slate-200 rounded-xl p-4 shadow-sm">
+      <div className="flex items-center gap-3">
+        <div className={`w-9 h-9 rounded-lg flex items-center justify-center ${color}`}><Icon size={18} /></div>
+        <div><p className="text-xs font-medium text-slate-500 uppercase tracking-wider">{label}</p><p className="text-xl font-bold text-slate-900">{value}</p></div>
+      </div>
+    </div>
+  );
 
-  // Handle View Details for PM - show all developers' hours
-  const handleViewDetails = (project) => {
-    setSelectedProject(project);
-    setViewDialogOpen(true);
-  };
+  const ProjectTable = ({ data, search, setSearch, searchPlaceholder, showTeam = false }) => (
+    <div className="bg-white border border-slate-200 rounded-xl shadow-sm overflow-hidden">
+      <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 p-4 border-b border-slate-200">
+        <h3 className="text-sm font-semibold text-slate-700">{showTeam ? 'Team Member Projects' : 'My Assigned Projects'}</h3>
+        <div className="relative w-full sm:w-60">
+          <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" size={14} />
+          <Input placeholder={searchPlaceholder} value={search} onChange={(e) => setSearch(e.target.value)} className="pl-9 h-9 text-sm border-slate-200" data-testid={showTeam ? 'team-projects-search' : 'my-projects-search'} />
+        </div>
+      </div>
+      {loading ? (
+        <div className="p-8 text-center text-slate-400 text-sm">Loading...</div>
+      ) : data.length === 0 ? (
+        <div className="p-12 text-center"><FolderKanban size={36} className="mx-auto mb-3 text-slate-300" /><p className="text-sm text-slate-400">{search ? 'No projects match your search' : 'No projects found'}</p></div>
+      ) : (
+        <div className="overflow-x-auto">
+          <table className="w-full">
+            <thead><tr className="border-b border-slate-200 bg-slate-50/50">
+              <th className="text-left text-xs font-semibold text-slate-500 uppercase tracking-wider py-3 px-4">Project</th>
+              <th className="text-left text-xs font-semibold text-slate-500 uppercase tracking-wider py-3 px-4">Status</th>
+              {!showTeam && <th className="text-left text-xs font-semibold text-slate-500 uppercase tracking-wider py-3 px-4">Type</th>}
+              <th className="text-left text-xs font-semibold text-slate-500 uppercase tracking-wider py-3 px-4">{showTeam ? 'Team Members & Hours' : 'Hours'}</th>
+              {!showTeam && <th className="text-left text-xs font-semibold text-slate-500 uppercase tracking-wider py-3 px-4">Actions</th>}
+            </tr></thead>
+            <tbody>
+              {data.map((project) => {
+                const hrs = showTeam ? null : workEntries.filter(e => e.project_code === project.project_code).reduce((s, e) => s + e.hours, 0);
+                return (
+                  <tr key={project.id || project.project_code} className="border-b border-slate-100 last:border-0 hover:bg-slate-50/80 transition-colors">
+                    <td className="py-3 px-4"><p className="font-medium text-sm text-slate-800">{project.name}</p><p className="text-xs text-slate-400 font-mono">{project.project_code}</p></td>
+                    <td className="py-3 px-4"><span className={`inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium border ${project.is_late ? 'bg-red-500 text-white border-red-500' : getStatusBadge(project.status)}`}>{project.is_late ? 'Late' : project.status}</span></td>
+                    {!showTeam && <td className="py-3 px-4 text-sm text-slate-500">{project.type}</td>}
+                    <td className="py-3 px-4">
+                      {showTeam ? (
+                        project.developers?.length > 0 ? (
+                          <div className="space-y-1.5">
+                            {project.developers.filter(dev => { const ids = teamMembers.map(tm => tm.employee_id); return dev.is_team_member && ids.includes(dev.employee_id); }).map((dev) => (
+                              <div key={dev.employee_id} className="flex items-center justify-between gap-2 p-2 bg-slate-50 rounded-lg">
+                                <div className="flex items-center gap-2"><span className="text-sm font-medium text-slate-700">{dev.name}</span><span className="text-[10px] px-1.5 py-0.5 rounded bg-blue-50 text-blue-600 border border-blue-100 font-medium">Team</span></div>
+                                <div className="flex items-center gap-2"><span className="text-sm font-bold text-blue-600">{dev.hours?.toFixed(1) || 0}h</span>
+                                  <Button size="sm" variant="outline" onClick={() => navigate(`/employee/work-entry?project=${project.project_code}&source=projects&status=${project.status}&name=${encodeURIComponent(project.name)}&employee=${dev.employee_id}`)} className="h-7 text-xs border-slate-200" data-testid={`view-hours-${dev.employee_id}-${project.project_code}`}><Eye size={12} className="mr-1" /> View</Button>
+                                </div>
+                              </div>
+                            ))}
+                          </div>
+                        ) : <p className="text-xs text-slate-400">No team member hours</p>
+                      ) : (
+                        <span className="text-sm font-bold text-blue-600">{hrs.toFixed(1)}h</span>
+                      )}
+                    </td>
+                    {!showTeam && (
+                      <td className="py-3 px-4">
+                        <Button size="sm" variant="outline" onClick={() => handleViewProject(project)} className="h-8 text-xs border-slate-200" data-testid={`view-hours-${project.project_code}`}><Eye size={12} className="mr-1" /> View Hours</Button>
+                      </td>
+                    )}
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+        </div>
+      )}
+    </div>
+  );
 
-  // Stats for regular employees
-  const totalProjects = projects.length;
-  const completedProjects = projects.filter(p => p.status?.toLowerCase() === 'completed').length;
-  const ongoingProjects = projects.filter(p => ['active', 'ongoing'].includes(p.status?.toLowerCase())).length;
-  const totalHoursSpent = workEntries.reduce((sum, e) => sum + (e.hours || 0), 0);
-
-  // Stats for PM view
-  const pmTotalProjects = pmProjects.length;
-  const pmCompletedProjects = pmProjects.filter(p => p.status?.toLowerCase() === 'completed').length;
-  const pmOngoingProjects = pmProjects.filter(p => ['active', 'ongoing'].includes(p.status?.toLowerCase())).length;
-  const pmTotalHours = pmProjects.reduce((sum, p) => sum + (p.total_hours || 0), 0);
-
-  // Stats for Team Leader view
-  const tlTotalProjects = teamProjects.length;
-  const tlCompletedProjects = teamProjects.filter(p => p.status?.toLowerCase() === 'completed').length;
-  const tlOngoingProjects = teamProjects.filter(p => ['active', 'ongoing'].includes(p.status?.toLowerCase())).length;
-  const tlTotalHours = teamProjects.reduce((sum, p) => sum + (p.total_hours || 0), 0);
-
-  // Team Leader View - Table similar to PM/Admin
+  // Team Leader View
   if (isTeamLeader) {
     return (
       <Layout user={user} onLogout={onLogout}>
-        <div className="p-4 sm:p-6 lg:p-8" data-testid="team-leader-projects-page">
-          <div className="mb-6">
-            <h1 className="text-2xl sm:text-3xl lg:text-4xl font-bold text-gray-900 mb-1">Team Projects</h1>
-            <p className="text-sm sm:text-base text-gray-600">
-              View your team's projects and work hours 
-              <span className="ml-2 px-2 py-0.5 bg-blue-100 text-blue-700 rounded text-xs">
-                {teamMembers.length} team member{teamMembers.length !== 1 ? 's' : ''}
-              </span>
-            </p>
+        <div className="p-4 md:p-8 lg:p-10 max-w-7xl mx-auto" data-testid="team-leader-projects-page">
+          <div className="mb-8">
+            <h1 className="text-2xl md:text-3xl font-bold text-slate-900 tracking-tight">My Projects</h1>
+            <p className="text-sm text-slate-500 mt-1">View your projects and team member projects</p>
           </div>
-
-          {/* Team Members Banner */}
-          <div className="mb-4 p-3 bg-blue-50 border border-blue-200 rounded-lg">
-            <div className="flex items-center gap-2 mb-2">
-              <UsersRound size={18} className="text-blue-600" />
-              <span className="font-medium text-blue-800">Your Team Members:</span>
-            </div>
-            <div className="flex flex-wrap gap-2">
-              {teamMembers.map(member => (
-                <span key={member.employee_id} className="px-2 py-1 bg-white border border-blue-200 rounded text-sm">
-                  {member.name}
-                </span>
-              ))}
-            </div>
-          </div>
-
-          {/* Stats Cards */}
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-3 sm:gap-4 mb-6">
-            <Card className="bg-gradient-to-br from-indigo-500 to-indigo-600 text-white">
-              <CardContent className="p-3 sm:p-4">
-                <div className="flex items-center gap-2 sm:gap-3">
-                  <FolderKanban size={20} className="sm:w-6 sm:h-6" />
-                  <div>
-                    <p className="text-xs sm:text-sm opacity-80">Team Projects</p>
-                    <p className="text-xl sm:text-2xl font-bold">{tlTotalProjects}</p>
-                  </div>
-                </div>
-              </CardContent>
-            </Card>
-            <Card className="bg-gradient-to-br from-blue-500 to-blue-600 text-white">
-              <CardContent className="p-3 sm:p-4">
-                <div className="flex items-center gap-2 sm:gap-3">
-                  <Clock size={20} className="sm:w-6 sm:h-6" />
-                  <div>
-                    <p className="text-xs sm:text-sm opacity-80">Ongoing</p>
-                    <p className="text-xl sm:text-2xl font-bold">{tlOngoingProjects}</p>
-                  </div>
-                </div>
-              </CardContent>
-            </Card>
-            <Card className="bg-gradient-to-br from-green-500 to-green-600 text-white">
-              <CardContent className="p-3 sm:p-4">
-                <div className="flex items-center gap-2 sm:gap-3">
-                  <CheckCircle size={20} className="sm:w-6 sm:h-6" />
-                  <div>
-                    <p className="text-xs sm:text-sm opacity-80">Completed</p>
-                    <p className="text-xl sm:text-2xl font-bold">{tlCompletedProjects}</p>
-                  </div>
-                </div>
-              </CardContent>
-            </Card>
-            <Card className="bg-gradient-to-br from-purple-500 to-purple-600 text-white">
-              <CardContent className="p-3 sm:p-4">
-                <div className="flex items-center gap-2 sm:gap-3">
-                  <Clock size={20} className="sm:w-6 sm:h-6" />
-                  <div>
-                    <p className="text-xs sm:text-sm opacity-80">Total Hours</p>
-                    <p className="text-xl sm:text-2xl font-bold">{tlTotalHours.toFixed(1)}h</p>
-                  </div>
-                </div>
-              </CardContent>
-            </Card>
-          </div>
-
-          {/* Team Projects Table */}
-          <Card className="shadow-lg">
-            <CardHeader className="border-b">
-              <CardTitle className="flex items-center gap-2 text-base sm:text-lg">
-                <FolderKanban size={20} />
-                Team Projects & Work Hours
-              </CardTitle>
-            </CardHeader>
-            <CardContent className="p-0">
-              {loading ? (
-                <div className="p-8 text-center text-gray-500">Loading projects...</div>
-              ) : teamProjects.length === 0 ? (
-                <div className="p-8 text-center text-gray-500">
-                  <FolderKanban size={48} className="mx-auto mb-4 opacity-50" />
-                  <p>No team projects found</p>
-                </div>
-              ) : (
-                <div className="table-container">
-                  <table>
-                    <thead>
-                      <tr>
-                        <th>Project Code</th>
-                        <th>Project Name</th>
-                        <th>Status</th>
-                        <th>Total Hours</th>
-                        <th>Team Members</th>
-                        <th>Actions</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {teamProjects.map((project) => (
-                        <tr key={project.id}>
-                          <td className="font-mono text-sm">{project.project_code}</td>
-                          <td className="font-medium">{project.name}</td>
-                          <td>
-                            <span className={`px-2 py-1 rounded text-xs font-medium ${
-                              project.is_late ? 'bg-red-500 text-white' : getStatusBadge(project.status)
-                            }`}>
-                              {project.is_late ? 'Late' : project.status}
-                            </span>
-                          </td>
-                          <td className="font-semibold text-blue-600">{project.total_hours?.toFixed(1) || 0}h</td>
-                          <td>
-                            <span className="px-2 py-1 bg-blue-100 text-blue-700 rounded text-xs">
-                              {project.team_member_count || 0} members
-                            </span>
-                          </td>
-                          <td>
-                            <Button
-                              size="sm"
-                              variant="outline"
-                              onClick={() => handleViewDetails(project)}
-                              data-testid={`view-team-project-${project.id}`}
-                            >
-                              <Eye size={14} className="mr-1" />
-                              View Hours
-                            </Button>
-                          </td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
-              )}
-            </CardContent>
-          </Card>
-
-          {/* View Details Dialog - Team Leader */}
-          <Dialog open={viewDialogOpen} onOpenChange={setViewDialogOpen}>
-            <DialogContent className="sm:max-w-xl max-h-[80vh] overflow-y-auto">
-              <DialogHeader>
-                <DialogTitle className="flex items-center gap-2">
-                  <Users size={20} />
-                  {selectedProject?.name} - Team Work Hours
-                </DialogTitle>
-              </DialogHeader>
-              {selectedProject && (
-                <div className="space-y-4">
-                  <div className="grid grid-cols-2 gap-4 text-sm">
-                    <div className="p-3 bg-gray-50 rounded-lg">
-                      <p className="text-gray-500">Project Code</p>
-                      <p className="font-mono font-medium">{selectedProject.project_code}</p>
-                    </div>
-                    <div className="p-3 bg-gray-50 rounded-lg">
-                      <p className="text-gray-500">Total Hours</p>
-                      <p className="font-bold text-blue-600">{selectedProject.total_hours?.toFixed(1) || 0}h</p>
-                    </div>
-                  </div>
-
-                  <div>
-                    <h4 className="font-semibold mb-2 flex items-center gap-2">
-                      <Users size={16} />
-                      Developer Breakdown ({selectedProject.developer_count || 0} developers)
-                    </h4>
-                    <div className="space-y-2 max-h-60 overflow-y-auto">
-                      {selectedProject.developers?.length > 0 ? (
-                        selectedProject.developers.map((dev, idx) => (
-                          <div 
-                            key={dev.employee_id || idx} 
-                            className={`flex justify-between items-center p-3 rounded-lg border ${
-                              dev.is_team_member ? 'bg-blue-50 border-blue-200' : 
-                              dev.is_self ? 'bg-green-50 border-green-200' : 'bg-gray-50'
-                            }`}
-                          >
-                            <div className="flex items-center gap-2">
-                              <span className="font-medium">{dev.name}</span>
-                              {dev.is_self && (
-                                <span className="text-xs bg-green-100 text-green-700 px-1.5 py-0.5 rounded">You</span>
-                              )}
-                              {dev.is_team_member && (
-                                <span className="text-xs bg-blue-100 text-blue-700 px-1.5 py-0.5 rounded">Team</span>
-                              )}
-                            </div>
-                            <span className="font-semibold text-blue-600">{dev.hours?.toFixed(1) || 0}h</span>
-                          </div>
-                        ))
-                      ) : (
-                        <p className="text-center text-gray-500 py-4">No work entries recorded</p>
-                      )}
-                    </div>
-                  </div>
-                </div>
-              )}
-            </DialogContent>
-          </Dialog>
+          <Tabs defaultValue="my-projects" className="w-full">
+            <TabsList className="mb-6 bg-slate-100">
+              <TabsTrigger value="my-projects" className="text-xs"><FolderKanban size={14} className="mr-1.5" /> My Projects ({projects.length})</TabsTrigger>
+              <TabsTrigger value="team-projects" className="text-xs"><UsersRound size={14} className="mr-1.5" /> Team Projects ({teamTotalProjects})</TabsTrigger>
+            </TabsList>
+            <TabsContent value="my-projects">
+              <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
+                <StatCard icon={FolderKanban} label="Total" value={projects.length} color="bg-blue-50 text-blue-600" />
+                <StatCard icon={CheckCircle} label="Completed" value={myCompletedProjects} color="bg-green-50 text-green-600" />
+                <StatCard icon={AlertCircle} label="Ongoing" value={myOngoingProjects} color="bg-amber-50 text-amber-600" />
+                <StatCard icon={Clock} label="Total Hours" value={`${myTotalHours.toFixed(1)}h`} color="bg-indigo-50 text-indigo-600" />
+              </div>
+              <ProjectTable data={filteredMyProjects} search={myProjectsSearch} setSearch={setMyProjectsSearch} searchPlaceholder="Search projects..." />
+            </TabsContent>
+            <TabsContent value="team-projects">
+              <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
+                <StatCard icon={FolderKanban} label="Total" value={teamTotalProjects} color="bg-blue-50 text-blue-600" />
+                <StatCard icon={CheckCircle} label="Completed" value={teamCompletedProjects} color="bg-green-50 text-green-600" />
+                <StatCard icon={AlertCircle} label="Ongoing" value={teamOngoingProjects} color="bg-amber-50 text-amber-600" />
+                <StatCard icon={Clock} label="Total Hours" value={`${teamTotalHours.toFixed(1)}h`} color="bg-indigo-50 text-indigo-600" />
+              </div>
+              <ProjectTable data={filteredTeamProjects} search={teamProjectsSearch} setSearch={setTeamProjectsSearch} searchPlaceholder="Search projects or members..." showTeam />
+            </TabsContent>
+          </Tabs>
         </div>
       </Layout>
     );
   }
 
-  // PM View - Table similar to Admin
+  // PM View
   if (isPM) {
+    const pmCompletedProjects = pmProjects.filter(p => p.status?.toLowerCase() === 'completed').length;
+    const pmOngoingProjects = pmProjects.filter(p => ['active', 'ongoing'].includes(p.status?.toLowerCase())).length;
+    const pmTotalHours = pmProjects.reduce((s, p) => s + (p.total_hours || 0), 0);
     return (
       <Layout user={user} onLogout={onLogout}>
-        <div className="p-4 sm:p-6 lg:p-8" data-testid="pm-projects-page">
-          <div className="mb-6">
-            <h1 className="text-2xl sm:text-3xl lg:text-4xl font-bold text-gray-900 mb-1">Project Management</h1>
-            <p className="text-sm sm:text-base text-gray-600">View assigned projects and team work hours</p>
+        <div className="p-4 md:p-8 lg:p-10 max-w-7xl mx-auto" data-testid="pm-projects-page">
+          <div className="mb-8">
+            <h1 className="text-2xl md:text-3xl font-bold text-slate-900 tracking-tight">Project Management</h1>
+            <p className="text-sm text-slate-500 mt-1">View assigned projects and team work hours</p>
           </div>
-
-          {/* Stats Cards */}
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-3 sm:gap-4 mb-6">
-            <Card className="bg-gradient-to-br from-indigo-500 to-indigo-600 text-white">
-              <CardContent className="p-3 sm:p-4">
-                <div className="flex items-center gap-2 sm:gap-3">
-                  <FolderKanban size={20} className="sm:w-6 sm:h-6" />
-                  <div>
-                    <p className="text-xs sm:text-sm opacity-80">Assigned Projects</p>
-                    <p className="text-xl sm:text-2xl font-bold">{pmTotalProjects}</p>
-                  </div>
-                </div>
-              </CardContent>
-            </Card>
-            <Card className="bg-gradient-to-br from-blue-500 to-blue-600 text-white">
-              <CardContent className="p-3 sm:p-4">
-                <div className="flex items-center gap-2 sm:gap-3">
-                  <Clock size={20} className="sm:w-6 sm:h-6" />
-                  <div>
-                    <p className="text-xs sm:text-sm opacity-80">Ongoing</p>
-                    <p className="text-xl sm:text-2xl font-bold">{pmOngoingProjects}</p>
-                  </div>
-                </div>
-              </CardContent>
-            </Card>
-            <Card className="bg-gradient-to-br from-green-500 to-green-600 text-white">
-              <CardContent className="p-3 sm:p-4">
-                <div className="flex items-center gap-2 sm:gap-3">
-                  <CheckCircle size={20} className="sm:w-6 sm:h-6" />
-                  <div>
-                    <p className="text-xs sm:text-sm opacity-80">Completed</p>
-                    <p className="text-xl sm:text-2xl font-bold">{pmCompletedProjects}</p>
-                  </div>
-                </div>
-              </CardContent>
-            </Card>
-            <Card className="bg-gradient-to-br from-purple-500 to-purple-600 text-white">
-              <CardContent className="p-3 sm:p-4">
-                <div className="flex items-center gap-2 sm:gap-3">
-                  <Clock size={20} className="sm:w-6 sm:h-6" />
-                  <div>
-                    <p className="text-xs sm:text-sm opacity-80">Total Hours</p>
-                    <p className="text-xl sm:text-2xl font-bold">{pmTotalHours.toFixed(1)}h</p>
-                  </div>
-                </div>
-              </CardContent>
-            </Card>
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
+            <StatCard icon={FolderKanban} label="Assigned" value={pmProjects.length} color="bg-blue-50 text-blue-600" />
+            <StatCard icon={Clock} label="Ongoing" value={pmOngoingProjects} color="bg-amber-50 text-amber-600" />
+            <StatCard icon={CheckCircle} label="Completed" value={pmCompletedProjects} color="bg-green-50 text-green-600" />
+            <StatCard icon={Clock} label="Total Hours" value={`${pmTotalHours.toFixed(1)}h`} color="bg-indigo-50 text-indigo-600" />
           </div>
-
-          {/* PM Projects Table */}
-          <Card className="shadow-lg">
-            <CardHeader className="border-b">
-              <CardTitle className="flex items-center gap-2 text-base sm:text-lg">
-                <FolderKanban size={20} />
-                My Assigned Projects
-              </CardTitle>
-            </CardHeader>
-            <CardContent className="p-0">
-              {loading ? (
-                <div className="p-8 text-center text-gray-500">Loading projects...</div>
-              ) : pmProjects.length === 0 ? (
-                <div className="p-8 text-center text-gray-500">
-                  <FolderKanban size={48} className="mx-auto mb-4 opacity-50" />
-                  <p>No projects assigned to you</p>
-                </div>
-              ) : (
-                <div className="table-container">
-                  <table>
-                    <thead>
-                      <tr>
-                        <th>Project Code</th>
-                        <th>Project Name</th>
-                        <th>Client</th>
-                        <th>Status</th>
-                        <th>Start Date</th>
-                        <th>Total Hours</th>
-                        <th>Developers</th>
-                        <th>Actions</th>
+          <div className="bg-white border border-slate-200 rounded-xl shadow-sm overflow-hidden">
+            <div className="p-4 border-b border-slate-200"><h3 className="text-sm font-semibold text-slate-700">My Assigned Projects</h3></div>
+            {pmProjects.length === 0 ? (
+              <div className="p-12 text-center"><FolderKanban size={36} className="mx-auto mb-3 text-slate-300" /><p className="text-sm text-slate-400">No projects assigned</p></div>
+            ) : (
+              <div className="table-container">
+                <table>
+                  <thead><tr className="border-b border-slate-200 bg-slate-50/50">
+                    <th className="text-left text-xs font-semibold text-slate-500 uppercase tracking-wider py-3 px-4">Code</th>
+                    <th className="text-left text-xs font-semibold text-slate-500 uppercase tracking-wider py-3 px-4">Name</th>
+                    <th className="text-left text-xs font-semibold text-slate-500 uppercase tracking-wider py-3 px-4">Client</th>
+                    <th className="text-left text-xs font-semibold text-slate-500 uppercase tracking-wider py-3 px-4">Status</th>
+                    <th className="text-left text-xs font-semibold text-slate-500 uppercase tracking-wider py-3 px-4">Hours</th>
+                    <th className="text-left text-xs font-semibold text-slate-500 uppercase tracking-wider py-3 px-4">Team</th>
+                    <th className="text-left text-xs font-semibold text-slate-500 uppercase tracking-wider py-3 px-4">Actions</th>
+                  </tr></thead>
+                  <tbody>
+                    {pmProjects.map((p) => (
+                      <tr key={p.id} className="border-b border-slate-100 last:border-0 hover:bg-slate-50/80 transition-colors">
+                        <td data-label="Code" className="py-3 px-4 text-sm font-mono text-blue-600">{p.project_code}</td>
+                        <td data-label="Name" className="py-3 px-4 text-sm font-medium text-slate-800">{p.name}</td>
+                        <td data-label="Client" className="py-3 px-4 text-sm text-slate-500">{p.client_username || p.client || '-'}</td>
+                        <td data-label="Status" className="py-3 px-4"><span className={`inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium border ${getStatusBadge(p.status)}`}>{p.status?.toUpperCase()}</span></td>
+                        <td data-label="Hours" className="py-3 px-4 text-sm font-bold text-blue-600">{(p.total_hours || 0).toFixed(1)}h</td>
+                        <td data-label="Team" className="py-3 px-4 text-sm text-slate-500"><Users size={14} className="inline mr-1" />{p.developer_count || 0}</td>
+                        <td data-label="Actions" className="py-3 px-4"><Button size="sm" variant="outline" onClick={() => handleViewDetails(p)} className="h-8 text-xs border-slate-200" data-testid={`view-details-${p.project_code}`}><Eye size={12} className="mr-1" /> Details</Button></td>
                       </tr>
-                    </thead>
-                    <tbody>
-                      {pmProjects.map((project) => (
-                        <tr key={project.id}>
-                          <td data-label="Project Code" className="font-semibold text-indigo-600">{project.project_code}</td>
-                          <td data-label="Project Name">{project.name}</td>
-                          <td data-label="Client">{project.client_username || project.client || '-'}</td>
-                          <td data-label="Status">
-                            <span className={`inline-flex items-center gap-1 px-2 py-1 rounded-full text-xs font-semibold ${getStatusBadge(project.status)}`}>
-                              {getStatusIcon(project.status)}
-                              {project.status?.toUpperCase() || 'N/A'}
-                            </span>
-                          </td>
-                          <td data-label="Start Date">{formatDate(project.start_date)}</td>
-                          <td data-label="Total Hours">
-                            <span className="font-semibold text-blue-600">{(project.total_hours || 0).toFixed(1)}h</span>
-                          </td>
-                          <td data-label="Developers">
-                            <span className="inline-flex items-center gap-1 text-gray-600">
-                              <Users size={14} />
-                              {project.developer_count || 0}
-                            </span>
-                          </td>
-                          <td data-label="Actions">
-                            <Button
-                              size="sm"
-                              variant="outline"
-                              onClick={() => handleViewDetails(project)}
-                              data-testid={`view-details-${project.project_code}`}
-                            >
-                              <Eye size={14} className="mr-1" />
-                              View Details
-                            </Button>
-                          </td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
-              )}
-            </CardContent>
-          </Card>
-
-          {/* Project Details Dialog */}
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
+          </div>
           <Dialog open={viewDialogOpen} onOpenChange={setViewDialogOpen}>
             <DialogContent className="sm:max-w-2xl">
-              <DialogHeader>
-                <DialogTitle className="flex items-center gap-2">
-                  <FolderKanban size={20} />
-                  {selectedProject?.name}
-                </DialogTitle>
-              </DialogHeader>
+              <DialogHeader><DialogTitle className="text-lg font-semibold text-slate-900">{selectedProject?.name}</DialogTitle></DialogHeader>
               {selectedProject && (
                 <div className="space-y-4">
-                  {/* Project Info */}
-                  <div className="grid grid-cols-2 gap-4 p-4 bg-gray-50 rounded-lg">
-                    <div>
-                      <p className="text-xs text-gray-500">Project Code</p>
-                      <p className="font-semibold text-indigo-600">{selectedProject.project_code}</p>
-                    </div>
-                    <div>
-                      <p className="text-xs text-gray-500">Client</p>
-                      <p className="font-semibold">{selectedProject.client_username || selectedProject.client || '-'}</p>
-                    </div>
-                    <div>
-                      <p className="text-xs text-gray-500">Status</p>
-                      <span className={`inline-flex items-center gap-1 px-2 py-1 rounded-full text-xs font-semibold ${getStatusBadge(selectedProject.status)}`}>
-                        {selectedProject.status?.toUpperCase() || 'N/A'}
-                      </span>
-                    </div>
-                    <div>
-                      <p className="text-xs text-gray-500">Total Hours</p>
-                      <p className="font-semibold text-blue-600">{(selectedProject.total_hours || 0).toFixed(1)}h</p>
-                    </div>
+                  <div className="grid grid-cols-2 gap-3 p-4 bg-slate-50 rounded-xl border border-slate-100">
+                    <div><p className="text-xs text-slate-400 uppercase tracking-wider">Code</p><p className="font-mono text-sm text-blue-600 mt-0.5">{selectedProject.project_code}</p></div>
+                    <div><p className="text-xs text-slate-400 uppercase tracking-wider">Client</p><p className="text-sm font-medium text-slate-800 mt-0.5">{selectedProject.client_username || '-'}</p></div>
+                    <div><p className="text-xs text-slate-400 uppercase tracking-wider">Status</p><span className={`inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium border mt-0.5 ${getStatusBadge(selectedProject.status)}`}>{selectedProject.status?.toUpperCase()}</span></div>
+                    <div><p className="text-xs text-slate-400 uppercase tracking-wider">Total Hours</p><p className="text-sm font-bold text-blue-600 mt-0.5">{(selectedProject.total_hours || 0).toFixed(1)}h</p></div>
                   </div>
-
-                  {/* Developer Hours Breakdown */}
                   <div>
-                    <h4 className="font-semibold mb-3 flex items-center gap-2">
-                      <Users size={16} />
-                      Developer Hours Breakdown
-                    </h4>
-                    {selectedProject.developers && selectedProject.developers.length > 0 ? (
-                      <div className="max-h-80 overflow-y-auto">
-                        <table className="w-full text-sm">
-                          <thead className="bg-gray-100 sticky top-0">
-                            <tr>
-                              <th className="text-left p-2">#</th>
-                              <th className="text-left p-2">Developer Name</th>
-                              <th className="text-right p-2">Hours Spent</th>
-                            </tr>
-                          </thead>
-                          <tbody>
-                            {selectedProject.developers.map((dev, idx) => (
-                              <tr key={idx} className="border-b">
-                                <td className="p-2 text-gray-500">{idx + 1}</td>
-                                <td className="p-2">{dev.name}</td>
-                                <td className="p-2 text-right font-semibold text-blue-600">{dev.hours.toFixed(1)}h</td>
-                              </tr>
-                            ))}
-                          </tbody>
-                          <tfoot className="bg-gray-50 font-semibold">
-                            <tr>
-                              <td className="p-2" colSpan={2}>Total</td>
-                              <td className="p-2 text-right text-blue-600">{(selectedProject.total_hours || 0).toFixed(1)}h</td>
-                            </tr>
-                          </tfoot>
+                    <h4 className="font-semibold text-sm text-slate-700 mb-2">Developer Hours</h4>
+                    {selectedProject.developers?.length > 0 ? (
+                      <div className="max-h-60 overflow-y-auto border border-slate-200 rounded-lg">
+                        <table className="w-full text-sm"><thead className="bg-slate-50 sticky top-0"><tr><th className="text-left p-2.5 text-xs text-slate-500">#</th><th className="text-left p-2.5 text-xs text-slate-500">Name</th><th className="text-right p-2.5 text-xs text-slate-500">Hours</th></tr></thead>
+                        <tbody>{selectedProject.developers.map((dev, idx) => (<tr key={idx} className="border-t border-slate-100"><td className="p-2.5 text-slate-400">{idx + 1}</td><td className="p-2.5 text-slate-700">{dev.name}</td><td className="p-2.5 text-right font-bold text-blue-600">{dev.hours.toFixed(1)}h</td></tr>))}</tbody>
+                        <tfoot className="bg-slate-50"><tr className="border-t border-slate-200"><td colSpan={2} className="p-2.5 font-semibold text-slate-700">Total</td><td className="p-2.5 text-right font-bold text-blue-600">{(selectedProject.total_hours || 0).toFixed(1)}h</td></tr></tfoot>
                         </table>
                       </div>
-                    ) : (
-                      <p className="text-gray-500 text-center py-4">No work hours logged yet</p>
-                    )}
+                    ) : (<p className="text-sm text-slate-400 text-center py-4">No work hours logged</p>)}
                   </div>
                 </div>
               )}
@@ -572,127 +250,53 @@ export default function EmployeeProjects({ user, onLogout }) {
   }
 
   // Regular Employee View
+  const totalHoursSpent = workEntries.reduce((s, e) => s + (e.hours || 0), 0);
   return (
     <Layout user={user} onLogout={onLogout}>
-      <div className="p-4 sm:p-6 lg:p-8" data-testid="employee-projects-page">
-        <div className="mb-6">
-          <h1 className="text-2xl sm:text-3xl lg:text-4xl font-bold text-gray-900 mb-1">My Projects</h1>
-          <p className="text-sm sm:text-base text-gray-600">View your assigned projects and hours spent</p>
+      <div className="p-4 md:p-8 lg:p-10 max-w-7xl mx-auto" data-testid="employee-projects-page">
+        <div className="mb-8">
+          <h1 className="text-2xl md:text-3xl font-bold text-slate-900 tracking-tight">My Projects</h1>
+          <p className="text-sm text-slate-500 mt-1">View your assigned projects and hours spent</p>
         </div>
-
-        {/* Stats Cards */}
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-3 sm:gap-4 mb-6">
-          <Card className="bg-gradient-to-br from-indigo-500 to-indigo-600 text-white">
-            <CardContent className="p-3 sm:p-4">
-              <div className="flex items-center gap-2 sm:gap-3">
-                <FolderKanban size={20} className="sm:w-6 sm:h-6" />
-                <div>
-                  <p className="text-xs sm:text-sm opacity-80">Assigned Projects</p>
-                  <p className="text-xl sm:text-2xl font-bold">{totalProjects}</p>
-                </div>
-              </div>
-            </CardContent>
-          </Card>
-          <Card className="bg-gradient-to-br from-blue-500 to-blue-600 text-white">
-            <CardContent className="p-3 sm:p-4">
-              <div className="flex items-center gap-2 sm:gap-3">
-                <Clock size={20} className="sm:w-6 sm:h-6" />
-                <div>
-                  <p className="text-xs sm:text-sm opacity-80">Ongoing</p>
-                  <p className="text-xl sm:text-2xl font-bold">{ongoingProjects}</p>
-                </div>
-              </div>
-            </CardContent>
-          </Card>
-          <Card className="bg-gradient-to-br from-green-500 to-green-600 text-white">
-            <CardContent className="p-3 sm:p-4">
-              <div className="flex items-center gap-2 sm:gap-3">
-                <CheckCircle size={20} className="sm:w-6 sm:h-6" />
-                <div>
-                  <p className="text-xs sm:text-sm opacity-80">Completed</p>
-                  <p className="text-xl sm:text-2xl font-bold">{completedProjects}</p>
-                </div>
-              </div>
-            </CardContent>
-          </Card>
-          <Card className="bg-gradient-to-br from-purple-500 to-purple-600 text-white">
-            <CardContent className="p-3 sm:p-4">
-              <div className="flex items-center gap-2 sm:gap-3">
-                <Clock size={20} className="sm:w-6 sm:h-6" />
-                <div>
-                  <p className="text-xs sm:text-sm opacity-80">Total Hours Spent</p>
-                  <p className="text-xl sm:text-2xl font-bold">{totalHoursSpent.toFixed(1)}h</p>
-                </div>
-              </div>
-            </CardContent>
-          </Card>
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
+          <StatCard icon={FolderKanban} label="Assigned" value={projects.length} color="bg-blue-50 text-blue-600" />
+          <StatCard icon={Clock} label="Ongoing" value={projects.filter(p => ['active', 'ongoing'].includes(p.status?.toLowerCase())).length} color="bg-amber-50 text-amber-600" />
+          <StatCard icon={CheckCircle} label="Completed" value={projects.filter(p => p.status?.toLowerCase() === 'completed').length} color="bg-green-50 text-green-600" />
+          <StatCard icon={Clock} label="Total Hours" value={`${totalHoursSpent.toFixed(1)}h`} color="bg-indigo-50 text-indigo-600" />
         </div>
-
-        {/* Projects Table */}
-        <Card className="shadow-lg">
-          <CardHeader className="border-b">
-            <CardTitle className="flex items-center gap-2 text-base sm:text-lg">
-              <FolderKanban size={20} />
-              Assigned Projects
-            </CardTitle>
-          </CardHeader>
-          <CardContent className="p-0">
-            {loading ? (
-              <div className="p-8 text-center text-gray-500">Loading projects...</div>
-            ) : projects.length === 0 ? (
-              <div className="p-8 text-center text-gray-500">
-                <FolderKanban size={48} className="mx-auto mb-4 opacity-50" />
-                <p>No projects assigned</p>
-              </div>
-            ) : (
-              <div className="table-container">
-                <table>
-                  <thead>
-                    <tr>
-                      <th>Project Code</th>
-                      <th>Project Name</th>
-                      <th>Status</th>
-                      <th>Start Date</th>
-                      <th>My Hours</th>
-                      <th>Actions</th>
+        <div className="bg-white border border-slate-200 rounded-xl shadow-sm overflow-hidden">
+          <div className="p-4 border-b border-slate-200"><h3 className="text-sm font-semibold text-slate-700">Assigned Projects</h3></div>
+          {loading ? (
+            <div className="p-8 text-center text-slate-400 text-sm">Loading...</div>
+          ) : projects.length === 0 ? (
+            <div className="p-12 text-center"><FolderKanban size={36} className="mx-auto mb-3 text-slate-300" /><p className="text-sm text-slate-400">No projects assigned</p></div>
+          ) : (
+            <div className="table-container">
+              <table>
+                <thead><tr className="border-b border-slate-200 bg-slate-50/50">
+                  <th className="text-left text-xs font-semibold text-slate-500 uppercase tracking-wider py-3 px-4">Code</th>
+                  <th className="text-left text-xs font-semibold text-slate-500 uppercase tracking-wider py-3 px-4">Name</th>
+                  <th className="text-left text-xs font-semibold text-slate-500 uppercase tracking-wider py-3 px-4">Status</th>
+                  <th className="text-left text-xs font-semibold text-slate-500 uppercase tracking-wider py-3 px-4">Start</th>
+                  <th className="text-left text-xs font-semibold text-slate-500 uppercase tracking-wider py-3 px-4">Hours</th>
+                  <th className="text-left text-xs font-semibold text-slate-500 uppercase tracking-wider py-3 px-4">Actions</th>
+                </tr></thead>
+                <tbody>
+                  {projects.map((p) => (
+                    <tr key={p.id} className="border-b border-slate-100 last:border-0 hover:bg-slate-50/80 transition-colors">
+                      <td data-label="Code" className="py-3 px-4 text-sm font-mono text-slate-600">{p.project_code}</td>
+                      <td data-label="Name" className="py-3 px-4 text-sm font-medium text-slate-800">{p.name}</td>
+                      <td data-label="Status" className="py-3 px-4"><span className={`inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium border ${getStatusBadge(p.status)}`}>{p.status?.toUpperCase()}</span></td>
+                      <td data-label="Start" className="py-3 px-4 text-sm text-slate-500">{formatDate(p.start_date)}</td>
+                      <td data-label="Hours" className="py-3 px-4 text-sm font-bold text-blue-600">{getProjectHours(p.project_code).toFixed(1)}h</td>
+                      <td data-label="Actions" className="py-3 px-4"><Button size="sm" variant="outline" onClick={() => handleViewProject(p)} className="h-8 text-xs border-slate-200"><Eye size={12} className="mr-1" /> View Hours</Button></td>
                     </tr>
-                  </thead>
-                  <tbody>
-                    {projects.map((project) => {
-                      const myHours = getProjectHours(project.project_code);
-                      return (
-                        <tr key={project.id}>
-                          <td data-label="Project Code" className="font-semibold">{project.project_code}</td>
-                          <td data-label="Project Name">{project.name}</td>
-                          <td data-label="Status">
-                            <span className={`inline-flex items-center gap-1 px-2 py-1 rounded-full text-xs font-semibold ${getStatusBadge(project.status)}`}>
-                              {getStatusIcon(project.status)}
-                              {project.status?.toUpperCase() || 'N/A'}
-                            </span>
-                          </td>
-                          <td data-label="Start Date">{formatDate(project.start_date)}</td>
-                          <td data-label="My Hours">
-                            <span className="font-semibold text-blue-600">{myHours.toFixed(1)}h</span>
-                          </td>
-                          <td data-label="Actions">
-                            <Button
-                              size="sm"
-                              variant="outline"
-                              onClick={() => handleViewProject(project)}
-                            >
-                              <Eye size={14} className="mr-1" />
-                              View Hours
-                            </Button>
-                          </td>
-                        </tr>
-                      );
-                    })}
-                  </tbody>
-                </table>
-              </div>
-            )}
-          </CardContent>
-        </Card>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </div>
       </div>
     </Layout>
   );

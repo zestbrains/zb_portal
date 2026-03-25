@@ -81,11 +81,11 @@ export default function EmailSettings({ user, onLogout }) {
 
   return (
     <Layout user={user} onLogout={onLogout}>
-      <div className="p-4 sm:p-6 lg:p-8" data-testid="email-settings-page">
+      <div className="p-4 md:p-8 lg:p-10 max-w-7xl mx-auto" data-testid="email-settings-page">
         {/* Header */}
         <div className="mb-6">
-          <h1 className="text-2xl sm:text-3xl lg:text-4xl font-bold text-gray-900 mb-1">Email Configuration</h1>
-          <p className="text-sm sm:text-base text-gray-600">Configure SMTP settings for leave approval notifications</p>
+          <h1 className="text-2xl md:text-3xl font-bold text-slate-900 tracking-tight">Email Configuration</h1>
+          <p className="text-sm text-slate-500 mt-1">Configure SMTP settings for leave approval notifications</p>
         </div>
 
         <div className="max-w-2xl">
@@ -101,10 +101,10 @@ export default function EmailSettings({ user, onLogout }) {
             </CardHeader>
             <CardContent className="space-y-6">
               {/* Enable/Disable Toggle */}
-              <div className="flex items-center justify-between p-4 bg-gray-50 rounded-lg">
+              <div className="flex items-center justify-between p-4 bg-slate-50 rounded-lg">
                 <div>
                   <Label className="text-base font-medium">Enable Email Notifications</Label>
-                  <p className="text-sm text-gray-500">Send email when leave is approved/rejected</p>
+                  <p className="text-sm text-slate-500">Send email when leave is approved/rejected</p>
                 </div>
                 <Switch
                   checked={config.is_enabled}
@@ -149,7 +149,7 @@ export default function EmailSettings({ user, onLogout }) {
                   placeholder="hr.zestbrains@gmail.com"
                   data-testid="smtp-email"
                 />
-                <p className="text-xs text-gray-500 mt-1">This email will appear as the sender</p>
+                <p className="text-xs text-slate-500 mt-1">This email will appear as the sender</p>
               </div>
 
               {/* SMTP Password */}
@@ -168,12 +168,12 @@ export default function EmailSettings({ user, onLogout }) {
                   <button
                     type="button"
                     onClick={() => setShowPassword(!showPassword)}
-                    className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600"
+                    className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600"
                   >
                     {showPassword ? <EyeOff size={18} /> : <Eye size={18} />}
                   </button>
                 </div>
-                <p className="text-xs text-gray-500 mt-1">
+                <p className="text-xs text-slate-500 mt-1">
                   For Gmail, create an App Password at: 
                   <a href="https://myaccount.google.com/apppasswords" target="_blank" rel="noopener noreferrer" className="text-blue-600 ml-1">
                     Google App Passwords
@@ -185,7 +185,7 @@ export default function EmailSettings({ user, onLogout }) {
               <div className="flex items-center justify-between">
                 <div>
                   <Label>Enable TLS/SSL</Label>
-                  <p className="text-xs text-gray-500">Required for most email providers</p>
+                  <p className="text-xs text-slate-500">Required for most email providers</p>
                 </div>
                 <Switch
                   checked={config.enable_ssl}
@@ -204,7 +204,7 @@ export default function EmailSettings({ user, onLogout }) {
                   placeholder="admin@company.com, hr2@company.com"
                   data-testid="cc-emails"
                 />
-                <p className="text-xs text-gray-500 mt-1">Comma-separated email addresses to CC on all notifications</p>
+                <p className="text-xs text-slate-500 mt-1">Comma-separated email addresses to CC on all notifications</p>
               </div>
 
               {/* Action Buttons */}
@@ -241,7 +241,7 @@ export default function EmailSettings({ user, onLogout }) {
                 When are emails sent?
               </CardTitle>
             </CardHeader>
-            <CardContent className="text-sm text-gray-600 space-y-2">
+            <CardContent className="text-sm text-slate-600 space-y-2">
               <p>Email notifications are sent when:</p>
               <ul className="list-disc list-inside space-y-1 ml-2">
                 <li>Admin/HR <strong>approves</strong> a leave application</li>

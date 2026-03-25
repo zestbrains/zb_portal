@@ -14,6 +14,9 @@ import AdminLeaveHistory from './pages/admin/LeaveHistory';
 import AdminManagement from './pages/admin/AdminManagement';
 import AdminHolidays from './pages/admin/Holidays';
 import AdminEmailSettings from './pages/admin/EmailSettings';
+import AdminBanks from './pages/admin/Banks';
+import AdminAttendance from './pages/admin/Attendance';
+import AdminSalary from './pages/admin/Salary';
 import HRDashboard from './pages/hr/Dashboard';
 import HREmployees from './pages/hr/Employees';
 import HRWorkingHours from './pages/hr/WorkingHours';
@@ -26,6 +29,7 @@ import EmployeeDashboard from './pages/employee/Dashboard';
 import EmployeeProjects from './pages/employee/Projects';
 import EmployeeWorkEntry from './pages/employee/WorkEntry';
 import EmployeeLeaveApply from './pages/employee/LeaveApply';
+import EmployeeAttendance from './pages/employee/Attendance';
 import EmployeeLeaveTracker from './pages/employee/LeaveTracker';
 import { Toaster } from './components/ui/sonner';
 import { api } from './utils/api';
@@ -100,6 +104,9 @@ function App() {
           <Route path="/admin/admin-management" element={user?.role === 'admin' ? <AdminManagement user={user} onLogout={handleLogout} /> : <Navigate to="/" />} />
           <Route path="/admin/holidays" element={user?.role === 'admin' ? <AdminHolidays user={user} onLogout={handleLogout} /> : <Navigate to="/" />} />
           <Route path="/admin/email-settings" element={user?.role === 'admin' ? <AdminEmailSettings user={user} onLogout={handleLogout} /> : <Navigate to="/" />} />
+          <Route path="/admin/banks" element={user?.role === 'admin' ? <AdminBanks user={user} onLogout={handleLogout} /> : <Navigate to="/" />} />
+          <Route path="/admin/attendance" element={user?.role === 'admin' ? <AdminAttendance user={user} onLogout={handleLogout} /> : <Navigate to="/" />} />
+          <Route path="/admin/salary" element={user?.role === 'admin' ? <AdminSalary user={user} onLogout={handleLogout} /> : <Navigate to="/" />} />
           
           {/* HR Routes */}
           <Route path="/hr/dashboard" element={user?.role === 'hr' ? <HRDashboard user={user} onLogout={handleLogout} /> : <Navigate to="/" />} />
@@ -117,6 +124,7 @@ function App() {
           <Route path="/employee/work-entry" element={user?.role === 'employee' ? <EmployeeWorkEntry user={user} onLogout={handleLogout} /> : <Navigate to="/" />} />
           <Route path="/employee/leave-tracker" element={user?.role === 'employee' ? <EmployeeLeaveTracker user={user} onLogout={handleLogout} /> : <Navigate to="/" />} />
           <Route path="/employee/leave-apply" element={user?.role === 'employee' ? <EmployeeLeaveApply user={user} onLogout={handleLogout} /> : <Navigate to="/" />} />
+          <Route path="/employee/attendance" element={user?.role === 'employee' ? <EmployeeAttendance user={user} onLogout={handleLogout} /> : <Navigate to="/" />} />
         </Routes>
       </BrowserRouter>
       <Toaster position="top-right" />

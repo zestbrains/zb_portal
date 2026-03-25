@@ -141,9 +141,9 @@ export default function LeaveHistory({ user, onLogout }) {
 
   const getStatusBadge = (status) => {
     switch(status) {
-      case 'approved': return 'bg-green-100 text-green-800';
-      case 'rejected': return 'bg-red-100 text-red-800';
-      default: return 'bg-yellow-100 text-yellow-800';
+      case 'approved': return 'bg-green-100 text-green-700 border-green-200';
+      case 'rejected': return 'bg-red-100 text-red-700 border-red-200';
+      default: return 'bg-amber-100 text-amber-700 border-amber-200';
     }
   };
 
@@ -165,70 +165,35 @@ export default function LeaveHistory({ user, onLogout }) {
 
   return (
     <Layout user={user} onLogout={onLogout}>
-      <div className="p-8" data-testid="leave-history-page">
-        <div className="mb-8">
-          <h1 className="text-4xl font-bold text-gray-900 mb-2">Leave History</h1>
-          <p className="text-gray-600">Complete history of all leave applications with advanced filters</p>
+      <div className="p-4 md:p-8 lg:p-10 max-w-7xl mx-auto" data-testid="leave-history-page">
+        <div className="mb-6">
+          <h1 className="text-2xl md:text-3xl font-bold text-slate-900 tracking-tight">Leave History</h1>
+          <p className="text-sm text-slate-500 mt-1">Complete history of all leave applications with advanced filters</p>
         </div>
 
         {/* Stats Cards */}
-        <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-6">
-          <Card className="bg-gradient-to-br from-gray-600 to-gray-700 text-white">
-            <CardContent className="p-4">
-              <div className="flex items-center gap-3">
-                <History size={24} />
-                <div>
-                  <p className="text-sm opacity-80">Total Applications</p>
-                  <p className="text-2xl font-bold">{totalCount}</p>
-                </div>
-              </div>
-            </CardContent>
-          </Card>
-          <Card className="bg-gradient-to-br from-yellow-500 to-yellow-600 text-white">
-            <CardContent className="p-4">
-              <div className="flex items-center gap-3">
-                <AlertCircle size={24} />
-                <div>
-                  <p className="text-sm opacity-80">Pending</p>
-                  <p className="text-2xl font-bold">{pendingCount}</p>
-                </div>
-              </div>
-            </CardContent>
-          </Card>
-          <Card className="bg-gradient-to-br from-green-500 to-green-600 text-white">
-            <CardContent className="p-4">
-              <div className="flex items-center gap-3">
-                <CheckCircle size={24} />
-                <div>
-                  <p className="text-sm opacity-80">Approved</p>
-                  <p className="text-2xl font-bold">{approvedCount}</p>
-                </div>
-              </div>
-            </CardContent>
-          </Card>
-          <Card className="bg-gradient-to-br from-red-500 to-red-600 text-white">
-            <CardContent className="p-4">
-              <div className="flex items-center gap-3">
-                <XCircle size={24} />
-                <div>
-                  <p className="text-sm opacity-80">Rejected</p>
-                  <p className="text-2xl font-bold">{rejectedCount}</p>
-                </div>
-              </div>
-            </CardContent>
-          </Card>
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
+          <div className="bg-white border border-slate-200 rounded-xl p-5 shadow-sm">
+            <div className="flex items-center gap-3"><div className="w-10 h-10 rounded-lg flex items-center justify-center bg-slate-100 text-slate-700"><History size={20} /></div><div><p className="text-xs font-medium text-slate-500 uppercase tracking-wider">Total</p><p className="text-2xl font-bold text-slate-900">{totalCount}</p></div></div>
+          </div>
+          <div className="bg-white border border-slate-200 rounded-xl p-5 shadow-sm">
+            <div className="flex items-center gap-3"><div className="w-10 h-10 rounded-lg flex items-center justify-center bg-amber-50 text-amber-600"><AlertCircle size={20} /></div><div><p className="text-xs font-medium text-slate-500 uppercase tracking-wider">Pending</p><p className="text-2xl font-bold text-amber-600">{pendingCount}</p></div></div>
+          </div>
+          <div className="bg-white border border-slate-200 rounded-xl p-5 shadow-sm">
+            <div className="flex items-center gap-3"><div className="w-10 h-10 rounded-lg flex items-center justify-center bg-green-50 text-green-600"><CheckCircle size={20} /></div><div><p className="text-xs font-medium text-slate-500 uppercase tracking-wider">Approved</p><p className="text-2xl font-bold text-green-600">{approvedCount}</p></div></div>
+          </div>
+          <div className="bg-white border border-slate-200 rounded-xl p-5 shadow-sm">
+            <div className="flex items-center gap-3"><div className="w-10 h-10 rounded-lg flex items-center justify-center bg-red-50 text-red-600"><XCircle size={20} /></div><div><p className="text-xs font-medium text-slate-500 uppercase tracking-wider">Rejected</p><p className="text-2xl font-bold text-red-600">{rejectedCount}</p></div></div>
+          </div>
         </div>
 
         {/* Filters */}
-        <Card className="mb-6">
-          <CardHeader className="pb-4">
-            <CardTitle className="flex items-center gap-2 text-lg">
-              <Filter size={20} />
-              Filters
-            </CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="grid grid-cols-1 md:grid-cols-5 gap-4 items-end">
+        <div className="bg-white border border-slate-200 rounded-xl shadow-sm mb-6 overflow-hidden">
+          <div className="p-4 border-b border-slate-200">
+            <h3 className="text-sm font-semibold text-slate-700">Filters</h3>
+          </div>
+          <div className="p-4">
+            <div className="grid grid-cols-2 md:grid-cols-5 gap-3 items-end">
               <div>
                 <Label htmlFor="employee-filter">Employee</Label>
                 <Select 
@@ -286,115 +251,99 @@ export default function LeaveHistory({ user, onLogout }) {
                 />
               </div>
               <div className="flex gap-2">
-                <Button onClick={handleApplyFilters} className="flex-1" data-testid="apply-filters-btn">
-                  <Search size={16} className="mr-2" />
+                <Button onClick={handleApplyFilters} className="flex-1 bg-slate-900 hover:bg-slate-800 text-sm" data-testid="apply-filters-btn">
+                  <Search size={14} className="mr-1.5" />
                   Apply
                 </Button>
                 {hasActiveFilters && (
-                  <Button variant="outline" onClick={handleClearFilters} data-testid="clear-filters-btn">
-                    <X size={16} />
+                  <Button variant="outline" onClick={handleClearFilters} className="border-slate-200" data-testid="clear-filters-btn">
+                    <X size={14} />
                   </Button>
                 )}
               </div>
             </div>
             {hasActiveFilters && (
-              <div className="mt-4 flex items-center gap-2 text-sm text-gray-600">
-                <span>Active Filters:</span>
+              <div className="mt-4 flex items-center gap-2 text-xs text-slate-500 flex-wrap">
+                <span className="font-medium">Active:</span>
                 {appliedFilters.employee_id && (
-                  <span className="px-2 py-1 bg-blue-100 text-blue-800 rounded">
-                    Employee: {getEmployeeName(appliedFilters.employee_id)}
+                  <span className="px-2 py-0.5 bg-blue-50 text-blue-700 rounded-full border border-blue-200">
+                    {getEmployeeName(appliedFilters.employee_id)}
                   </span>
                 )}
                 {appliedFilters.status && (
-                  <span className={`px-2 py-1 rounded ${getStatusBadge(appliedFilters.status)}`}>
-                    Status: {appliedFilters.status}
+                  <span className={`px-2 py-0.5 rounded-full border ${getStatusBadge(appliedFilters.status)}`}>
+                    {appliedFilters.status}
                   </span>
                 )}
                 {appliedFilters.from_date && (
-                  <span className="px-2 py-1 bg-gray-100 text-gray-800 rounded">
+                  <span className="px-2 py-0.5 bg-slate-50 text-slate-700 rounded-full border border-slate-200">
                     From: {formatDate(appliedFilters.from_date)}
                   </span>
                 )}
                 {appliedFilters.to_date && (
-                  <span className="px-2 py-1 bg-gray-100 text-gray-800 rounded">
+                  <span className="px-2 py-0.5 bg-slate-50 text-slate-700 rounded-full border border-slate-200">
                     To: {formatDate(appliedFilters.to_date)}
                   </span>
                 )}
               </div>
             )}
-          </CardContent>
-        </Card>
+          </div>
+        </div>
 
         {/* Applications Table */}
-        <Card className="shadow-lg">
-          <CardHeader className="border-b">
-            <div className="flex items-center justify-between">
-              <CardTitle className="flex items-center gap-2">
-                <History size={20} />
-                Leave Applications ({applications.length})
-              </CardTitle>
-              <Button variant="outline" size="sm" onClick={() => fetchHistory(appliedFilters)}>
-                <RefreshCw size={16} className="mr-2" />
-                Refresh
-              </Button>
-            </div>
-          </CardHeader>
-          <CardContent className="p-0">
+        <div className="bg-white border border-slate-200 rounded-xl shadow-sm overflow-hidden">
+          <div className="flex items-center justify-between p-4 border-b border-slate-200">
+            <h3 className="text-sm font-semibold text-slate-700">Leave Applications ({applications.length})</h3>
+            <Button variant="outline" size="sm" onClick={() => fetchHistory(appliedFilters)} className="text-xs border-slate-200">
+              <RefreshCw size={14} className="mr-1.5" /> Refresh
+            </Button>
+          </div>
             {loading ? (
-              <div className="p-8 text-center text-gray-500">Loading...</div>
+              <div className="p-8 text-center text-slate-400 text-sm">Loading...</div>
             ) : applications.length === 0 ? (
-              <div className="p-8 text-center text-gray-500">
-                <History size={48} className="mx-auto mb-4 opacity-50" />
-                <p>No leave applications found</p>
-                {hasActiveFilters && (
-                  <p className="text-sm mt-2">Try adjusting your filters</p>
-                )}
+              <div className="p-12 text-center">
+                <History size={36} className="mx-auto mb-3 text-slate-300" />
+                <p className="text-sm text-slate-400">No leave applications found</p>
+                {hasActiveFilters && (<p className="text-xs text-slate-300 mt-1">Try adjusting your filters</p>)}
               </div>
             ) : (
-              <div className="table-container">
-                <table>
+              <div className="overflow-x-auto">
+                <table className="w-full">
                   <thead>
-                    <tr>
-                      <th>Employee</th>
-                      <th>Applied On</th>
-                      <th>Leave Period</th>
-                      <th>Days</th>
-                      <th>Reason</th>
-                      <th>Status</th>
-                      <th>Leave Types</th>
-                      <th>Action By</th>
-                      <th>Actions</th>
+                    <tr className="border-b border-slate-200 bg-slate-50/50">
+                      <th className="text-left text-xs font-semibold text-slate-500 uppercase tracking-wider py-3 px-4">Employee</th>
+                      <th className="text-left text-xs font-semibold text-slate-500 uppercase tracking-wider py-3 px-4">Applied On</th>
+                      <th className="text-left text-xs font-semibold text-slate-500 uppercase tracking-wider py-3 px-4">Period</th>
+                      <th className="text-left text-xs font-semibold text-slate-500 uppercase tracking-wider py-3 px-4">Days</th>
+                      <th className="text-left text-xs font-semibold text-slate-500 uppercase tracking-wider py-3 px-4">Reason</th>
+                      <th className="text-left text-xs font-semibold text-slate-500 uppercase tracking-wider py-3 px-4">Status</th>
+                      <th className="text-left text-xs font-semibold text-slate-500 uppercase tracking-wider py-3 px-4">Leave Types</th>
+                      <th className="text-left text-xs font-semibold text-slate-500 uppercase tracking-wider py-3 px-4">Action By</th>
+                      <th className="text-left text-xs font-semibold text-slate-500 uppercase tracking-wider py-3 px-4">Actions</th>
                     </tr>
                   </thead>
                   <tbody>
                     {applications.map((app) => (
-                      <tr key={app.id}>
-                        <td>
-                          <div className="font-semibold">{getEmployeeName(app.employee_id)}</div>
-                          <div className="text-xs text-gray-500">{app.employee_id}</div>
+                      <tr key={app.id} className="border-b border-slate-100 last:border-0 hover:bg-slate-50/80 transition-colors">
+                        <td className="py-3 px-4">
+                          <div className="font-medium text-sm text-slate-800">{getEmployeeName(app.employee_id)}</div>
+                          <div className="text-xs text-slate-400">{app.employee_id}</div>
                         </td>
-                        <td className="text-sm">{formatDate(app.created_at)}</td>
-                        <td>
-                          <div className="text-sm">
-                            {formatDate(app.from_date)}
-                          </div>
-                          <div className="text-xs text-gray-500">
-                            to {formatDate(app.to_date)}
-                          </div>
+                        <td className="py-3 px-4 text-sm text-slate-500">{formatDate(app.created_at)}</td>
+                        <td className="py-3 px-4">
+                          <div className="text-sm text-slate-700">{formatDate(app.from_date)}</div>
+                          <div className="text-xs text-slate-400">to {formatDate(app.to_date)}</div>
                         </td>
-                        <td className="font-semibold">{app.days_count}</td>
-                        <td className="max-w-xs">
-                          <div className="truncate text-sm" title={app.reason}>
-                            {app.reason}
-                          </div>
+                        <td className="py-3 px-4 font-bold text-sm text-slate-800">{app.days_count}</td>
+                        <td className="py-3 px-4 max-w-xs">
+                          <div className="truncate text-sm text-slate-600" title={app.reason}>{app.reason}</div>
                         </td>
-                        <td>
-                          <span className={`inline-flex items-center gap-1 px-2 py-1 rounded-full text-xs font-semibold ${getStatusBadge(app.status)}`}>
-                            {getStatusIcon(app.status)}
-                            {app.status.toUpperCase()}
+                        <td className="py-3 px-4">
+                          <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium border ${getStatusBadge(app.status)}`}>
+                            {getStatusIcon(app.status)} {app.status.toUpperCase()}
                           </span>
                         </td>
-                        <td>
+                        <td className="py-3 px-4">
                           {app.leave_dates && app.leave_dates.length > 0 ? (
                             <div className="text-xs space-y-1">
                               {app.leave_dates.slice(0, 2).map((ld, idx) => (
@@ -407,21 +356,21 @@ export default function LeaveHistory({ user, onLogout }) {
                                 </div>
                               ))}
                               {app.leave_dates.length > 2 && (
-                                <span className="text-gray-500">+{app.leave_dates.length - 2} more</span>
+                                <span className="text-slate-500">+{app.leave_dates.length - 2} more</span>
                               )}
                             </div>
                           ) : (
-                            <span className="text-gray-400">-</span>
+                            <span className="text-slate-400">-</span>
                           )}
                         </td>
                         <td className="text-sm">
                           {app.approved_by ? (
                             <div>
                               <div>{app.approved_by}</div>
-                              <div className="text-xs text-gray-500">{formatDate(app.approved_date)}</div>
+                              <div className="text-xs text-slate-500">{formatDate(app.approved_date)}</div>
                             </div>
                           ) : (
-                            <span className="text-gray-400">-</span>
+                            <span className="text-slate-400">-</span>
                           )}
                         </td>
                         <td>
@@ -435,19 +384,11 @@ export default function LeaveHistory({ user, onLogout }) {
                               <Eye size={14} className="mr-1" />
                               View
                             </Button>
-                            <Button 
-                              size="sm" 
-                              variant="outline"
-                              onClick={() => handleOpenEdit(app)}
-                            >
-                              <Edit size={14} />
+                            <Button size="sm" variant="outline" onClick={() => handleOpenEdit(app)} className="h-7 w-7 p-0 border-slate-200">
+                              <Edit size={12} />
                             </Button>
-                            <Button 
-                              size="sm" 
-                              variant="destructive"
-                              onClick={() => handleAdminDelete(app.id, getEmployeeName(app.employee_id))}
-                            >
-                              <Trash2 size={14} />
+                            <Button size="sm" variant="outline" onClick={() => handleAdminDelete(app.id, getEmployeeName(app.employee_id))} className="h-7 w-7 p-0 text-red-500 border-red-200 hover:bg-red-50">
+                              <Trash2 size={12} />
                             </Button>
                           </div>
                         </td>
@@ -457,8 +398,7 @@ export default function LeaveHistory({ user, onLogout }) {
                 </table>
               </div>
             )}
-          </CardContent>
-        </Card>
+        </div>
 
         {/* Detail Dialog */}
         {selectedApp && (
@@ -480,7 +420,7 @@ export default function LeaveHistory({ user, onLogout }) {
                 </div>
 
                 {/* Application Details */}
-                <div className="p-4 bg-gray-50 rounded-lg">
+                <div className="p-4 bg-slate-50 rounded-lg">
                   <h3 className="font-semibold mb-3">Application Information</h3>
                   <div className="grid grid-cols-2 gap-3 text-sm">
                     <div><strong>Employee:</strong> {getEmployeeName(selectedApp.employee_id)}</div>
@@ -495,7 +435,7 @@ export default function LeaveHistory({ user, onLogout }) {
                 {/* Reason */}
                 <div className="p-4 bg-blue-50 rounded-lg">
                   <h3 className="font-semibold text-blue-800 mb-2">Employee's Reason</h3>
-                  <p className="text-gray-700">{selectedApp.reason}</p>
+                  <p className="text-slate-700">{selectedApp.reason}</p>
                 </div>
 
                 {/* Leave Types (if approved) */}
@@ -532,15 +472,15 @@ export default function LeaveHistory({ user, onLogout }) {
 
                 {/* Admin Comments */}
                 {selectedApp.comments && selectedApp.status !== 'rejected' && (
-                  <div className="p-4 bg-gray-50 rounded-lg">
+                  <div className="p-4 bg-slate-50 rounded-lg">
                     <h3 className="font-semibold mb-2">Admin Comments</h3>
-                    <p className="text-gray-700">{selectedApp.comments}</p>
+                    <p className="text-slate-700">{selectedApp.comments}</p>
                   </div>
                 )}
 
                 {/* Action Details */}
                 {selectedApp.approved_by && (
-                  <div className="p-4 bg-gray-100 rounded-lg">
+                  <div className="p-4 bg-slate-100 rounded-lg">
                     <h3 className="font-semibold mb-2">Action Details</h3>
                     <div className="grid grid-cols-2 gap-3 text-sm">
                       <div><strong>Processed By:</strong> {selectedApp.approved_by}</div>

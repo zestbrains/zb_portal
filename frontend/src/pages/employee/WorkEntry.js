@@ -10,7 +10,7 @@ import { Textarea } from '../../components/ui/textarea';
 import { Card, CardHeader, CardTitle, CardContent } from '../../components/ui/card';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '../../components/ui/dialog';
 import { toast } from 'sonner';
-import { Clock, Calendar, FolderKanban, Edit, Lock, Plus, Filter, ChevronLeft, ChevronRight, Trash2, Eye, X, AlertCircle, History, CheckCircle, XCircle } from 'lucide-react';
+import { Clock, Calendar, FolderKanban, Edit, Plus, Filter, ChevronLeft, ChevronRight, Trash2, Eye, X, AlertCircle, CheckCircle, XCircle } from 'lucide-react';
 
 export default function EmployeeWorkEntry({ user, onLogout }) {
   const [searchParams, setSearchParams] = useSearchParams();
@@ -25,1069 +25,343 @@ export default function EmployeeWorkEntry({ user, onLogout }) {
   const [viewingEntries, setViewingEntries] = useState([]);
   const [viewingDate, setViewingDate] = useState('');
   const [projectFilter, setProjectFilter] = useState('');
-  
-  // Pagination
   const [currentPage, setCurrentPage] = useState(1);
   const [pageSize, setPageSize] = useState(10);
-  
-  // Date Filter
-  const [dateFilter, setDateFilter] = useState({
-    from_date: '',
-    to_date: ''
-  });
-  
-  const [formData, setFormData] = useState({
-    project_code: '',
-    hours: '',
-    work_details: '',
-    date: new Date().toISOString().split('T')[0]
-  });
-  const [editFormData, setEditFormData] = useState({
-    project_code: '',
-    hours: '',
-    work_details: ''
-  });
-  
-  // New state for multi-entry edit modal
+  const [dateFilter, setDateFilter] = useState({ from_date: '', to_date: '' });
+  const [formData, setFormData] = useState({ project_code: '', hours: '', work_details: '', date: new Date().toISOString().split('T')[0] });
+  const [editFormData, setEditFormData] = useState({ project_code: '', hours: '', work_details: '' });
   const [editDateDialogOpen, setEditDateDialogOpen] = useState(false);
   const [editingDate, setEditingDate] = useState('');
   const [editingDateEntries, setEditingDateEntries] = useState([]);
-  
-  // Pending approvals state
   const [pendingApprovals, setPendingApprovals] = useState([]);
-  
-  // All approval requests (for history view)
   const [allApprovalRequests, setAllApprovalRequests] = useState([]);
-  const [approvalTab, setApprovalTab] = useState('pending'); // 'pending' or 'history'
+  const [approvalTab, setApprovalTab] = useState('pending');
+  const [isProjectView, setIsProjectView] = useState(false);
+  const [projectViewInfo, setProjectViewInfo] = useState({ status: '', name: '' });
+  const [employees, setEmployees] = useState([]);
 
-  // Get today's date in IST timezone
-  const getTodayIST = () => {
-    const now = new Date();
-    // Convert to IST (UTC+5:30)
-    const istOffset = 5.5 * 60 * 60 * 1000; // 5 hours 30 minutes in milliseconds
-    const utcTime = now.getTime() + (now.getTimezoneOffset() * 60 * 1000);
-    const istTime = new Date(utcTime + istOffset);
-    return istTime.toISOString().split('T')[0];
-  };
-  
-  // Calculate date limits for work entry (last 2 days + today)
-  const getMinDate = () => {
-    const date = new Date();
-    // Convert to IST
-    const istOffset = 5.5 * 60 * 60 * 1000;
-    const utcTime = date.getTime() + (date.getTimezoneOffset() * 60 * 1000);
-    const istDate = new Date(utcTime + istOffset);
-    // Go back 2 days
-    istDate.setDate(istDate.getDate() - 2);
-    return istDate.toISOString().split('T')[0];
-  };
-  
+  const getTodayIST = () => { const n = new Date(); const ist = new Date(n.getTime() + (n.getTimezoneOffset() * 60000) + (5.5 * 3600000)); return ist.toISOString().split('T')[0]; };
+  const getMinDate = () => { const d = new Date(); const ist = new Date(d.getTime() + (d.getTimezoneOffset() * 60000) + (5.5 * 3600000)); ist.setDate(ist.getDate() - 2); return ist.toISOString().split('T')[0]; };
   const today = getTodayIST();
 
   useEffect(() => {
-    // Check for project filter in URL
     const projectParam = searchParams.get('project');
-    if (projectParam) {
-      setProjectFilter(projectParam);
-    }
-    fetchProjects();
-    fetchEntries();
-    fetchPendingApprovals();
-    fetchAllApprovalRequests();
+    const sourceParam = searchParams.get('source');
+    const statusParam = searchParams.get('status');
+    const nameParam = searchParams.get('name');
+    if (projectParam) setProjectFilter(projectParam);
+    if (sourceParam === 'projects') { setIsProjectView(true); setProjectViewInfo({ status: statusParam || '', name: nameParam || projectParam || '' }); }
+    fetchProjects(); fetchEntries();
+    if (sourceParam === 'projects') fetchEmployees();
+    if (sourceParam !== 'projects') { fetchPendingApprovals(); fetchAllApprovalRequests(); }
   }, []);
 
-  useEffect(() => {
-    applyFilters();
-  }, [entries, dateFilter, projectFilter]);
+  useEffect(() => { applyFilters(); }, [entries, dateFilter, projectFilter]);
 
-  const fetchProjects = async () => {
-    try {
-      const response = await api.get('/projects');
-      setProjects(response.data);
-      const assigned = response.data.filter(p => 
-        p.assigned_employees && p.assigned_employees.length > 0
-      );
-      setAssignedProjects(assigned);
-    } catch (error) {
-      console.error('Error fetching projects');
-    }
-  };
-
+  const fetchProjects = async () => { try { const r = await api.get('/projects'); setProjects(r.data); setAssignedProjects(r.data.filter(p => p.assigned_employees?.length > 0)); } catch (e) {} };
   const fetchEntries = async () => {
     try {
-      const response = await api.get('/work-entries');
-      setEntries(response.data);
-    } catch (error) {
-      console.error('Error fetching entries');
-    }
+      const src = searchParams.get('source'), proj = searchParams.get('project'), emp = searchParams.get('employee');
+      if (src === 'projects' && proj) { let url = `/work-entries?project_code=${proj}`; if (emp) url += `&employee_id=${emp}`; const r = await api.get(url); setEntries(r.data); }
+      else { const r = await api.get('/work-entries'); setEntries(r.data); }
+    } catch (e) {}
   };
-
-  const fetchPendingApprovals = async () => {
-    try {
-      const response = await api.get('/weekend-approvals/my-pending');
-      setPendingApprovals(response.data || []);
-    } catch (error) {
-      console.error('Error fetching pending approvals');
-    }
-  };
-
-  const fetchAllApprovalRequests = async () => {
-    try {
-      const response = await api.get('/weekend-approvals/employee/my-requests');
-      setAllApprovalRequests(response.data || []);
-    } catch (error) {
-      console.error('Error fetching approval requests');
-    }
-  };
+  const fetchEmployees = async () => { try { const r = await api.get('/employees'); setEmployees(r.data); } catch (e) {} };
+  const getEmployeeName = (id) => { const e = employees.find(e => e.employee_id === id); return e ? e.name : id; };
+  const fetchPendingApprovals = async () => { try { const r = await api.get('/weekend-approvals/my-pending'); setPendingApprovals(r.data || []); } catch (e) {} };
+  const fetchAllApprovalRequests = async () => { try { const r = await api.get('/weekend-approvals/employee/my-requests'); setAllApprovalRequests(r.data || []); } catch (e) {} };
 
   const applyFilters = () => {
-    let filtered = [...entries];
-    
-    // Apply project filter
-    if (projectFilter) {
-      filtered = filtered.filter(e => e.project_code === projectFilter);
-    }
-    
-    if (dateFilter.from_date) {
-      filtered = filtered.filter(e => e.date >= dateFilter.from_date);
-    }
-    if (dateFilter.to_date) {
-      filtered = filtered.filter(e => e.date <= dateFilter.to_date);
-    }
-    
-    // Sort by date descending
-    filtered.sort((a, b) => new Date(b.date) - new Date(a.date));
-    
-    setFilteredEntries(filtered);
-    setCurrentPage(1);
+    let f = [...entries];
+    if (projectFilter) f = f.filter(e => e.project_code === projectFilter);
+    if (dateFilter.from_date) f = f.filter(e => e.date >= dateFilter.from_date);
+    if (dateFilter.to_date) f = f.filter(e => e.date <= dateFilter.to_date);
+    f.sort((a, b) => new Date(b.date) - new Date(a.date));
+    setFilteredEntries(f); setCurrentPage(1);
   };
-
-  const clearFilters = () => {
-    setDateFilter({ from_date: '', to_date: '' });
-    setProjectFilter('');
-    setSearchParams({});
-  };
-
-  const clearProjectFilter = () => {
-    setProjectFilter('');
-    setSearchParams({});
-  };
+  const clearFilters = () => { setDateFilter({ from_date: '', to_date: '' }); setProjectFilter(''); setSearchParams({}); };
+  const clearProjectFilter = () => { setProjectFilter(''); setSearchParams({}); };
 
   const handleSubmit = async (e) => {
     e.preventDefault();
     try {
-      const response = await api.post('/work-entries', {
-        ...formData,
-        hours: parseFloat(formData.hours)
-      });
-      
-      // Check if it's a weekend/holiday approval
-      if (response.data.status === 'pending_approval') {
-        toast.success(response.data.message, {
-          description: 'Your work entry will be added after admin approval.',
-          duration: 5000
-        });
-        // Refresh pending approvals to show the new entry
-        fetchPendingApprovals();
-      } else {
-        toast.success('Work entry added successfully');
-      }
-      
-      setFormData({
-        project_code: '',
-        hours: '',
-        work_details: '',
-        date: new Date().toISOString().split('T')[0]
-      });
-      setAddDialogOpen(false);
-      fetchEntries();
-    } catch (error) {
-      toast.error(error.response?.data?.detail || 'Error adding work entry');
-    }
+      const r = await api.post('/work-entries', { ...formData, hours: parseFloat(formData.hours) });
+      if (r.data.status === 'pending_approval') { toast.success(r.data.message, { description: 'Entry pending admin approval.', duration: 5000 }); fetchPendingApprovals(); }
+      else { toast.success('Work entry added'); }
+      setFormData({ project_code: '', hours: '', work_details: '', date: new Date().toISOString().split('T')[0] }); setAddDialogOpen(false); fetchEntries();
+    } catch (error) { toast.error(error.response?.data?.detail || 'Error adding entry'); }
   };
 
-  const handleEdit = (entry) => {
-    setEditingEntry(entry);
-    setEditFormData({
-      project_code: entry.project_code,
-      hours: entry.hours.toString(),
-      work_details: entry.work_details
-    });
-    setEditDialogOpen(true);
-  };
-
-  // New: Handle edit for all entries of a date
-  const handleEditDate = (date, entries) => {
-    setEditingDate(date);
-    setEditingDateEntries(entries.map(e => ({
-      ...e,
-      hours: e.hours.toString(),
-      isModified: false
-    })));
-    setEditDateDialogOpen(true);
-  };
-
-  // New: Update a single entry in the date edit modal
-  const updateEntryInModal = (entryId, field, value) => {
-    setEditingDateEntries(prev => prev.map(e => 
-      e.id === entryId ? { ...e, [field]: value, isModified: true } : e
-    ));
-  };
-
-  // New: Save all modified entries from date edit modal
+  const handleEdit = (entry) => { setEditingEntry(entry); setEditFormData({ project_code: entry.project_code, hours: entry.hours.toString(), work_details: entry.work_details }); setEditDialogOpen(true); };
+  const handleEditDate = (date, entries) => { setEditingDate(date); setEditingDateEntries(entries.map(e => ({ ...e, hours: e.hours.toString(), isModified: false }))); setEditDateDialogOpen(true); };
+  const updateEntryInModal = (id, field, value) => { setEditingDateEntries(prev => prev.map(e => e.id === id ? { ...e, [field]: value, isModified: true } : e)); };
   const handleSaveAllEntries = async () => {
     try {
-      const modifiedEntries = editingDateEntries.filter(e => e.isModified);
-      
-      for (const entry of modifiedEntries) {
-        await api.put(`/work-entries/employee/${entry.id}`, {
-          project_code: entry.project_code,
-          hours: parseFloat(entry.hours),
-          work_details: entry.work_details
-        });
-      }
-      
-      toast.success(`Updated ${modifiedEntries.length} work entries`);
-      setEditDateDialogOpen(false);
-      fetchEntries();
-    } catch (error) {
-      toast.error(error.response?.data?.detail || 'Error updating work entries');
-    }
+      const modified = editingDateEntries.filter(e => e.isModified);
+      for (const entry of modified) await api.put(`/work-entries/employee/${entry.id}`, { project_code: entry.project_code, hours: parseFloat(entry.hours), work_details: entry.work_details });
+      toast.success(`Updated ${modified.length} entries`); setEditDateDialogOpen(false); fetchEntries();
+    } catch (error) { toast.error(error.response?.data?.detail || 'Error updating'); }
   };
+  const handleDeleteFromModal = async (id, name) => { if (!window.confirm(`Delete entry for "${name}"?`)) return; try { await api.delete(`/work-entries/employee/${id}`); setEditingDateEntries(prev => prev.filter(e => e.id !== id)); toast.success('Deleted'); fetchEntries(); } catch (error) { toast.error('Error deleting'); } };
+  const isEditable = (dateStr) => dateStr >= getTodayIST();
 
-  // New: Delete entry from date edit modal
-  const handleDeleteFromModal = async (entryId, projectName) => {
-    if (!window.confirm(`Delete entry for "${projectName}"?`)) return;
-    
-    try {
-      await api.delete(`/work-entries/employee/${entryId}`);
-      setEditingDateEntries(prev => prev.filter(e => e.id !== entryId));
-      toast.success('Entry deleted');
-      fetchEntries();
-    } catch (error) {
-      toast.error(error.response?.data?.detail || 'Error deleting entry');
-    }
-  };
+  const handleEditPendingApproval = async (a) => { const h = prompt(`Edit hours for ${getProjectName(a.project_code)}:`, a.original_hours); if (h === null) return; try { await api.put(`/weekend-approvals/employee/${a.id}`, { hours: parseFloat(h) }); toast.success('Updated'); fetchPendingApprovals(); } catch (error) { toast.error('Error'); } };
+  const handleDeletePendingApproval = async (a) => { if (!window.confirm('Delete pending request?')) return; try { await api.delete(`/weekend-approvals/employee/${a.id}`); toast.success('Deleted'); fetchPendingApprovals(); fetchAllApprovalRequests(); } catch (error) { toast.error('Error'); } };
+  const handleDeleteApprovalHistory = async (a) => { if (!window.confirm(`Delete ${a.status} entry?`)) return; try { await api.delete(`/weekend-approvals/employee/${a.id}`); toast.success('Deleted'); fetchAllApprovalRequests(); fetchEntries(); } catch (error) { toast.error('Error'); } };
 
-  // Check if date is editable (today or future in IST)
-  const isEditable = (dateStr) => {
-    const todayIST = getTodayIST();
-    return dateStr >= todayIST;
-  };
+  const handleUpdateEntry = async (e) => { e.preventDefault(); try { await api.put(`/work-entries/employee/${editingEntry.id}`, { ...editFormData, hours: parseFloat(editFormData.hours) }); toast.success('Updated'); setEditDialogOpen(false); fetchEntries(); } catch (error) { toast.error('Error'); } };
+  const handleViewEntries = (entries, date) => { setViewingEntries(entries); setViewingDate(date); setViewDialogOpen(true); };
+  const isToday = (dateStr) => dateStr === today;
 
-  // Handle editing pending approval
-  const handleEditPendingApproval = async (approval) => {
-    const newHours = prompt(`Edit hours for ${getProjectName(approval.project_code)} on ${formatDate(approval.original_date)}:`, approval.original_hours);
-    if (newHours === null) return;
-    
-    try {
-      await api.put(`/weekend-approvals/employee/${approval.id}`, {
-        hours: parseFloat(newHours)
-      });
-      toast.success('Pending request updated');
-      fetchPendingApprovals();
-    } catch (error) {
-      toast.error(error.response?.data?.detail || 'Error updating request');
-    }
-  };
-
-  // Handle deleting pending approval
-  const handleDeletePendingApproval = async (approval) => {
-    if (!window.confirm(`Delete pending request for ${getProjectName(approval.project_code)} on ${formatDate(approval.original_date)}?`)) return;
-    
-    try {
-      await api.delete(`/weekend-approvals/employee/${approval.id}`);
-      toast.success('Pending request deleted');
-      fetchPendingApprovals();
-      fetchAllApprovalRequests();
-    } catch (error) {
-      toast.error(error.response?.data?.detail || 'Error deleting request');
-    }
-  };
-
-  // Handle deleting from approval history (approved/rejected)
-  const handleDeleteApprovalHistory = async (approval) => {
-    const statusText = approval.status === 'approved' ? 'approved' : 'rejected';
-    if (!window.confirm(`Delete ${statusText} entry for ${getProjectName(approval.project_code)} on ${formatDate(approval.original_date)}?\n\n${approval.status === 'approved' ? 'This will also remove the associated work hours.' : ''}`)) return;
-    
-    try {
-      await api.delete(`/weekend-approvals/employee/${approval.id}`);
-      toast.success('Entry deleted from history');
-      fetchAllApprovalRequests();
-      fetchEntries(); // Refresh work entries if it was approved
-    } catch (error) {
-      toast.error(error.response?.data?.detail || 'Error deleting entry');
-    }
-  };
-
-  const handleUpdateEntry = async (e) => {
-    e.preventDefault();
-    try {
-      await api.put(`/work-entries/employee/${editingEntry.id}`, {
-        ...editFormData,
-        hours: parseFloat(editFormData.hours)
-      });
-      toast.success('Work entry updated successfully');
-      setEditDialogOpen(false);
-      setEditingEntry(null);
-      fetchEntries();
-    } catch (error) {
-      toast.error(error.response?.data?.detail || 'Error updating work entry');
-    }
-  };
-
-  const handleDelete = async (entryId, projectName) => {
-    if (!window.confirm(`Are you sure you want to delete the entry for "${projectName}"?`)) {
-      return;
-    }
-    try {
-      await api.delete(`/work-entries/employee/${entryId}`);
-      toast.success('Work entry deleted successfully');
-      fetchEntries();
-    } catch (error) {
-      toast.error(error.response?.data?.detail || 'Error deleting work entry');
-    }
-  };
-
-  const handleViewEntries = (entries, date) => {
-    setViewingEntries(entries);
-    setViewingDate(date);
-    setViewDialogOpen(true);
-  };
-
-  const isToday = (dateStr) => {
-    return dateStr === today;
-  };
-
-  // Group entries by date (like Admin view)
-  const groupEntriesByDate = (entriesList) => {
-    const grouped = {};
-    entriesList.forEach(entry => {
-      if (!grouped[entry.date]) {
-        grouped[entry.date] = {
-          date: entry.date,
-          entries: [],
-          totalHours: 0
-        };
-      }
-      grouped[entry.date].entries.push(entry);
-      grouped[entry.date].totalHours += entry.hours;
-    });
-    // Convert to array and sort by date descending
-    return Object.values(grouped).sort((a, b) => new Date(b.date) - new Date(a.date));
+  const groupEntriesByDate = (list) => {
+    const g = {};
+    list.forEach(entry => { if (!g[entry.date]) g[entry.date] = { date: entry.date, entries: [], totalHours: 0 }; g[entry.date].entries.push(entry); g[entry.date].totalHours += entry.hours; });
+    return Object.values(g).sort((a, b) => new Date(b.date) - new Date(a.date));
   };
 
   const groupedEntries = groupEntriesByDate(filteredEntries);
-  
-  // Pagination calculations (now based on grouped entries - one row per date)
   const totalPages = Math.ceil(groupedEntries.length / pageSize);
   const startIndex = (currentPage - 1) * pageSize;
-  const endIndex = startIndex + pageSize;
-  const paginatedGroups = groupedEntries.slice(startIndex, endIndex);
-
-  // Stats
+  const paginatedGroups = groupedEntries.slice(startIndex, startIndex + pageSize);
   const todayEntries = entries.filter(e => e.date === today);
-  const totalHoursToday = todayEntries.reduce((sum, e) => sum + e.hours, 0);
-  const totalHoursFiltered = filteredEntries.reduce((sum, e) => sum + e.hours, 0);
-
-  const getProjectName = (projectCode) => {
-    const project = projects.find(p => p.project_code === projectCode);
-    return project ? project.name : projectCode || 'Unknown Project';
-  };
-
-  const formatDate = (dateStr) => {
-    return new Date(dateStr).toLocaleDateString('en-IN', {
-      day: '2-digit',
-      month: 'short',
-      year: 'numeric'
-    });
-  };
-
-  // Format projects for display (e.g., "Project A - 3h, Project B - 2h")
-  const formatProjectsDisplay = (entriesForDate) => {
-    return entriesForDate.map(entry => 
-      `${getProjectName(entry.project_code)} - ${entry.hours}h`
-    ).join(', ');
-  };
+  const totalHoursToday = todayEntries.reduce((s, e) => s + e.hours, 0);
+  const totalHoursFiltered = filteredEntries.reduce((s, e) => s + e.hours, 0);
+  const getProjectName = (code) => { const p = projects.find(p => p.project_code === code); return p ? p.name : code || 'Unknown'; };
+  const formatDate = (d) => new Date(d).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' });
 
   return (
     <Layout user={user} onLogout={onLogout}>
-      <div className="p-8" data-testid="work-entry-page">
-        <div className="mb-6 flex justify-between items-center">
+      <div className="p-4 md:p-8 lg:p-10 max-w-7xl mx-auto" data-testid="work-entry-page">
+        <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 mb-6">
           <div>
-            <h1 className="text-4xl font-bold text-gray-900 mb-2">Working Hours</h1>
-            <p className="text-gray-600">Log and view your daily work hours</p>
+            <h1 className="text-2xl md:text-3xl font-bold text-slate-900 tracking-tight">{isProjectView ? 'Project Work Hours' : 'Working Hours'}</h1>
+            <p className="text-sm text-slate-500 mt-1">{isProjectView ? 'View work hours for this project' : 'Log and view your daily work hours'}</p>
           </div>
-          <Button onClick={() => setAddDialogOpen(true)} data-testid="add-work-entry-btn">
-            <Plus size={18} className="mr-2" />
-            Add Working Hours
-          </Button>
+          {!isProjectView && (
+            <Button onClick={() => setAddDialogOpen(true)} className="bg-slate-900 hover:bg-slate-800 text-white h-9 text-sm rounded-lg" data-testid="add-work-entry-btn"><Plus size={16} className="mr-1.5" /> Add Hours</Button>
+          )}
         </div>
 
-        {/* Project Filter Banner */}
-        {projectFilter && (
-          <div className="mb-4 p-3 bg-indigo-50 border border-indigo-200 rounded-lg flex items-center justify-between">
-            <div className="flex items-center gap-2">
-              <FolderKanban size={18} className="text-indigo-600" />
-              <span className="text-indigo-800">
-                Showing hours for: <strong>{getProjectName(projectFilter)}</strong> ({projectFilter})
-              </span>
+        {/* Project Banner */}
+        {isProjectView && projectViewInfo.status && (
+          <div className={`mb-6 p-4 rounded-xl border flex items-center justify-between ${projectViewInfo.status.toLowerCase() === 'late' ? 'bg-red-50 border-red-200' : projectViewInfo.status.toLowerCase() === 'completed' ? 'bg-green-50 border-green-200' : 'bg-blue-50 border-blue-200'}`}>
+            <div className="flex items-center gap-3">
+              <FolderKanban size={20} className={projectViewInfo.status.toLowerCase() === 'late' ? 'text-red-600' : projectViewInfo.status.toLowerCase() === 'completed' ? 'text-green-600' : 'text-blue-600'} />
+              <div><p className="text-xs font-medium text-slate-500">Project Status</p><p className={`text-sm font-bold ${projectViewInfo.status.toLowerCase() === 'late' ? 'text-red-700' : projectViewInfo.status.toLowerCase() === 'completed' ? 'text-green-700' : 'text-blue-700'}`}>{projectViewInfo.status.toUpperCase()}</p></div>
             </div>
-            <Button variant="ghost" size="sm" onClick={clearProjectFilter} className="text-indigo-600 hover:text-indigo-800">
-              <X size={16} className="mr-1" />
-              Clear Filter
-            </Button>
+            <div className="text-right"><p className="text-xs text-slate-500">Project</p><p className="text-sm font-semibold text-slate-800">{decodeURIComponent(projectViewInfo.name)}</p></div>
           </div>
         )}
 
-        {/* Stats Cards */}
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
-          <Card className="bg-gradient-to-br from-blue-500 to-blue-600 text-white">
-            <CardContent className="p-4">
+        {projectFilter && !isProjectView && (
+          <div className="mb-4 p-3 bg-blue-50 border border-blue-200 rounded-xl flex items-center justify-between">
+            <div className="flex items-center gap-2"><FolderKanban size={16} className="text-blue-600" /><span className="text-sm text-blue-800">Showing: <strong>{getProjectName(projectFilter)}</strong></span></div>
+            <Button variant="ghost" size="sm" onClick={clearProjectFilter} className="text-blue-600 hover:text-blue-800 h-7 text-xs"><X size={14} className="mr-1" /> Clear</Button>
+          </div>
+        )}
+
+        {/* Stats */}
+        <div className={`grid grid-cols-1 ${isProjectView ? 'md:grid-cols-2' : 'md:grid-cols-3'} gap-4 mb-6`}>
+          {[
+            { label: "Today's Hours", value: `${totalHoursToday.toFixed(1)}h`, icon: Clock, color: 'bg-blue-50 text-blue-600' },
+            { label: projectFilter ? 'Project Total' : 'Filtered Total', value: `${totalHoursFiltered.toFixed(1)}h`, icon: Calendar, color: 'bg-green-50 text-green-600' },
+            ...(!isProjectView ? [{ label: 'Assigned Projects', value: assignedProjects.length, icon: FolderKanban, color: 'bg-indigo-50 text-indigo-600' }] : []),
+          ].map((s) => (
+            <div key={s.label} className="bg-white border border-slate-200 rounded-xl p-5 shadow-sm">
               <div className="flex items-center gap-3">
-                <Clock size={24} />
-                <div>
-                  <p className="text-sm opacity-80">Today's Hours</p>
-                  <p className="text-2xl font-bold">{totalHoursToday.toFixed(1)}h</p>
-                </div>
+                <div className={`w-10 h-10 rounded-lg flex items-center justify-center ${s.color}`}><s.icon size={20} /></div>
+                <div><p className="text-xs font-medium text-slate-500 uppercase tracking-wider">{s.label}</p><p className="text-2xl font-bold text-slate-900">{s.value}</p></div>
               </div>
-            </CardContent>
-          </Card>
-          <Card className="bg-gradient-to-br from-green-500 to-green-600 text-white">
-            <CardContent className="p-4">
-              <div className="flex items-center gap-3">
-                <Calendar size={24} />
-                <div>
-                  <p className="text-sm opacity-80">{projectFilter ? 'Project Total Hours' : 'Filtered Total Hours'}</p>
-                  <p className="text-2xl font-bold">{totalHoursFiltered.toFixed(1)}h</p>
-                </div>
-              </div>
-            </CardContent>
-          </Card>
-          <Card className="bg-gradient-to-br from-purple-500 to-purple-600 text-white">
-            <CardContent className="p-4">
-              <div className="flex items-center gap-3">
-                <FolderKanban size={24} />
-                <div>
-                  <p className="text-sm opacity-80">Total Assigned Projects</p>
-                  <p className="text-2xl font-bold">{assignedProjects.length}</p>
-                </div>
-              </div>
-            </CardContent>
-          </Card>
+            </div>
+          ))}
         </div>
 
         {/* Date Filter */}
-        <Card className="mb-6">
-          <CardHeader className="pb-4">
-            <CardTitle className="flex items-center gap-2 text-lg">
-              <Filter size={20} />
-              Filter by Date
-            </CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="flex flex-wrap gap-4 items-end">
-              <div>
-                <Label htmlFor="from-date">From Date</Label>
-                <Input
-                  id="from-date"
-                  type="date"
-                  value={dateFilter.from_date}
-                  onChange={(e) => setDateFilter({ ...dateFilter, from_date: e.target.value })}
-                  data-testid="filter-from-date"
-                />
-              </div>
-              <div>
-                <Label htmlFor="to-date">To Date</Label>
-                <Input
-                  id="to-date"
-                  type="date"
-                  value={dateFilter.to_date}
-                  onChange={(e) => setDateFilter({ ...dateFilter, to_date: e.target.value })}
-                  data-testid="filter-to-date"
-                />
-              </div>
-              {(dateFilter.from_date || dateFilter.to_date) && (
-                <Button variant="outline" onClick={clearFilters}>
-                  Clear Filters
-                </Button>
-              )}
-            </div>
-          </CardContent>
-        </Card>
+        <div className="bg-white border border-slate-200 rounded-xl p-4 mb-6 shadow-sm">
+          <div className="flex flex-wrap gap-4 items-end">
+            <div><Label className="text-xs text-slate-500">From</Label><Input type="date" value={dateFilter.from_date} onChange={(e) => setDateFilter({ ...dateFilter, from_date: e.target.value })} className="mt-1 h-9 border-slate-200 w-40" data-testid="filter-from-date" /></div>
+            <div><Label className="text-xs text-slate-500">To</Label><Input type="date" value={dateFilter.to_date} onChange={(e) => setDateFilter({ ...dateFilter, to_date: e.target.value })} className="mt-1 h-9 border-slate-200 w-40" data-testid="filter-to-date" /></div>
+            {(dateFilter.from_date || dateFilter.to_date) && <Button variant="outline" size="sm" onClick={clearFilters} className="h-9 text-xs border-slate-200">Clear</Button>}
+          </div>
+        </div>
 
-        {/* Weekend/Holiday Approvals Section with Tabs */}
-        {(pendingApprovals.length > 0 || allApprovalRequests.filter(r => r.status !== 'pending' && r.status !== 'deleted').length > 0) && (
-          <Card className="shadow-lg mb-6">
-            <CardHeader className="border-b pb-0">
-              <div className="flex items-center gap-4 mb-4">
-                <CardTitle className="flex items-center gap-2">
-                  <AlertCircle size={20} />
-                  Weekend/Holiday Approvals
-                </CardTitle>
-              </div>
-              {/* Tabs */}
+        {/* Approvals Section */}
+        {!isProjectView && (pendingApprovals.length > 0 || allApprovalRequests.filter(r => r.status !== 'pending' && r.status !== 'deleted').length > 0) && (
+          <div className="bg-white border border-slate-200 rounded-xl shadow-sm mb-6 overflow-hidden">
+            <div className="p-4 border-b border-slate-200">
+              <h3 className="text-sm font-semibold text-slate-700 mb-3">Weekend/Holiday Approvals</h3>
               <div className="flex gap-2">
-                <Button
-                  variant={approvalTab === 'pending' ? 'default' : 'outline'}
-                  size="sm"
-                  onClick={() => setApprovalTab('pending')}
-                  className={approvalTab === 'pending' ? 'bg-orange-500 hover:bg-orange-600' : ''}
-                >
-                  Pending ({pendingApprovals.length})
-                </Button>
-                <Button
-                  variant={approvalTab === 'history' ? 'default' : 'outline'}
-                  size="sm"
-                  onClick={() => setApprovalTab('history')}
-                  className={approvalTab === 'history' ? 'bg-blue-500 hover:bg-blue-600' : ''}
-                >
-                  History ({allApprovalRequests.filter(r => r.status !== 'pending' && r.status !== 'deleted').length})
-                </Button>
-              </div>
-            </CardHeader>
-            <CardContent className="p-4">
-              {/* Pending Tab */}
-              {approvalTab === 'pending' && (
-                <>
-                  {pendingApprovals.length === 0 ? (
-                    <p className="text-center text-gray-500 py-4">No pending approvals</p>
-                  ) : (
-                    <>
-                      <p className="text-sm text-orange-600 mb-3">
-                        These entries are awaiting admin approval. You can edit or delete them.
-                      </p>
-                      <div className="space-y-2">
-                        {pendingApprovals.map((approval) => (
-                          <div key={approval.id} className="flex items-center justify-between bg-orange-50 p-3 rounded-lg border border-orange-200">
-                            <div className="flex-1">
-                              <div className="flex items-center gap-2">
-                                <span className="font-medium">{formatDate(approval.original_date)}</span>
-                                <span className="text-xs bg-orange-100 text-orange-700 px-2 py-0.5 rounded">Pending</span>
-                              </div>
-                              <div className="text-sm text-gray-600 mt-1">
-                                <span className="font-medium">{getProjectName(approval.project_code)}</span>
-                                <span className="mx-2">•</span>
-                                <span>{approval.original_hours}h</span>
-                                {approval.original_work_details && (
-                                  <>
-                                    <span className="mx-2">•</span>
-                                    <span className="text-gray-500 truncate max-w-xs inline-block align-bottom">{approval.original_work_details}</span>
-                                  </>
-                                )}
-                              </div>
-                            </div>
-                            <div className="flex gap-2">
-                              <Button
-                                size="sm"
-                                variant="outline"
-                                onClick={() => handleEditPendingApproval(approval)}
-                                className="text-blue-600 hover:bg-blue-50"
-                              >
-                                <Edit size={14} />
-                              </Button>
-                              <Button
-                                size="sm"
-                                variant="outline"
-                                onClick={() => handleDeletePendingApproval(approval)}
-                                className="text-red-600 hover:bg-red-50"
-                                data-testid={`delete-pending-${approval.id}`}
-                              >
-                                <Trash2 size={14} />
-                              </Button>
-                            </div>
-                          </div>
-                        ))}
-                      </div>
-                    </>
-                  )}
-                </>
-              )}
-
-              {/* History Tab */}
-              {approvalTab === 'history' && (
-                <>
-                  {allApprovalRequests.filter(r => r.status !== 'pending' && r.status !== 'deleted').length === 0 ? (
-                    <p className="text-center text-gray-500 py-4">No approval history</p>
-                  ) : (
-                    <div className="space-y-2">
-                      {allApprovalRequests
-                        .filter(r => r.status !== 'pending' && r.status !== 'deleted')
-                        .map((record) => (
-                          <div 
-                            key={record.id} 
-                            className={`flex items-center justify-between p-3 rounded-lg border ${
-                              record.status === 'approved' ? 'bg-green-50 border-green-200' : 'bg-red-50 border-red-200'
-                            }`}
-                          >
-                            <div className="flex-1">
-                              <div className="flex items-center gap-2 flex-wrap">
-                                <span className="font-medium">{formatDate(record.original_date)}</span>
-                                {record.status === 'approved' ? (
-                                  <span className="text-xs bg-green-100 text-green-700 px-2 py-0.5 rounded">Approved</span>
-                                ) : (
-                                  <span className="text-xs bg-red-100 text-red-700 px-2 py-0.5 rounded">Rejected</span>
-                                )}
-                                {record.is_compensation && (
-                                  <span className="text-xs bg-purple-100 text-purple-700 px-2 py-0.5 rounded">Compensation</span>
-                                )}
-                              </div>
-                              <div className="text-sm text-gray-600 mt-1">
-                                <span className="font-medium">{getProjectName(record.project_code)}</span>
-                                <span className="mx-2">•</span>
-                                <span>{record.status === 'approved' ? (record.approved_hours || record.original_hours) : record.original_hours}h</span>
-                                {record.rejection_reason && (
-                                  <>
-                                    <span className="mx-2">•</span>
-                                    <span className="text-red-600">Reason: {record.rejection_reason}</span>
-                                  </>
-                                )}
-                              </div>
-                            </div>
-                            <Button
-                              size="sm"
-                              variant="outline"
-                              onClick={() => handleDeleteApprovalHistory(record)}
-                              className="text-red-600 hover:bg-red-50"
-                              data-testid={`delete-history-${record.id}`}
-                            >
-                              <Trash2 size={14} />
-                            </Button>
-                          </div>
-                        ))}
-                    </div>
-                  )}
-                </>
-              )}
-            </CardContent>
-          </Card>
-        )}
-
-        {/* Work Entries Table - Like Admin View */}
-        <Card className="shadow-lg">
-          <CardHeader className="border-b">
-            <div className="flex justify-between items-center">
-              <CardTitle className="flex items-center gap-2">
-                <Clock size={20} />
-                Work Entries ({filteredEntries.length})
-              </CardTitle>
-              <div className="flex items-center gap-2">
-                <Label>Show:</Label>
-                <Select value={pageSize.toString()} onValueChange={(v) => { setPageSize(parseInt(v)); setCurrentPage(1); }}>
-                  <SelectTrigger className="w-20">
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="10">10</SelectItem>
-                    <SelectItem value="25">25</SelectItem>
-                    <SelectItem value="50">50</SelectItem>
-                  </SelectContent>
-                </Select>
+                <Button size="sm" variant={approvalTab === 'pending' ? 'default' : 'outline'} onClick={() => setApprovalTab('pending')} className={`text-xs h-8 ${approvalTab === 'pending' ? 'bg-amber-500 hover:bg-amber-600' : 'border-slate-200'}`}>Pending ({pendingApprovals.length})</Button>
+                <Button size="sm" variant={approvalTab === 'history' ? 'default' : 'outline'} onClick={() => setApprovalTab('history')} className={`text-xs h-8 ${approvalTab === 'history' ? 'bg-slate-900 hover:bg-slate-800' : 'border-slate-200'}`}>History ({allApprovalRequests.filter(r => r.status !== 'pending' && r.status !== 'deleted').length})</Button>
               </div>
             </div>
-          </CardHeader>
-          <CardContent className="p-0">
-            {filteredEntries.length === 0 ? (
-              <div className="p-8 text-center text-gray-500">
-                <FolderKanban size={48} className="mx-auto mb-4 opacity-50" />
-                <p>No work entries found</p>
-                <p className="text-sm">Start logging your work hours</p>
-              </div>
-            ) : (
-              <>
-                <div className="table-container">
-                  <table>
-                    <thead>
-                      <tr>
-                        <th>Date</th>
-                        <th>Projects</th>
-                        <th>Total Hours</th>
-                        <th>Actions</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {paginatedGroups.map((group) => {
-                        const isTodayEntry = isToday(group.date);
-                        return (
-                          <tr key={group.date} className={isTodayEntry ? 'bg-blue-50' : ''}>
-                            <td>
-                              <div className="flex items-center gap-2">
-                                <span className="font-medium">{formatDate(group.date)}</span>
-                                {isTodayEntry && (
-                                  <span className="text-xs bg-blue-600 text-white px-2 py-0.5 rounded">Today</span>
-                                )}
-                              </div>
-                            </td>
-                            <td className="max-w-md">
-                              <div className="flex flex-wrap gap-1">
-                                {group.entries.map((entry, idx) => (
-                                  <span 
-                                    key={entry.id} 
-                                    className="inline-flex items-center bg-gray-100 text-gray-800 px-2 py-1 rounded text-sm"
-                                    title={entry.work_details}
-                                  >
-                                    {getProjectName(entry.project_code)} - {entry.hours}h
-                                  </span>
-                                ))}
-                              </div>
-                            </td>
-                            <td>
-                              <span className="font-semibold text-blue-600">{group.totalHours}h</span>
-                            </td>
-                            <td>
-                              {isEditable(group.date) ? (
-                                <Button
-                                  size="sm"
-                                  variant="outline"
-                                  onClick={() => handleEditDate(group.date, group.entries)}
-                                  data-testid={`edit-date-${group.date}`}
-                                  className="text-blue-600 hover:text-blue-700 hover:bg-blue-50"
-                                >
-                                  <Edit size={14} className="mr-1" />
-                                  Edit
-                                </Button>
-                              ) : (
-                                <Button
-                                  size="sm"
-                                  variant="ghost"
-                                  className="text-gray-500 hover:text-gray-700"
-                                  onClick={() => handleViewEntries(group.entries, group.date)}
-                                  data-testid={`view-entries-${group.date}`}
-                                >
-                                  <Eye size={14} className="mr-1" />
-                                  View
-                                </Button>
-                              )}
-                            </td>
-                          </tr>
-                        );
-                      })}
-                    </tbody>
-                  </table>
-                </div>
-
-                {/* Pagination Controls */}
-                {totalPages > 1 && (
-                  <div className="flex items-center justify-between px-6 py-4 border-t">
-                    <div className="text-sm text-gray-600">
-                      Showing {startIndex + 1} to {Math.min(endIndex, groupedEntries.length)} of {groupedEntries.length} dates
-                    </div>
-                    <div className="flex items-center gap-2">
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        onClick={() => setCurrentPage(p => Math.max(1, p - 1))}
-                        disabled={currentPage === 1}
-                      >
-                        <ChevronLeft size={16} />
-                        Previous
-                      </Button>
-                      <div className="flex items-center gap-1">
-                        {[...Array(Math.min(5, totalPages))].map((_, i) => {
-                          let pageNum;
-                          if (totalPages <= 5) {
-                            pageNum = i + 1;
-                          } else if (currentPage <= 3) {
-                            pageNum = i + 1;
-                          } else if (currentPage >= totalPages - 2) {
-                            pageNum = totalPages - 4 + i;
-                          } else {
-                            pageNum = currentPage - 2 + i;
-                          }
-                          return (
-                            <Button
-                              key={pageNum}
-                              variant={currentPage === pageNum ? 'default' : 'outline'}
-                              size="sm"
-                              onClick={() => setCurrentPage(pageNum)}
-                              className="w-8 h-8 p-0"
-                            >
-                              {pageNum}
-                            </Button>
-                          );
-                        })}
-                      </div>
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))}
-                        disabled={currentPage === totalPages}
-                      >
-                        Next
-                        <ChevronRight size={16} />
-                      </Button>
-                    </div>
-                  </div>
-                )}
-              </>
-            )}
-          </CardContent>
-        </Card>
-
-        {/* Add Entry Dialog */}
-        <Dialog open={addDialogOpen} onOpenChange={setAddDialogOpen}>
-          <DialogContent>
-            <DialogHeader>
-              <DialogTitle className="flex items-center gap-2">
-                <Plus size={20} />
-                Add Work Entry
-              </DialogTitle>
-            </DialogHeader>
-            <form onSubmit={handleSubmit} className="space-y-4">
-              <div>
-                <Label htmlFor="date">Date</Label>
-                <Input
-                  id="date"
-                  type="date"
-                  value={formData.date}
-                  onChange={(e) => setFormData({ ...formData, date: e.target.value })}
-                  min={getMinDate()}
-                  required
-                  data-testid="work-entry-date-input"
-                />
-                <p className="text-xs text-gray-500 mt-1">Past dates: last 2 days only. Future dates allowed.</p>
-              </div>
-              <div>
-                <Label htmlFor="project">Project</Label>
-                <Select value={formData.project_code} onValueChange={(value) => setFormData({ ...formData, project_code: value })}>
-                  <SelectTrigger data-testid="work-entry-project-select">
-                    <SelectValue placeholder="Select project" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {projects.map((proj) => (
-                      <SelectItem key={proj.project_code} value={proj.project_code}>
-                        {proj.name} ({proj.project_code})
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-              <div>
-                <Label htmlFor="hours">Hours</Label>
-                <Input
-                  id="hours"
-                  type="number"
-                  step="0.5"
-                  min="0.5"
-                  value={formData.hours}
-                  onChange={(e) => setFormData({ ...formData, hours: e.target.value })}
-                  placeholder="Enter hours"
-                  required
-                  data-testid="work-entry-hours-input"
-                />
-              </div>
-              <div>
-                <Label htmlFor="work_details">Work Details</Label>
-                <Textarea
-                  id="work_details"
-                  value={formData.work_details}
-                  onChange={(e) => setFormData({ ...formData, work_details: e.target.value })}
-                  rows={4}
-                  required
-                  placeholder="Describe the work you completed..."
-                  data-testid="work-entry-details-input"
-                />
-              </div>
-              
-              <div className="bg-blue-50 p-3 rounded-lg border border-blue-200">
-                <p className="text-sm text-blue-800">
-                  <strong>Note:</strong> If you add multiple entries for the same date and project, hours will be accumulated.
-                </p>
-              </div>
-              
-              <Button type="submit" className="w-full" data-testid="submit-work-entry-button">
-                Add Entry
-              </Button>
-            </form>
-          </DialogContent>
-        </Dialog>
-
-        {/* Edit Entry Dialog - Single Entry (kept for backward compatibility) */}
-        <Dialog open={editDialogOpen} onOpenChange={setEditDialogOpen}>
-          <DialogContent>
-            <DialogHeader>
-              <DialogTitle>Edit Work Entry</DialogTitle>
-            </DialogHeader>
-            <form onSubmit={handleUpdateEntry} className="space-y-4">
-              <div>
-                <Label>Project</Label>
-                <Select value={editFormData.project_code} onValueChange={(value) => setEditFormData({...editFormData, project_code: value})}>
-                  <SelectTrigger>
-                    <SelectValue placeholder="Select project" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {projects.map((proj) => (
-                      <SelectItem key={proj.project_code} value={proj.project_code}>
-                        {proj.name} ({proj.project_code})
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-              <div>
-                <Label>Hours</Label>
-                <Input
-                  type="number"
-                  step="0.5"
-                  min="0.5"
-                  value={editFormData.hours}
-                  onChange={(e) => setEditFormData({...editFormData, hours: e.target.value})}
-                  required
-                />
-              </div>
-              <div>
-                <Label>Work Details</Label>
-                <Textarea
-                  value={editFormData.work_details}
-                  onChange={(e) => setEditFormData({...editFormData, work_details: e.target.value})}
-                  rows={4}
-                  required
-                />
-              </div>
-              <Button type="submit" className="w-full">
-                Update Entry
-              </Button>
-            </form>
-          </DialogContent>
-        </Dialog>
-
-        {/* NEW: Edit All Entries for a Date Modal */}
-        <Dialog open={editDateDialogOpen} onOpenChange={setEditDateDialogOpen}>
-          <DialogContent className="sm:max-w-2xl max-h-[85vh] overflow-y-auto">
-            <DialogHeader>
-              <DialogTitle className="flex items-center gap-2">
-                <Edit size={20} />
-                Edit Work Entries - {formatDate(editingDate)}
-              </DialogTitle>
-            </DialogHeader>
-            
-            <div className="space-y-4">
-              {editingDateEntries.length === 0 ? (
-                <p className="text-center text-gray-500 py-4">No entries to edit</p>
-              ) : (
-                editingDateEntries.map((entry, idx) => (
-                  <div key={entry.id} className="p-4 bg-gray-50 rounded-lg border space-y-3">
-                    <div className="flex justify-between items-start">
+            <div className="p-4">
+              {approvalTab === 'pending' && (pendingApprovals.length === 0 ? <p className="text-center text-slate-400 text-sm py-4">No pending approvals</p> : (
+                <div className="space-y-2">
+                  {pendingApprovals.map((a) => (
+                    <div key={a.id} className="flex items-center justify-between bg-amber-50 p-3 rounded-lg border border-amber-200">
                       <div className="flex-1">
-                        <Label className="text-xs text-gray-500">Project</Label>
-                        <Select 
-                          value={entry.project_code} 
-                          onValueChange={(value) => updateEntryInModal(entry.id, 'project_code', value)}
-                        >
-                          <SelectTrigger className="mt-1">
-                            <SelectValue />
-                          </SelectTrigger>
-                          <SelectContent>
-                            {projects.map((proj) => (
-                              <SelectItem key={proj.project_code} value={proj.project_code}>
-                                {proj.name} ({proj.project_code})
-                              </SelectItem>
-                            ))}
-                          </SelectContent>
-                        </Select>
+                        <div className="flex items-center gap-2"><span className="font-medium text-sm text-slate-700">{formatDate(a.original_date)}</span><span className="text-[10px] px-1.5 py-0.5 rounded-full bg-amber-100 text-amber-700 border border-amber-200 font-medium">Pending</span></div>
+                        <div className="text-xs text-slate-500 mt-1"><span className="font-medium">{getProjectName(a.project_code)}</span> - {a.original_hours}h</div>
                       </div>
-                      <Button
-                        size="sm"
-                        variant="ghost"
-                        className="text-red-500 hover:text-red-700 hover:bg-red-50 ml-2"
-                        onClick={() => handleDeleteFromModal(entry.id, getProjectName(entry.project_code))}
-                      >
-                        <Trash2 size={16} />
-                      </Button>
-                    </div>
-                    
-                    <div className="grid grid-cols-3 gap-3">
-                      <div>
-                        <Label className="text-xs text-gray-500">Hours</Label>
-                        <Input
-                          type="number"
-                          step="0.5"
-                          min="0.5"
-                          value={entry.hours}
-                          onChange={(e) => updateEntryInModal(entry.id, 'hours', e.target.value)}
-                          className="mt-1"
-                        />
-                      </div>
-                      <div className="col-span-2">
-                        <Label className="text-xs text-gray-500">Work Details</Label>
-                        <Input
-                          value={entry.work_details}
-                          onChange={(e) => updateEntryInModal(entry.id, 'work_details', e.target.value)}
-                          className="mt-1"
-                          placeholder="Work details..."
-                        />
+                      <div className="flex gap-1.5">
+                        <Button size="sm" variant="outline" onClick={() => handleEditPendingApproval(a)} className="h-7 w-7 p-0 border-slate-200"><Edit size={12} /></Button>
+                        <Button size="sm" variant="outline" onClick={() => handleDeletePendingApproval(a)} className="h-7 w-7 p-0 text-red-500 border-red-200 hover:bg-red-50" data-testid={`delete-pending-${a.id}`}><Trash2 size={12} /></Button>
                       </div>
                     </div>
-                    
-                    {entry.isModified && (
-                      <span className="text-xs text-orange-600 font-medium">Modified</span>
-                    )}
-                  </div>
-                ))
-              )}
-            </div>
-            
-            <div className="mt-4 pt-4 border-t flex justify-between items-center">
-              <p className="text-sm text-gray-600">
-                Total: <span className="font-bold text-blue-600">
-                  {editingDateEntries.reduce((sum, e) => sum + parseFloat(e.hours || 0), 0).toFixed(1)}h
-                </span>
-                {editingDateEntries.some(e => e.isModified) && (
-                  <span className="ml-2 text-orange-600">
-                    ({editingDateEntries.filter(e => e.isModified).length} modified)
-                  </span>
-                )}
-              </p>
-              <div className="flex gap-2">
-                <Button variant="outline" onClick={() => setEditDateDialogOpen(false)}>
-                  Cancel
-                </Button>
-                <Button 
-                  onClick={handleSaveAllEntries}
-                  disabled={!editingDateEntries.some(e => e.isModified)}
-                >
-                  Save Changes
-                </Button>
-              </div>
-            </div>
-          </DialogContent>
-        </Dialog>
-
-        {/* View Entries Dialog (for past dates) */}
-        <Dialog open={viewDialogOpen} onOpenChange={setViewDialogOpen}>
-          <DialogContent className="max-w-2xl">
-            <DialogHeader>
-              <DialogTitle className="flex items-center gap-2">
-                <Eye size={20} />
-                Work Entries - {formatDate(viewingDate)}
-              </DialogTitle>
-            </DialogHeader>
-            <div className="space-y-4 max-h-[400px] overflow-y-auto">
-              {viewingEntries.map((entry, idx) => (
-                <div key={entry.id} className="p-4 bg-gray-50 rounded-lg border">
-                  <div className="flex justify-between items-start mb-2">
-                    <h4 className="font-semibold text-gray-900">{getProjectName(entry.project_code)}</h4>
-                    <span className="px-3 py-1 bg-blue-100 text-blue-800 rounded-full text-sm font-bold">
-                      {entry.hours}h
-                    </span>
-                  </div>
-                  <div className="text-sm text-gray-600">
-                    <p className="font-medium text-gray-700 mb-1">Work Details:</p>
-                    <p className="whitespace-pre-wrap bg-white p-2 rounded border">{entry.work_details || 'No details provided'}</p>
-                  </div>
+                  ))}
                 </div>
               ))}
-              {viewingEntries.length === 0 && (
-                <p className="text-center text-gray-500 py-4">No entries found</p>
-              )}
+              {approvalTab === 'history' && (() => { const items = allApprovalRequests.filter(r => r.status !== 'pending' && r.status !== 'deleted'); return items.length === 0 ? <p className="text-center text-slate-400 text-sm py-4">No history</p> : (
+                <div className="space-y-2">
+                  {items.map((r) => (
+                    <div key={r.id} className={`flex items-center justify-between p-3 rounded-lg border ${r.status === 'approved' ? 'bg-green-50 border-green-200' : 'bg-red-50 border-red-200'}`}>
+                      <div className="flex-1">
+                        <div className="flex items-center gap-2 flex-wrap"><span className="font-medium text-sm text-slate-700">{formatDate(r.original_date)}</span><span className={`text-[10px] px-1.5 py-0.5 rounded-full font-medium border ${r.status === 'approved' ? 'bg-green-100 text-green-700 border-green-200' : 'bg-red-100 text-red-700 border-red-200'}`}>{r.status === 'approved' ? 'Approved' : 'Rejected'}</span></div>
+                        <div className="text-xs text-slate-500 mt-1"><span className="font-medium">{getProjectName(r.project_code)}</span> - {r.status === 'approved' ? (r.approved_hours || r.original_hours) : r.original_hours}h{r.rejection_reason && <span className="text-red-500 ml-2">Reason: {r.rejection_reason}</span>}</div>
+                      </div>
+                      <Button size="sm" variant="outline" onClick={() => handleDeleteApprovalHistory(r)} className="h-7 w-7 p-0 text-red-500 border-red-200 hover:bg-red-50" data-testid={`delete-history-${r.id}`}><Trash2 size={12} /></Button>
+                    </div>
+                  ))}
+                </div>
+              ); })()}
             </div>
-            <div className="mt-4 pt-4 border-t flex justify-between items-center">
-              <p className="text-sm text-gray-500">
-                Total: <span className="font-bold text-blue-600">{viewingEntries.reduce((sum, e) => sum + e.hours, 0)}h</span>
-              </p>
-              <Button variant="outline" onClick={() => setViewDialogOpen(false)}>
-                Close
-              </Button>
+          </div>
+        )}
+
+        {/* Work Entries Table */}
+        <div className="bg-white border border-slate-200 rounded-xl shadow-sm overflow-hidden">
+          <div className="flex justify-between items-center p-4 border-b border-slate-200">
+            <h3 className="text-sm font-semibold text-slate-700">Work Entries ({filteredEntries.length})</h3>
+            <div className="flex items-center gap-2">
+              <span className="text-xs text-slate-400">Show:</span>
+              <Select value={pageSize.toString()} onValueChange={(v) => { setPageSize(parseInt(v)); setCurrentPage(1); }}>
+                <SelectTrigger className="w-16 h-8 text-xs border-slate-200"><SelectValue /></SelectTrigger>
+                <SelectContent><SelectItem value="10">10</SelectItem><SelectItem value="25">25</SelectItem><SelectItem value="50">50</SelectItem></SelectContent>
+              </Select>
+            </div>
+          </div>
+          {filteredEntries.length === 0 ? (
+            <div className="p-12 text-center"><FolderKanban size={36} className="mx-auto mb-3 text-slate-300" /><p className="text-sm text-slate-400">No work entries found</p><p className="text-xs text-slate-300 mt-1">Start logging your work hours</p></div>
+          ) : (
+            <>
+              <div className="overflow-x-auto">
+                <table className="w-full">
+                  <thead><tr className="border-b border-slate-200 bg-slate-50/50">
+                    <th className="text-left text-xs font-semibold text-slate-500 uppercase tracking-wider py-3 px-4">Date</th>
+                    {isProjectView && <th className="text-left text-xs font-semibold text-slate-500 uppercase tracking-wider py-3 px-4">Employee</th>}
+                    <th className="text-left text-xs font-semibold text-slate-500 uppercase tracking-wider py-3 px-4">Projects</th>
+                    <th className="text-left text-xs font-semibold text-slate-500 uppercase tracking-wider py-3 px-4">Total</th>
+                    <th className="text-left text-xs font-semibold text-slate-500 uppercase tracking-wider py-3 px-4">Actions</th>
+                  </tr></thead>
+                  <tbody>
+                    {paginatedGroups.map((group) => (
+                      <tr key={group.date} className={`border-b border-slate-100 last:border-0 transition-colors ${isToday(group.date) ? 'bg-blue-50/50' : 'hover:bg-slate-50/80'}`}>
+                        <td className="py-3 px-4"><div className="flex items-center gap-2"><span className="font-medium text-sm text-slate-700">{formatDate(group.date)}</span>{isToday(group.date) && <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-blue-600 text-white font-medium">Today</span>}</div></td>
+                        {isProjectView && <td className="py-3 px-4"><div className="flex flex-col gap-0.5">{[...new Set(group.entries.map(e => e.employee_id))].map(id => <span key={id} className="text-sm text-slate-600">{getEmployeeName(id)}</span>)}</div></td>}
+                        <td className="py-3 px-4 max-w-md"><div className="flex flex-wrap gap-1">{group.entries.map((entry) => (<span key={entry.id} className={`inline-flex items-center px-2 py-0.5 rounded text-xs ${entry.is_compensation ? 'bg-emerald-100 text-emerald-800 border border-emerald-200' : 'bg-slate-100 text-slate-700'}`} title={entry.work_details}>{isProjectView && <span className="mr-1 font-medium">{getEmployeeName(entry.employee_id)}:</span>}{getProjectName(entry.project_code)} - {entry.hours}h{entry.is_compensation && <span className="ml-1 text-[10px] font-bold text-emerald-700">COMP</span>}</span>))}</div></td>
+                        <td className="py-3 px-4"><span className="text-sm font-bold text-blue-600">{group.totalHours}h</span></td>
+                        <td className="py-3 px-4">
+                          {isEditable(group.date) ? (
+                            <Button size="sm" variant="outline" onClick={() => handleEditDate(group.date, group.entries)} className="h-8 text-xs border-slate-200 text-blue-600" data-testid={`edit-date-${group.date}`}><Edit size={12} className="mr-1" /> Edit</Button>
+                          ) : (
+                            <Button size="sm" variant="ghost" onClick={() => handleViewEntries(group.entries, group.date)} className="h-8 text-xs text-slate-400" data-testid={`view-entries-${group.date}`}><Eye size={12} className="mr-1" /> View</Button>
+                          )}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+              {totalPages > 1 && (
+                <div className="flex items-center justify-between px-4 py-3 border-t border-slate-200">
+                  <span className="text-xs text-slate-400">Showing {startIndex + 1}-{Math.min(startIndex + pageSize, groupedEntries.length)} of {groupedEntries.length}</span>
+                  <div className="flex items-center gap-1">
+                    <Button variant="outline" size="sm" onClick={() => setCurrentPage(p => Math.max(1, p - 1))} disabled={currentPage === 1} className="h-8 text-xs border-slate-200"><ChevronLeft size={14} /></Button>
+                    {[...Array(Math.min(5, totalPages))].map((_, i) => { let pn = totalPages <= 5 ? i + 1 : currentPage <= 3 ? i + 1 : currentPage >= totalPages - 2 ? totalPages - 4 + i : currentPage - 2 + i; return (<Button key={pn} variant={currentPage === pn ? 'default' : 'outline'} size="sm" onClick={() => setCurrentPage(pn)} className={`h-8 w-8 p-0 text-xs ${currentPage === pn ? 'bg-slate-900' : 'border-slate-200'}`}>{pn}</Button>); })}
+                    <Button variant="outline" size="sm" onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))} disabled={currentPage === totalPages} className="h-8 text-xs border-slate-200"><ChevronRight size={14} /></Button>
+                  </div>
+                </div>
+              )}
+            </>
+          )}
+        </div>
+
+        {/* Add Dialog */}
+        <Dialog open={addDialogOpen} onOpenChange={setAddDialogOpen}>
+          <DialogContent className="sm:max-w-md">
+            <DialogHeader><DialogTitle className="text-lg font-semibold text-slate-900">Add Work Entry</DialogTitle></DialogHeader>
+            <form onSubmit={handleSubmit} className="space-y-4">
+              <div><Label className="text-sm text-slate-700">Date</Label><Input type="date" value={formData.date} onChange={(e) => setFormData({ ...formData, date: e.target.value })} min={getMinDate()} required className="mt-1.5 border-slate-200" data-testid="work-entry-date-input" /><p className="text-[10px] text-slate-400 mt-1">Past dates: last 2 days only. Future dates allowed.</p></div>
+              <div><Label className="text-sm text-slate-700">Project</Label><Select value={formData.project_code} onValueChange={(v) => setFormData({ ...formData, project_code: v })}><SelectTrigger className="mt-1.5 border-slate-200" data-testid="work-entry-project-select"><SelectValue placeholder="Select project" /></SelectTrigger><SelectContent>{projects.map(p => <SelectItem key={p.project_code} value={p.project_code}>{p.name} ({p.project_code})</SelectItem>)}</SelectContent></Select></div>
+              <div><Label className="text-sm text-slate-700">Hours</Label><Input type="number" step="0.5" min="0.5" value={formData.hours} onChange={(e) => setFormData({ ...formData, hours: e.target.value })} placeholder="Enter hours" required className="mt-1.5 border-slate-200" data-testid="work-entry-hours-input" /></div>
+              <div><Label className="text-sm text-slate-700">Work Details</Label><Textarea value={formData.work_details} onChange={(e) => setFormData({ ...formData, work_details: e.target.value })} rows={3} required placeholder="Describe the work..." className="mt-1.5 border-slate-200" data-testid="work-entry-details-input" /></div>
+              <div className="p-3 bg-slate-50 rounded-lg border border-slate-100"><p className="text-xs text-slate-500">Multiple entries for the same date and project will accumulate hours.</p></div>
+              <Button type="submit" className="w-full bg-slate-900 hover:bg-slate-800 h-10" data-testid="submit-work-entry-button">Add Entry</Button>
+            </form>
+          </DialogContent>
+        </Dialog>
+
+        {/* Edit Single Entry Dialog */}
+        <Dialog open={editDialogOpen} onOpenChange={setEditDialogOpen}>
+          <DialogContent className="sm:max-w-md">
+            <DialogHeader><DialogTitle className="text-lg font-semibold text-slate-900">Edit Work Entry</DialogTitle></DialogHeader>
+            <form onSubmit={handleUpdateEntry} className="space-y-4">
+              <div><Label className="text-sm text-slate-700">Project</Label><Select value={editFormData.project_code} onValueChange={(v) => setEditFormData({...editFormData, project_code: v})}><SelectTrigger className="mt-1.5 border-slate-200"><SelectValue /></SelectTrigger><SelectContent>{projects.map(p => <SelectItem key={p.project_code} value={p.project_code}>{p.name} ({p.project_code})</SelectItem>)}</SelectContent></Select></div>
+              <div><Label className="text-sm text-slate-700">Hours</Label><Input type="number" step="0.5" min="0.5" value={editFormData.hours} onChange={(e) => setEditFormData({...editFormData, hours: e.target.value})} required className="mt-1.5 border-slate-200" /></div>
+              <div><Label className="text-sm text-slate-700">Work Details</Label><Textarea value={editFormData.work_details} onChange={(e) => setEditFormData({...editFormData, work_details: e.target.value})} rows={3} required className="mt-1.5 border-slate-200" /></div>
+              <Button type="submit" className="w-full bg-slate-900 hover:bg-slate-800">Update Entry</Button>
+            </form>
+          </DialogContent>
+        </Dialog>
+
+        {/* Edit All Entries for Date */}
+        <Dialog open={editDateDialogOpen} onOpenChange={setEditDateDialogOpen}>
+          <DialogContent className="sm:max-w-2xl max-h-[85vh] overflow-y-auto">
+            <DialogHeader><DialogTitle className="text-lg font-semibold text-slate-900">Edit Entries - {formatDate(editingDate)}</DialogTitle></DialogHeader>
+            <div className="space-y-3">
+              {editingDateEntries.map((entry) => (
+                <div key={entry.id} className="p-4 bg-slate-50 rounded-xl border border-slate-100 space-y-3">
+                  <div className="flex justify-between items-start">
+                    <div className="flex-1"><Label className="text-xs text-slate-400">Project</Label><Select value={entry.project_code} onValueChange={(v) => updateEntryInModal(entry.id, 'project_code', v)}><SelectTrigger className="mt-1 border-slate-200"><SelectValue /></SelectTrigger><SelectContent>{projects.map(p => <SelectItem key={p.project_code} value={p.project_code}>{p.name} ({p.project_code})</SelectItem>)}</SelectContent></Select></div>
+                    <Button size="sm" variant="ghost" className="text-red-400 hover:text-red-600 hover:bg-red-50 ml-2 h-8 w-8 p-0" onClick={() => handleDeleteFromModal(entry.id, getProjectName(entry.project_code))}><Trash2 size={14} /></Button>
+                  </div>
+                  <div className="grid grid-cols-3 gap-3">
+                    <div><Label className="text-xs text-slate-400">Hours</Label><Input type="number" step="0.5" min="0.5" value={entry.hours} onChange={(e) => updateEntryInModal(entry.id, 'hours', e.target.value)} className="mt-1 border-slate-200" /></div>
+                    <div className="col-span-2"><Label className="text-xs text-slate-400">Details</Label><Input value={entry.work_details} onChange={(e) => updateEntryInModal(entry.id, 'work_details', e.target.value)} className="mt-1 border-slate-200" /></div>
+                  </div>
+                  {entry.isModified && <span className="text-[10px] text-amber-600 font-medium">Modified</span>}
+                </div>
+              ))}
+            </div>
+            <div className="mt-4 pt-4 border-t border-slate-200 flex justify-between items-center">
+              <p className="text-sm text-slate-500">Total: <span className="font-bold text-blue-600">{editingDateEntries.reduce((s, e) => s + parseFloat(e.hours || 0), 0).toFixed(1)}h</span>{editingDateEntries.some(e => e.isModified) && <span className="ml-2 text-amber-600 text-xs">({editingDateEntries.filter(e => e.isModified).length} modified)</span>}</p>
+              <div className="flex gap-2"><Button variant="outline" onClick={() => setEditDateDialogOpen(false)} className="border-slate-200">Cancel</Button><Button onClick={handleSaveAllEntries} disabled={!editingDateEntries.some(e => e.isModified)} className="bg-slate-900 hover:bg-slate-800">Save Changes</Button></div>
+            </div>
+          </DialogContent>
+        </Dialog>
+
+        {/* View Dialog */}
+        <Dialog open={viewDialogOpen} onOpenChange={setViewDialogOpen}>
+          <DialogContent className="sm:max-w-2xl">
+            <DialogHeader><DialogTitle className="text-lg font-semibold text-slate-900">Work Entries - {formatDate(viewingDate)}</DialogTitle></DialogHeader>
+            <div className="space-y-3 max-h-[400px] overflow-y-auto">
+              {viewingEntries.map((entry) => (
+                <div key={entry.id} className={`p-4 rounded-xl border ${entry.is_compensation ? 'bg-emerald-50 border-emerald-200' : 'bg-slate-50 border-slate-100'}`}>
+                  <div className="flex justify-between items-start mb-2">
+                    <div className="flex items-center gap-2">
+                      <h4 className="font-semibold text-sm text-slate-800">{getProjectName(entry.project_code)}</h4>
+                      {entry.is_compensation && <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-emerald-600 text-white font-bold" data-testid={`comp-label-${entry.id}`}>Compensation</span>}
+                    </div>
+                    <span className="px-2.5 py-0.5 bg-blue-100 text-blue-700 rounded-full text-xs font-bold border border-blue-200">{entry.hours}h</span>
+                  </div>
+                  <div className="text-xs text-slate-500"><p className="font-medium text-slate-600 mb-1">Work Details:</p><p className="whitespace-pre-wrap bg-white p-2 rounded border border-slate-100">{entry.work_details || 'No details'}</p></div>
+                </div>
+              ))}
+            </div>
+            <div className="mt-4 pt-4 border-t border-slate-200 flex justify-between items-center">
+              <p className="text-sm text-slate-500">Total: <span className="font-bold text-blue-600">{viewingEntries.reduce((s, e) => s + e.hours, 0)}h</span></p>
+              <Button variant="outline" onClick={() => setViewDialogOpen(false)} className="border-slate-200">Close</Button>
             </div>
           </DialogContent>
         </Dialog>

@@ -221,27 +221,24 @@ EMP001,2026-02-21,PL,0.5,taken`;
 
   return (
     <Layout user={user} onLogout={onLogout}>
-      <div className="p-4 sm:p-6 lg:p-8" data-testid="leave-tracker-page">
+      <div className="p-4 md:p-8 lg:p-10 max-w-7xl mx-auto" data-testid="leave-tracker-page">
         {/* Header */}
         <div className="flex flex-col sm:flex-row sm:justify-between sm:items-center gap-4 mb-6 sm:mb-8">
           <div>
-            <h1 className="text-2xl sm:text-3xl lg:text-4xl font-bold text-gray-900 mb-1 sm:mb-2">Leave Tracker</h1>
-            <p className="text-sm sm:text-base text-gray-600">Monitor employee leave records (Current Year)</p>
+            <h1 className="text-2xl md:text-3xl font-bold text-slate-900 tracking-tight">Leave Tracker</h1>
+            <p className="text-sm text-slate-500 mt-1">Monitor employee leave records (Current Year)</p>
           </div>
           <div className="flex flex-wrap gap-2">
-            <Button onClick={downloadSampleCSV} variant="outline" size="sm" className="text-xs sm:text-sm" data-testid="sample-csv-btn">
-              <Download size={14} className="mr-1 sm:mr-2 sm:w-[18px] sm:h-[18px]" />
-              <span className="hidden sm:inline">Sample</span> CSV
+            <Button onClick={downloadSampleCSV} variant="outline" size="sm" className="text-xs border-slate-200" data-testid="sample-csv-btn">
+              <Download size={14} className="mr-1" /> Sample CSV
             </Button>
             <input type="file" accept=".csv" onChange={handleFileUpload} id="csv-upload" className="hidden" />
-            <Button onClick={() => document.getElementById('csv-upload').click()} className="bg-green-600 hover:bg-green-700 text-xs sm:text-sm" size="sm" data-testid="import-csv-btn">
-              <Upload size={14} className="mr-1 sm:mr-2 sm:w-[18px] sm:h-[18px]" />
-              Import
+            <Button onClick={() => document.getElementById('csv-upload').click()} variant="outline" size="sm" className="text-xs border-green-200 text-green-700 hover:bg-green-50" data-testid="import-csv-btn">
+              <Upload size={14} className="mr-1" /> Import
             </Button>
             <Dialog open={encashDialogOpen} onOpenChange={setEncashDialogOpen}>
-              <Button onClick={() => setEncashDialogOpen(true)} className="bg-purple-600 hover:bg-purple-700 text-xs sm:text-sm" size="sm" data-testid="encash-leave-btn">
-                <DollarSign size={14} className="mr-1 sm:mr-2 sm:w-[18px] sm:h-[18px]" />
-                Encash
+              <Button onClick={() => setEncashDialogOpen(true)} className="bg-slate-900 hover:bg-slate-800 text-xs" size="sm" data-testid="encash-leave-btn">
+                <DollarSign size={14} className="mr-1" /> Encash
               </Button>
               <DialogContent className="sm:max-w-md">
                 <DialogHeader>
@@ -278,7 +275,7 @@ EMP001,2026-02-21,PL,0.5,taken`;
                       </SelectContent>
                     </Select>
                   </div>
-                  <Button onClick={handleEncashment} className="w-full bg-purple-600 hover:bg-purple-700" data-testid="process-encash-btn">
+                  <Button onClick={handleEncashment} className="w-full bg-slate-900 hover:bg-slate-800" data-testid="process-encash-btn">
                     Process Encashment
                   </Button>
                 </div>
@@ -288,54 +285,37 @@ EMP001,2026-02-21,PL,0.5,taken`;
         </div>
 
         {/* Employee Status Tabs */}
-        <div className="flex flex-wrap gap-2 mb-4 sm:mb-6">
-          <Button 
-            variant={employeeStatusTab === 'active' ? 'default' : 'outline'}
-            onClick={() => setEmployeeStatusTab('active')}
-            className={`text-xs sm:text-sm ${employeeStatusTab === 'active' ? 'bg-indigo-600 hover:bg-indigo-700' : ''}`}
-            size="sm"
-          >
-            Active
-          </Button>
-          <Button 
-            variant={employeeStatusTab === 'ex-employee' ? 'default' : 'outline'}
-            onClick={() => setEmployeeStatusTab('ex-employee')}
-            className={`text-xs sm:text-sm ${employeeStatusTab === 'ex-employee' ? 'bg-gray-600 hover:bg-gray-700' : ''}`}
-            size="sm"
-          >
-            Ex-Employees
-          </Button>
+        <div className="flex flex-wrap gap-2 mb-4 items-center">
+          {[
+            { value: 'active', label: 'Active' },
+            { value: 'ex-employee', label: 'Ex-Employees' },
+          ].map(tab => (
+            <Button key={tab.value} variant={employeeStatusTab === tab.value ? 'default' : 'outline'} onClick={() => setEmployeeStatusTab(tab.value)} className={`text-xs ${employeeStatusTab === tab.value ? 'bg-slate-900 hover:bg-slate-800' : 'border-slate-200'}`} size="sm">{tab.label}</Button>
+          ))}
           <div className="ml-auto">
-            <Input
-              placeholder="Search by name or ID..."
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-              className="w-48 sm:w-64"
-              data-testid="leave-tracker-search"
-            />
+            <Input placeholder="Search by name or ID..." value={searchQuery} onChange={(e) => setSearchQuery(e.target.value)} className="w-48 sm:w-60 h-9 text-sm border-slate-200" data-testid="leave-tracker-search" />
           </div>
         </div>
 
         {/* Main List View Table */}
-        <Card className="shadow-lg">
-          <CardContent className="p-0">
+        <div className="bg-white border border-slate-200 rounded-xl shadow-sm overflow-hidden">
             {loading ? (
-              <div className="p-8 text-center text-gray-500">Loading tracker...</div>
+              <div className="p-8 text-center text-slate-400 text-sm">Loading tracker...</div>
             ) : tracker.length === 0 ? (
-              <div className="p-8 text-center text-gray-500">No leave records found for {employeeStatusTab === 'active' ? 'active' : 'ex-'}employees.</div>
+              <div className="p-12 text-center"><Calendar size={36} className="mx-auto mb-3 text-slate-300" /><p className="text-sm text-slate-400">No leave records found</p></div>
             ) : (
-              <div className="table-container">
-                <table data-testid="leave-tracker-table">
+              <div className="overflow-x-auto">
+                <table className="w-full" data-testid="leave-tracker-table">
                   <thead>
-                    <tr>
-                      <th>S.No</th>
-                      <th>Employee ID</th>
-                      <th>Employee Name</th>
-                      <th>Joining Date</th>
-                      <th>PL Taken</th>
-                      <th>CL Taken</th>
-                      <th>Available PL</th>
-                      <th>Actions</th>
+                    <tr className="border-b border-slate-200 bg-slate-50/50">
+                      <th className="text-left text-xs font-semibold text-slate-500 uppercase tracking-wider py-3 px-4">#</th>
+                      <th className="text-left text-xs font-semibold text-slate-500 uppercase tracking-wider py-3 px-4">Employee ID</th>
+                      <th className="text-left text-xs font-semibold text-slate-500 uppercase tracking-wider py-3 px-4">Name</th>
+                      <th className="text-left text-xs font-semibold text-slate-500 uppercase tracking-wider py-3 px-4">Joining</th>
+                      <th className="text-left text-xs font-semibold text-slate-500 uppercase tracking-wider py-3 px-4">PL Taken</th>
+                      <th className="text-left text-xs font-semibold text-slate-500 uppercase tracking-wider py-3 px-4">CL Taken</th>
+                      <th className="text-left text-xs font-semibold text-slate-500 uppercase tracking-wider py-3 px-4">Available PL</th>
+                      <th className="text-left text-xs font-semibold text-slate-500 uppercase tracking-wider py-3 px-4">Actions</th>
                     </tr>
                   </thead>
                   <tbody>
@@ -346,32 +326,24 @@ EMP001,2026-02-21,PL,0.5,taken`;
                         emp.employee_id.toLowerCase().includes(searchQuery.toLowerCase())
                       )
                       .map((emp, index) => (
-                      <tr key={emp.employee_id} data-testid={`leave-row-${emp.employee_id}`}>
-                        <td data-label="S.No">{index + 1}</td>
-                        <td data-label="Employee ID" className="font-semibold">{emp.employee_id}</td>
-                        <td data-label="Name">{emp.name}</td>
-                        <td data-label="Joining Date">{formatDate(emp.joining_date)}</td>
-                        <td data-label="PL Taken" className="text-red-600 font-medium">{emp.pl_taken.toFixed(1)}</td>
-                        <td data-label="CL Taken" className="text-orange-600 font-medium">{emp.cl_taken.toFixed(1)}</td>
-                        <td data-label="Available PL" className="font-semibold text-green-600">{emp.available_pl.toFixed(1)}</td>
-                        <td data-label="Actions">
+                      <tr key={emp.employee_id} className="border-b border-slate-100 last:border-0 hover:bg-slate-50/80 transition-colors" data-testid={`leave-row-${emp.employee_id}`}>
+                        <td className="py-3 px-4 text-sm text-slate-400">{index + 1}</td>
+                        <td className="py-3 px-4 font-mono text-sm text-slate-600">{emp.employee_id}</td>
+                        <td className="py-3 px-4 font-medium text-sm text-slate-800">{emp.name}</td>
+                        <td className="py-3 px-4 text-sm text-slate-500">{formatDate(emp.joining_date)}</td>
+                        <td className="py-3 px-4 text-red-600 font-bold text-sm">{emp.pl_taken.toFixed(1)}</td>
+                        <td className="py-3 px-4 text-amber-600 font-bold text-sm">{emp.cl_taken.toFixed(1)}</td>
+                        <td className="py-3 px-4 font-bold text-green-600 text-sm">{emp.available_pl.toFixed(1)}</td>
+                        <td className="py-3 px-4">
                           <div className="flex gap-1">
-                            <Button 
-                              size="sm" 
-                              variant="outline" 
-                              onClick={() => handleViewDetails(emp.employee_id)}
-                              data-testid={`view-btn-${emp.employee_id}`}
-                            >
-                              <Eye size={16} className="mr-1" /> View
+                            <Button size="sm" variant="outline" onClick={() => handleViewDetails(emp.employee_id)} className="h-7 text-xs border-slate-200" data-testid={`view-btn-${emp.employee_id}`}>
+                              <Eye size={12} className="mr-1" /> View
                             </Button>
-                            <Button 
-                              size="sm" 
-                              variant="outline"
-                              className="text-orange-600 hover:text-orange-700 hover:bg-orange-50"
+                            <Button size="sm" variant="outline" className="h-7 w-7 p-0 text-amber-600 border-amber-200 hover:bg-amber-50"
                               onClick={() => handleResetClick(emp)}
                               data-testid={`reset-btn-${emp.employee_id}`}
                             >
-                              <RotateCcw size={16} />
+                              <RotateCcw size={12} />
                             </Button>
                           </div>
                         </td>
@@ -381,20 +353,19 @@ EMP001,2026-02-21,PL,0.5,taken`;
                 </table>
               </div>
             )}
-          </CardContent>
-        </Card>
+        </div>
 
         {/* Year-wise Leave Details Dialog */}
         <Dialog open={viewDialogOpen} onOpenChange={setViewDialogOpen}>
           <DialogContent className="sm:max-w-2xl lg:max-w-4xl overflow-hidden">
             <DialogHeader className="flex-shrink-0">
               <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
-                <DialogTitle className="text-lg sm:text-xl">
+                <DialogTitle className="text-lg font-semibold text-slate-900">
                   Leave Details - {viewingEmployee?.name}
                 </DialogTitle>
-                <span className="text-xs sm:text-sm text-gray-500">({viewingEmployee?.employee_id})</span>
+                <span className="text-xs text-slate-400 font-mono">({viewingEmployee?.employee_id})</span>
               </div>
-              <p className="text-xs sm:text-sm text-gray-500">
+              <p className="text-xs text-slate-500">
                 Joining: {viewingEmployee && formatDate(viewingEmployee.joining_date)}
               </p>
             </DialogHeader>
@@ -402,21 +373,21 @@ EMP001,2026-02-21,PL,0.5,taken`;
             {viewingEmployee && (
               <div className="flex flex-col flex-1 overflow-hidden">
                 {/* Year Tabs */}
-                <div className="flex gap-1.5 sm:gap-2 border-b pb-2 mb-3 sm:mb-4 flex-wrap flex-shrink-0 overflow-x-hidden" data-testid="year-tabs">
+                <div className="flex gap-1.5 border-b border-slate-200 pb-2 mb-3 flex-wrap flex-shrink-0" data-testid="year-tabs">
                   {viewingEmployee.years_data.map((yearData) => (
                     <button
                       key={yearData.year_number}
                       onClick={() => setActiveYearTab(yearData.year_number)}
                       data-testid={`year-tab-${yearData.year_number}`}
-                      className={`px-2.5 sm:px-4 py-1.5 sm:py-2 rounded-t-lg font-medium text-xs sm:text-sm transition-colors whitespace-nowrap ${
+                      className={`px-3 py-1.5 rounded-lg font-medium text-xs transition-colors whitespace-nowrap ${
                         activeYearTab === yearData.year_number
-                          ? 'bg-blue-600 text-white'
+                          ? 'bg-slate-900 text-white'
                           : yearData.is_closed
-                          ? 'bg-gray-200 text-gray-600 hover:bg-gray-300'
-                          : 'bg-green-100 text-green-700 hover:bg-green-200'
+                          ? 'bg-slate-100 text-slate-500 hover:bg-slate-200'
+                          : 'bg-green-50 text-green-700 hover:bg-green-100 border border-green-200'
                       }`}
                     >
-                      {yearData.year_label} {yearData.is_closed ? '✓' : ''}
+                      {yearData.year_label} {yearData.is_closed ? '(Closed)' : '(Active)'}
                     </button>
                   ))}
                 </div>
@@ -447,26 +418,26 @@ EMP001,2026-02-21,PL,0.5,taken`;
                             {/* Summary Stats */}
                             <div className="grid grid-cols-2 lg:grid-cols-4 gap-2 sm:gap-4">
                               <div className="bg-white p-2 sm:p-3 rounded border">
-                                <div className="text-xs text-gray-500">PL Taken</div>
+                                <div className="text-xs text-slate-500">PL Taken</div>
                                 <div className="text-lg sm:text-xl font-bold text-red-600">{yearData.pl_taken.toFixed(1)}</div>
                               </div>
                               <div className="bg-white p-2 sm:p-3 rounded border">
-                                <div className="text-xs text-gray-500">CL Taken</div>
+                                <div className="text-xs text-slate-500">CL Taken</div>
                                 <div className="text-lg sm:text-xl font-bold text-orange-600">{yearData.cl_taken.toFixed(1)}</div>
                               </div>
                               {yearData.is_closed ? (
                                 <div className="bg-white p-2 sm:p-3 rounded border">
-                                  <div className="text-xs text-gray-500">Encashed</div>
+                                  <div className="text-xs text-slate-500">Encashed</div>
                                   <div className="text-lg sm:text-xl font-bold text-purple-600">{yearData.settled_pl.toFixed(1)}</div>
                                 </div>
                               ) : (
                                 <div className="bg-white p-2 sm:p-3 rounded border">
-                                  <div className="text-xs text-gray-500">Available PL</div>
+                                  <div className="text-xs text-slate-500">Available PL</div>
                                   <div className="text-lg sm:text-xl font-bold text-green-600">{yearData.available_pl.toFixed(1)}</div>
                                 </div>
                               )}
                               <div className="bg-white p-2 sm:p-3 rounded border">
-                                <div className="text-xs text-gray-500">
+                                <div className="text-xs text-slate-500">
                                   {yearData.is_closed ? 'Encash Month' : 'Next Encash'}
                                 </div>
                                 <div className="text-xs sm:text-sm font-semibold text-blue-600">{yearData.encash_month}</div>
@@ -476,9 +447,9 @@ EMP001,2026-02-21,PL,0.5,taken`;
 
                           {/* Monthly Leave Records */}
                           <div className="space-y-2 sm:space-y-3">
-                            <h4 className="font-semibold text-gray-700 text-sm">Monthly Records</h4>
+                            <h4 className="font-semibold text-slate-700 text-sm">Monthly Records</h4>
                             {yearData.monthly_leaves.length === 0 ? (
-                              <div className="p-4 sm:p-6 text-center text-gray-400 bg-gray-50 rounded-lg text-sm">
+                              <div className="p-4 sm:p-6 text-center text-slate-400 bg-slate-50 rounded-lg text-sm">
                                 No leave records for this year
                               </div>
                             ) : (
@@ -489,8 +460,8 @@ EMP001,2026-02-21,PL,0.5,taken`;
                                 
                                 return (
                                   <div key={idx} className="border rounded-lg bg-white" data-testid={`month-${monthData.month.replace(' ', '-')}`}>
-                                    <div className="flex justify-between items-center p-2.5 sm:p-3 bg-gray-50 border-b">
-                                      <div className="font-semibold text-gray-800 text-sm">{monthData.month}</div>
+                                    <div className="flex justify-between items-center p-2.5 sm:p-3 bg-slate-50 border-b">
+                                      <div className="font-semibold text-slate-800 text-sm">{monthData.month}</div>
                                       <div className="flex gap-2 sm:gap-4 text-xs sm:text-sm">
                                         <span className="text-red-600">PL: {monthData.leaves.pl_total.toFixed(1)}</span>
                                         <span className="text-orange-600">CL: {monthData.leaves.cl_total.toFixed(1)}</span>
@@ -498,7 +469,7 @@ EMP001,2026-02-21,PL,0.5,taken`;
                                     </div>
                                     <div className="divide-y">
                                       {allLeaves.map((leave) => (
-                                        <div key={leave.id} className="flex flex-col sm:flex-row sm:items-center justify-between p-2.5 sm:p-3 hover:bg-gray-50 gap-2">
+                                        <div key={leave.id} className="flex flex-col sm:flex-row sm:items-center justify-between p-2.5 sm:p-3 hover:bg-slate-50 gap-2">
                                           <div className="flex items-center gap-2 sm:gap-4">
                                             <span className="font-mono text-xs sm:text-sm">{formatDate(leave.date)}</span>
                                             <span className={`px-2 py-0.5 rounded text-xs font-semibold ${
@@ -605,7 +576,7 @@ EMP001,2026-02-21,PL,0.5,taken`;
               <DialogTitle className="text-red-600">Reset Leave Data</DialogTitle>
             </DialogHeader>
             <div className="py-4">
-              <p className="text-gray-700 mb-4">
+              <p className="text-slate-700 mb-4">
                 Are you sure you want to reset all leave data for <strong>{resetEmployee?.name}</strong>?
               </p>
               <div className="bg-red-50 border border-red-200 rounded-lg p-3 text-sm text-red-700">

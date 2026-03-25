@@ -10,7 +10,7 @@ import { Card, CardContent } from '../../components/ui/card';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '../../components/ui/dialog';
 import { Textarea } from '../../components/ui/textarea';
 import { toast } from 'sonner';
-import { Plus, Edit, Trash2, Eye, Upload, Download, X, AlertTriangle, Clock } from 'lucide-react';
+import { Plus, Edit, Trash2, Eye, Upload, Download, X, AlertTriangle, Clock, FolderKanban } from 'lucide-react';
 import { Badge } from '../../components/ui/badge';
 
 export default function AdminProjects({ user, onLogout }) {
@@ -255,148 +255,113 @@ Website Redesign,Development,zb_new_701,2026-01-01,2026-03-31,0,EMP001,ongoing,c
 
   const getStatusColor = (status) => {
     const colors = {
-      'ongoing': 'bg-blue-100 text-blue-800',
-      'late': 'bg-red-500 text-white',
-      'atrisk': 'bg-yellow-100 text-yellow-800',
-      'completed': 'bg-green-100 text-green-800',
-      'hold': 'bg-gray-100 text-gray-800',
-      'cancel': 'bg-red-100 text-red-800',
-      'cancelled': 'bg-red-100 text-red-800'
+      'ongoing': 'bg-blue-100 text-blue-700 border-blue-200',
+      'late': 'bg-red-500 text-white border-red-500',
+      'atrisk': 'bg-amber-100 text-amber-700 border-amber-200',
+      'completed': 'bg-green-100 text-green-700 border-green-200',
+      'hold': 'bg-slate-100 text-slate-600 border-slate-200',
+      'cancel': 'bg-red-100 text-red-700 border-red-200',
+      'cancelled': 'bg-red-100 text-red-700 border-red-200'
     };
-    return colors[status] || 'bg-gray-100 text-gray-800';
+    return colors[status] || 'bg-slate-100 text-slate-600 border-slate-200';
   };
 
   return (
     <Layout user={user} onLogout={onLogout}>
-      <div className="p-4 md:p-6 lg:p-8" data-testid="projects-page">
-        <div className="flex flex-col md:flex-row md:justify-between md:items-center gap-4 mb-4 md:mb-6">
+      <div className="p-4 md:p-8 lg:p-10 max-w-7xl mx-auto" data-testid="projects-page">
+        <div className="flex flex-col md:flex-row md:justify-between md:items-center gap-4 mb-6">
           <div>
-            <h1 className="text-2xl md:text-3xl lg:text-4xl font-bold text-gray-900 mb-1 md:mb-2">Projects</h1>
-            <p className="text-sm md:text-base text-gray-600">Manage company projects • <span className="font-semibold text-indigo-600">{getFilteredProjects().length} projects</span></p>
+            <h1 className="text-2xl md:text-3xl font-bold text-slate-900 tracking-tight">Projects</h1>
+            <p className="text-sm text-slate-500 mt-1">Manage company projects <span className="font-semibold text-blue-600">{getFilteredProjects().length} projects</span></p>
           </div>
-          <div className="flex flex-wrap gap-2 md:gap-3">
+          <div className="flex flex-wrap gap-2">
             {user.role === 'admin' && (
-              <Button onClick={() => setDeleteAllDialogOpen(true)} variant="destructive" size="sm" className="text-xs md:text-sm" data-testid="delete-all-projects-btn">
-                <Trash2 size={14} className="mr-1 md:mr-2 md:w-[18px] md:h-[18px]" />
-                <span className="hidden sm:inline">Delete All</span>
-                <span className="sm:hidden">Delete</span>
+              <Button onClick={() => setDeleteAllDialogOpen(true)} variant="outline" size="sm" className="text-xs border-red-200 text-red-600 hover:bg-red-50" data-testid="delete-all-projects-btn">
+                <Trash2 size={14} className="mr-1" /> Delete All
               </Button>
             )}
-            <Button onClick={downloadSampleCSV} variant="outline" size="sm" className="text-xs md:text-sm">
-              <Download size={14} className="mr-1 md:mr-2 md:w-[18px] md:h-[18px]" />
-              <span className="hidden sm:inline">Sample CSV</span>
-              <span className="sm:hidden">CSV</span>
+            <Button onClick={downloadSampleCSV} variant="outline" size="sm" className="text-xs border-slate-200">
+              <Download size={14} className="mr-1" /> Sample CSV
             </Button>
             <input type="file" accept=".csv" onChange={handleCsvImport} id="csv-upload-projects" className="hidden" />
-            <Button onClick={() => document.getElementById('csv-upload-projects').click()} variant="outline" size="sm" className="text-xs md:text-sm">
-              <Upload size={14} className="mr-1 md:mr-2 md:w-[18px] md:h-[18px]" />
-              Import
+            <Button onClick={() => document.getElementById('csv-upload-projects').click()} variant="outline" size="sm" className="text-xs border-slate-200">
+              <Upload size={14} className="mr-1" /> Import
             </Button>
-            <Button onClick={openNewDialog} className="bg-indigo-600 hover:bg-indigo-700 text-xs md:text-sm" size="sm">
-              <Plus size={14} className="mr-1 md:mr-2 md:w-[18px] md:h-[18px]" />
-              Add Project
+            <Button onClick={openNewDialog} className="bg-slate-900 hover:bg-slate-800 text-xs text-white" size="sm">
+              <Plus size={14} className="mr-1" /> Add Project
             </Button>
           </div>
         </div>
 
         {/* Filters */}
-        <Card className="mb-4 md:mb-6">
-          <CardContent className="p-3 md:p-4">
-            <div className="grid grid-cols-2 md:grid-cols-4 gap-2 md:gap-4">
-              <Input
-                placeholder="Project name..."
-                value={filters.projectName}
-                onChange={(e) => setFilters({...filters, projectName: e.target.value})}
-              />
-              <Input
-                placeholder="Client name..."
-                value={filters.clientName}
-                onChange={(e) => setFilters({...filters, clientName: e.target.value})}
-              />
-              <Select value={filters.status || 'active_only'} onValueChange={(value) => setFilters({...filters, status: value})}>
-                <SelectTrigger>
-                  <SelectValue placeholder="Status" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="active_only">Active Projects (Default)</SelectItem>
-                  <SelectItem value="all">All Status</SelectItem>
-                  <SelectItem value="ongoing">Ongoing</SelectItem>
-                  <SelectItem value="late">Late</SelectItem>
-                  <SelectItem value="hold">Hold</SelectItem>
-                  <SelectItem value="cancelled">Cancelled</SelectItem>
-                  <SelectItem value="completed">Completed</SelectItem>
-                </SelectContent>
-              </Select>
-              <Input
-                placeholder="Search..."
-                value={filters.search}
-                onChange={(e) => setFilters({...filters, search: e.target.value})}
-              />
-            </div>
-          </CardContent>
-        </Card>
+        <div className="bg-white border border-slate-200 rounded-xl p-4 shadow-sm mb-6">
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+            <Input placeholder="Project name..." value={filters.projectName} onChange={(e) => setFilters({...filters, projectName: e.target.value})} className="border-slate-200 h-9 text-sm" />
+            <Input placeholder="Client name..." value={filters.clientName} onChange={(e) => setFilters({...filters, clientName: e.target.value})} className="border-slate-200 h-9 text-sm" />
+            <Select value={filters.status || 'active_only'} onValueChange={(value) => setFilters({...filters, status: value})}>
+              <SelectTrigger className="border-slate-200 h-9 text-sm"><SelectValue placeholder="Status" /></SelectTrigger>
+              <SelectContent>
+                <SelectItem value="active_only">Active (Default)</SelectItem>
+                <SelectItem value="all">All Status</SelectItem>
+                <SelectItem value="ongoing">Ongoing</SelectItem>
+                <SelectItem value="late">Late</SelectItem>
+                <SelectItem value="hold">Hold</SelectItem>
+                <SelectItem value="cancelled">Cancelled</SelectItem>
+                <SelectItem value="completed">Completed</SelectItem>
+              </SelectContent>
+            </Select>
+            <Input placeholder="Search..." value={filters.search} onChange={(e) => setFilters({...filters, search: e.target.value})} className="border-slate-200 h-9 text-sm" />
+          </div>
+        </div>
 
-        <Card className="shadow-lg">
-          <CardContent className="p-0">
+        <div className="bg-white border border-slate-200 rounded-xl shadow-sm overflow-hidden">
             {loading ? (
-              <div className="p-8 text-center text-gray-500">Loading projects...</div>
+              <div className="p-8 text-center text-slate-400 text-sm">Loading projects...</div>
             ) : filteredProjects.length === 0 ? (
-              <div className="p-8 text-center text-gray-500">No projects found. Try changing the status filter.</div>
+              <div className="p-12 text-center"><FolderKanban size={36} className="mx-auto mb-3 text-slate-300" /><p className="text-sm text-slate-400">No projects found</p></div>
             ) : (
               <div className="table-container">
                 <table>
                   <thead>
-                    <tr>
-                      <th className="hidden md:table-cell">S.No</th>
-                      <th>Project Name</th>
-                      <th>Project Code</th>
-                      <th className="hidden lg:table-cell">Client Name</th>
-                      <th className="hidden xl:table-cell">Employees & Hours</th>
-                      <th>Total Hours</th>
-                      <th>Status</th>
-                      <th>Actions</th>
+                    <tr className="border-b border-slate-200 bg-slate-50/50">
+                      <th className="hidden md:table-cell text-left text-xs font-semibold text-slate-500 uppercase tracking-wider py-3 px-4">#</th>
+                      <th className="text-left text-xs font-semibold text-slate-500 uppercase tracking-wider py-3 px-4">Project</th>
+                      <th className="text-left text-xs font-semibold text-slate-500 uppercase tracking-wider py-3 px-4">Code</th>
+                      <th className="hidden lg:table-cell text-left text-xs font-semibold text-slate-500 uppercase tracking-wider py-3 px-4">Client</th>
+                      <th className="hidden xl:table-cell text-left text-xs font-semibold text-slate-500 uppercase tracking-wider py-3 px-4">Team & Hours</th>
+                      <th className="text-left text-xs font-semibold text-slate-500 uppercase tracking-wider py-3 px-4">Hours</th>
+                      <th className="text-left text-xs font-semibold text-slate-500 uppercase tracking-wider py-3 px-4">Status</th>
+                      <th className="text-left text-xs font-semibold text-slate-500 uppercase tracking-wider py-3 px-4">Actions</th>
                     </tr>
                   </thead>
                   <tbody>
                     {filteredProjects.map((proj, index) => {
                       const empHours = getEmployeeHours(proj.project_code);
                       return (
-                        <tr key={proj.id}>
-                          <td data-label="S.No" className="hidden md:table-cell">{index + 1}</td>
-                          <td data-label="Project" className="font-semibold">{proj.name}</td>
-                          <td data-label="Code">{proj.project_code}</td>
-                          <td data-label="Client" className="hidden lg:table-cell">{proj.client_username}</td>
-                          <td data-label="Employees" className="hidden xl:table-cell">
-                            <div className="space-y-1">
+                        <tr key={proj.id} className="border-b border-slate-100 last:border-0 hover:bg-slate-50/80 transition-colors">
+                          <td data-label="#" className="hidden md:table-cell py-3 px-4 text-sm text-slate-400">{index + 1}</td>
+                          <td data-label="Project" className="py-3 px-4 font-medium text-sm text-slate-800">{proj.name}</td>
+                          <td data-label="Code" className="py-3 px-4 text-sm font-mono text-slate-500">{proj.project_code}</td>
+                          <td data-label="Client" className="hidden lg:table-cell py-3 px-4 text-sm text-slate-500">{proj.client_username}</td>
+                          <td data-label="Team" className="hidden xl:table-cell py-3 px-4">
+                            <div className="space-y-0.5">
                               {Object.entries(empHours).slice(0, 3).map(([empId, hours]) => {
                                 const emp = employees.find(e => e.employee_id === empId);
-                                return (
-                                  <div key={empId} className="text-sm">
-                                    {emp?.name || empId}: <span className="font-semibold">{hours.toFixed(1)}h</span>
-                                  </div>
-                                );
+                                return <div key={empId} className="text-xs text-slate-600">{emp?.name || empId}: <span className="font-bold text-blue-600">{hours.toFixed(1)}h</span></div>;
                               })}
-                              {Object.keys(empHours).length > 3 && <span className="text-gray-400 text-xs">+{Object.keys(empHours).length - 3} more</span>}
-                              {Object.keys(empHours).length === 0 && <span className="text-gray-400">No hours logged</span>}
+                              {Object.keys(empHours).length > 3 && <span className="text-slate-300 text-xs">+{Object.keys(empHours).length - 3} more</span>}
+                              {Object.keys(empHours).length === 0 && <span className="text-slate-300 text-xs">No hours</span>}
                             </div>
                           </td>
-                          <td data-label="Hours" className="font-bold text-blue-600">{proj.completed_hours.toFixed(1)}h</td>
-                          <td data-label="Status">
-                            <span className={`badge ${getStatusColor(proj.status)} px-2 md:px-3 py-1 rounded-full text-xs font-medium`}>
-                              {proj.status}
-                            </span>
+                          <td data-label="Hours" className="py-3 px-4 font-bold text-sm text-blue-600">{proj.completed_hours.toFixed(1)}h</td>
+                          <td data-label="Status" className="py-3 px-4">
+                            <span className={`inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium border ${getStatusColor(proj.status)}`}>{proj.status}</span>
                           </td>
-                          <td data-label="Actions">
-                            <div className="flex gap-1 md:gap-2">
-                              <Button size="sm" variant="outline" onClick={() => handleView(proj)} className="p-1.5 md:p-2">
-                                <Eye size={14} className="md:w-4 md:h-4" />
-                              </Button>
-                              <Button size="sm" variant="outline" onClick={() => handleEdit(proj)} className="p-1.5 md:p-2">
-                                <Edit size={14} className="md:w-4 md:h-4" />
-                              </Button>
-                              <Button size="sm" variant="destructive" onClick={() => handleDelete(proj.id)}>
-                                <Trash2 size={16} />
-                              </Button>
+                          <td data-label="Actions" className="py-3 px-4">
+                            <div className="flex gap-1">
+                              <Button size="sm" variant="outline" onClick={() => handleView(proj)} className="h-7 w-7 p-0 border-slate-200"><Eye size={12} /></Button>
+                              <Button size="sm" variant="outline" onClick={() => handleEdit(proj)} className="h-7 w-7 p-0 border-slate-200"><Edit size={12} /></Button>
+                              <Button size="sm" variant="outline" onClick={() => handleDelete(proj.id)} className="h-7 w-7 p-0 text-red-500 border-red-200 hover:bg-red-50"><Trash2 size={12} /></Button>
                             </div>
                           </td>
                         </tr>
@@ -406,8 +371,7 @@ Website Redesign,Development,zb_new_701,2026-01-01,2026-03-31,0,EMP001,ongoing,c
                 </table>
               </div>
             )}
-          </CardContent>
-        </Card>
+        </div>
 
         {/* Add/Edit Dialog */}
         <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
@@ -475,7 +439,7 @@ Website Redesign,Development,zb_new_701,2026-01-01,2026-03-31,0,EMP001,ongoing,c
                 {employeeSearch && filteredEmployees.length > 0 && (
                   <div className="border rounded-md max-h-32 sm:max-h-40 overflow-y-auto mt-2">
                     {filteredEmployees.slice(0, 10).map(emp => (
-                      <div key={emp.employee_id} className={`p-2 hover:bg-gray-100 cursor-pointer text-sm flex items-center justify-between ${emp.status !== 'active' ? 'bg-gray-50' : ''}`} onClick={() => addEmployee(emp.employee_id)}>
+                      <div key={emp.employee_id} className={`p-2 hover:bg-slate-100 cursor-pointer text-sm flex items-center justify-between ${emp.status !== 'active' ? 'bg-slate-50' : ''}`} onClick={() => addEmployee(emp.employee_id)}>
                         <span>{emp.name} ({emp.employee_id})</span>
                         {emp.status !== 'active' && (
                           <span className="text-xs bg-red-100 text-red-600 px-1.5 py-0.5 rounded">Ex</span>
@@ -498,6 +462,7 @@ Website Redesign,Development,zb_new_701,2026-01-01,2026-03-31,0,EMP001,ongoing,c
                   })}
                 </div>
               </div>
+              
               <Button type="submit" className="w-full">
                 {editingProject ? 'Update' : 'Create'}
               </Button>
@@ -516,48 +481,33 @@ Website Redesign,Development,zb_new_701,2026-01-01,2026-03-31,0,EMP001,ongoing,c
                 {/* Project Header */}
                 <div className="flex justify-between items-start">
                   <div>
-                    <h3 className="text-xl font-bold text-gray-900">{viewingProject.name}</h3>
-                    <p className="text-sm text-indigo-600 font-medium">{viewingProject.project_code}</p>
+                    <h3 className="text-lg font-bold text-slate-900">{viewingProject.name}</h3>
+                    <p className="text-sm text-blue-600 font-mono">{viewingProject.project_code}</p>
                   </div>
-                  <span className={`badge ${getStatusColor(viewingProject.status)} px-3 py-1 rounded-full text-sm font-medium`}>
+                  <span className={`inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-medium border ${getStatusColor(viewingProject.status)}`}>
                     {viewingProject.status?.toUpperCase()}
                   </span>
                 </div>
 
-                {/* Project Info Grid */}
-                <div className="grid grid-cols-2 gap-4 bg-gray-50 rounded-lg p-4">
-                  <div>
-                    <p className="text-xs text-gray-500 uppercase tracking-wide">Type</p>
-                    <p className="font-semibold text-gray-900">{viewingProject.type || '-'}</p>
-                  </div>
-                  <div>
-                    <p className="text-xs text-gray-500 uppercase tracking-wide">Client</p>
-                    <p className="font-semibold text-gray-900">{viewingProject.client_username || '-'}</p>
-                  </div>
-                  <div>
-                    <p className="text-xs text-gray-500 uppercase tracking-wide">Start Date</p>
-                    <p className="font-semibold text-gray-900">
-                      {viewingProject.start_date ? new Date(viewingProject.start_date).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' }) : '-'}
-                    </p>
-                  </div>
-                  <div>
-                    <p className="text-xs text-gray-500 uppercase tracking-wide">Total Hours</p>
-                    <p className="font-bold text-blue-600 text-lg">{viewingProject.completed_hours?.toFixed(1)}h</p>
-                  </div>
+                <div className="grid grid-cols-2 gap-3 bg-slate-50 rounded-xl p-4 border border-slate-100">
+                  <div><p className="text-xs text-slate-400 uppercase tracking-wider">Type</p><p className="font-semibold text-sm text-slate-800">{viewingProject.type || '-'}</p></div>
+                  <div><p className="text-xs text-slate-400 uppercase tracking-wider">Client</p><p className="font-semibold text-sm text-slate-800">{viewingProject.client_username || '-'}</p></div>
+                  <div><p className="text-xs text-slate-400 uppercase tracking-wider">Start Date</p><p className="font-semibold text-sm text-slate-800">{viewingProject.start_date ? new Date(viewingProject.start_date).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' }) : '-'}</p></div>
+                  <div><p className="text-xs text-slate-400 uppercase tracking-wider">Total Hours</p><p className="font-bold text-blue-600 text-lg">{viewingProject.completed_hours?.toFixed(1)}h</p></div>
                 </div>
 
                 {/* Scope of Work */}
                 {viewingProject.scope_of_work && viewingProject.scope_of_work !== 'NULL' && (
                   <div>
-                    <p className="text-xs text-gray-500 uppercase tracking-wide mb-1">Scope of Work</p>
-                    <p className="text-gray-700">{viewingProject.scope_of_work}</p>
+                    <p className="text-xs text-slate-400 uppercase tracking-wide mb-1">Scope of Work</p>
+                    <p className="text-slate-700">{viewingProject.scope_of_work}</p>
                   </div>
                 )}
 
                 {/* Timesheet Link */}
                 {viewingProject.timesheet_link && viewingProject.timesheet_link !== 'NULL' && viewingProject.timesheet_link !== 'null' && (
                   <div>
-                    <p className="text-xs text-gray-500 uppercase tracking-wide mb-1">Timesheet</p>
+                    <p className="text-xs text-slate-400 uppercase tracking-wide mb-1">Timesheet</p>
                     <a href={viewingProject.timesheet_link} target="_blank" rel="noopener noreferrer" className="text-blue-600 hover:underline text-sm break-all">
                       {viewingProject.timesheet_link}
                     </a>
@@ -566,16 +516,16 @@ Website Redesign,Development,zb_new_701,2026-01-01,2026-03-31,0,EMP001,ongoing,c
 
                 {/* Developer Hours Breakdown */}
                 <div className="border-t pt-4">
-                  <p className="text-xs text-gray-500 uppercase tracking-wide mb-3">Developer Hours Breakdown</p>
+                  <p className="text-xs text-slate-400 uppercase tracking-wide mb-3">Developer Hours Breakdown</p>
                   {historyLoading ? (
-                    <div className="text-center py-4 text-gray-500 text-sm">Loading...</div>
+                    <div className="text-center py-4 text-slate-400 text-sm">Loading...</div>
                   ) : projectHistory?.developers?.length > 0 ? (
                     <div className="space-y-2 max-h-48 overflow-y-auto">
                       {projectHistory.developers.map((dev, idx) => (
-                        <div key={idx} className="flex justify-between items-center p-2 bg-gray-50 rounded">
+                        <div key={idx} className="flex justify-between items-center p-2 bg-slate-50 rounded">
                           <div className="flex items-center gap-2">
                             <span className="font-medium text-sm">{dev.employee_name}</span>
-                            <span className={`text-xs px-1.5 py-0.5 rounded ${dev.status === 'active' ? 'bg-green-100 text-green-700' : 'bg-gray-100 text-gray-600'}`}>
+                            <span className={`text-xs px-1.5 py-0.5 rounded ${dev.status === 'active' ? 'bg-green-100 text-green-700' : 'bg-slate-100 text-slate-500'}`}>
                               {dev.status}
                             </span>
                           </div>
@@ -584,14 +534,14 @@ Website Redesign,Development,zb_new_701,2026-01-01,2026-03-31,0,EMP001,ongoing,c
                       ))}
                     </div>
                   ) : (
-                    <div className="text-center py-4 text-gray-500 text-sm">No developer hours recorded</div>
+                    <div className="text-center py-4 text-slate-400 text-sm">No developer hours recorded</div>
                   )}
                 </div>
 
                 {/* Assigned Employees */}
                 {viewingProject.assigned_employees?.length > 0 && (
                   <div className="border-t pt-4">
-                    <p className="text-xs text-gray-500 uppercase tracking-wide mb-2">Assigned Employees ({viewingProject.assigned_employees.length})</p>
+                    <p className="text-xs text-slate-400 uppercase tracking-wide mb-2">Assigned Employees ({viewingProject.assigned_employees.length})</p>
                     <div className="flex flex-wrap gap-2">
                       {viewingProject.assigned_employees.map(empId => {
                         const emp = employees.find(e => e.employee_id === empId);
@@ -634,7 +584,7 @@ Website Redesign,Development,zb_new_701,2026-01-01,2026-03-31,0,EMP001,ongoing,c
               </DialogTitle>
             </DialogHeader>
             <div className="py-4">
-              <p className="text-gray-700 mb-4 text-sm sm:text-base">
+              <p className="text-slate-700 mb-4 text-sm sm:text-base">
                 Are you sure you want to delete <strong>ALL {projects.length} projects</strong>?
               </p>
               <p className="text-red-600 text-xs sm:text-sm bg-red-50 p-3 rounded">

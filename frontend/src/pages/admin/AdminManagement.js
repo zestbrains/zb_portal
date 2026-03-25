@@ -4,7 +4,6 @@ import { api } from '../../utils/api';
 import { Button } from '../../components/ui/button';
 import { Input } from '../../components/ui/input';
 import { Label } from '../../components/ui/label';
-import { Card, CardContent, CardHeader, CardTitle } from '../../components/ui/card';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../../components/ui/select';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '../../components/ui/dialog';
 import { toast } from 'sonner';
@@ -63,149 +62,125 @@ export default function AdminManagement({ user, onLogout }) {
   };
 
   const getRoleBadge = (role) => {
-    if (role === 'admin') {
-      return 'bg-purple-100 text-purple-800';
-    }
-    return 'bg-blue-100 text-blue-800';
+    if (role === 'admin') return 'bg-purple-100 text-purple-700 border-purple-200';
+    return 'bg-blue-100 text-blue-700 border-blue-200';
   };
 
   const getRoleIcon = (role) => {
-    if (role === 'admin') {
-      return <ShieldCheck size={16} className="text-purple-600" />;
-    }
-    return <Shield size={16} className="text-blue-600" />;
+    if (role === 'admin') return <ShieldCheck size={14} className="text-purple-600" />;
+    return <Shield size={14} className="text-blue-600" />;
   };
 
   return (
     <Layout user={user} onLogout={onLogout}>
-      <div className="p-8" data-testid="admin-management-page">
-        <div className="mb-8 flex justify-between items-center">
+      <div className="p-4 md:p-8 lg:p-10" data-testid="admin-management-page">
+        <div className="flex flex-col sm:flex-row sm:justify-between sm:items-center gap-4 mb-6">
           <div>
-            <h1 className="text-4xl font-bold text-gray-900 mb-2">Admin Management</h1>
-            <p className="text-gray-600">Create and manage Admin & HR users</p>
+            <h1 className="text-2xl md:text-3xl font-bold text-slate-900 tracking-tight">Admin Management</h1>
+            <p className="text-sm text-slate-500 mt-1">Create and manage Admin & HR users</p>
           </div>
-          <Button onClick={() => setDialogOpen(true)} data-testid="create-admin-btn">
-            <UserPlus size={18} className="mr-2" />
+          <Button onClick={() => setDialogOpen(true)} className="bg-slate-900 hover:bg-slate-800 text-xs" size="sm" data-testid="create-admin-btn">
+            <UserPlus size={14} className="mr-1" />
             Create New User
           </Button>
         </div>
 
         {/* Stats */}
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
-          <Card className="bg-gradient-to-br from-gray-600 to-gray-700 text-white">
-            <CardContent className="p-4">
-              <div className="flex items-center gap-3">
-                <Users size={24} />
-                <div>
-                  <p className="text-sm opacity-80">Total Users</p>
-                  <p className="text-2xl font-bold">{adminUsers.length}</p>
-                </div>
-              </div>
-            </CardContent>
-          </Card>
-          <Card className="bg-gradient-to-br from-purple-500 to-purple-600 text-white">
-            <CardContent className="p-4">
-              <div className="flex items-center gap-3">
-                <ShieldCheck size={24} />
-                <div>
-                  <p className="text-sm opacity-80">Admins</p>
-                  <p className="text-2xl font-bold">{adminUsers.filter(u => u.role === 'admin').length}</p>
-                </div>
-              </div>
-            </CardContent>
-          </Card>
-          <Card className="bg-gradient-to-br from-blue-500 to-blue-600 text-white">
-            <CardContent className="p-4">
-              <div className="flex items-center gap-3">
-                <Shield size={24} />
-                <div>
-                  <p className="text-sm opacity-80">HR Users</p>
-                  <p className="text-2xl font-bold">{adminUsers.filter(u => u.role === 'hr').length}</p>
-                </div>
-              </div>
-            </CardContent>
-          </Card>
+        <div className="grid grid-cols-2 md:grid-cols-3 gap-4 mb-6">
+          <div className="bg-white border border-slate-200 rounded-xl p-5 shadow-sm">
+            <div className="flex items-center gap-3">
+              <div className="w-10 h-10 rounded-lg flex items-center justify-center bg-slate-100 text-slate-700"><Users size={20} /></div>
+              <div><p className="text-xs font-medium text-slate-500 uppercase tracking-wider">Total Users</p><p className="text-2xl font-bold text-slate-900">{adminUsers.length}</p></div>
+            </div>
+          </div>
+          <div className="bg-white border border-slate-200 rounded-xl p-5 shadow-sm">
+            <div className="flex items-center gap-3">
+              <div className="w-10 h-10 rounded-lg flex items-center justify-center bg-purple-50 text-purple-600"><ShieldCheck size={20} /></div>
+              <div><p className="text-xs font-medium text-slate-500 uppercase tracking-wider">Admins</p><p className="text-2xl font-bold text-purple-600">{adminUsers.filter(u => u.role === 'admin').length}</p></div>
+            </div>
+          </div>
+          <div className="bg-white border border-slate-200 rounded-xl p-5 shadow-sm">
+            <div className="flex items-center gap-3">
+              <div className="w-10 h-10 rounded-lg flex items-center justify-center bg-blue-50 text-blue-600"><Shield size={20} /></div>
+              <div><p className="text-xs font-medium text-slate-500 uppercase tracking-wider">HR Users</p><p className="text-2xl font-bold text-blue-600">{adminUsers.filter(u => u.role === 'hr').length}</p></div>
+            </div>
+          </div>
         </div>
 
         {/* Users Table */}
-        <Card className="shadow-lg">
-          <CardHeader>
-            <CardTitle className="flex items-center gap-2">
-              <Users size={20} />
-              Admin & HR Users
-            </CardTitle>
-          </CardHeader>
-          <CardContent className="p-0">
-            {loading ? (
-              <div className="p-8 text-center text-gray-500">Loading...</div>
-            ) : adminUsers.length === 0 ? (
-              <div className="p-8 text-center text-gray-500">
-                <Users size={48} className="mx-auto mb-4 opacity-50" />
-                <p>No admin users found</p>
-              </div>
-            ) : (
-              <div className="table-container">
-                <table>
-                  <thead>
-                    <tr>
-                      <th>Username</th>
-                      <th>Email</th>
-                      <th>Role</th>
-                      <th>Employee ID</th>
-                      <th>Status</th>
-                      <th>Created At</th>
-                      <th>Actions</th>
+        <div className="bg-white border border-slate-200 rounded-xl shadow-sm overflow-hidden">
+          <div className="flex items-center justify-between p-4 border-b border-slate-200">
+            <h3 className="text-sm font-semibold text-slate-700">Admin & HR Users</h3>
+          </div>
+          {loading ? (
+            <div className="p-8 text-center text-slate-400 text-sm">Loading...</div>
+          ) : adminUsers.length === 0 ? (
+            <div className="p-12 text-center">
+              <Users size={36} className="mx-auto mb-3 text-slate-300" />
+              <p className="text-sm text-slate-400">No admin users found</p>
+            </div>
+          ) : (
+            <div className="overflow-x-auto">
+              <table className="w-full">
+                <thead>
+                  <tr className="border-b border-slate-200 bg-slate-50/50">
+                    <th className="text-left text-xs font-semibold text-slate-500 uppercase tracking-wider py-3 px-4">Username</th>
+                    <th className="text-left text-xs font-semibold text-slate-500 uppercase tracking-wider py-3 px-4">Email</th>
+                    <th className="text-left text-xs font-semibold text-slate-500 uppercase tracking-wider py-3 px-4">Role</th>
+                    <th className="text-left text-xs font-semibold text-slate-500 uppercase tracking-wider py-3 px-4">Employee ID</th>
+                    <th className="text-left text-xs font-semibold text-slate-500 uppercase tracking-wider py-3 px-4">Status</th>
+                    <th className="text-left text-xs font-semibold text-slate-500 uppercase tracking-wider py-3 px-4">Created At</th>
+                    <th className="text-left text-xs font-semibold text-slate-500 uppercase tracking-wider py-3 px-4">Actions</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {adminUsers.map((adminUser) => (
+                    <tr key={adminUser.id} className="border-b border-slate-100 last:border-0 hover:bg-slate-50/80 transition-colors">
+                      <td className="py-3 px-4 font-medium text-sm text-slate-800">{adminUser.username}</td>
+                      <td className="py-3 px-4 text-sm text-slate-600">{adminUser.email}</td>
+                      <td className="py-3 px-4">
+                        <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium border ${getRoleBadge(adminUser.role)}`}>
+                          {getRoleIcon(adminUser.role)}
+                          {adminUser.role.toUpperCase()}
+                        </span>
+                      </td>
+                      <td className="py-3 px-4 text-sm text-slate-600">{adminUser.employee_id || '-'}</td>
+                      <td className="py-3 px-4">
+                        <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium border ${adminUser.is_active ? 'bg-green-100 text-green-700 border-green-200' : 'bg-red-100 text-red-700 border-red-200'}`}>
+                          {adminUser.is_active ? 'Active' : 'Inactive'}
+                        </span>
+                      </td>
+                      <td className="py-3 px-4 text-sm text-slate-500">
+                        {adminUser.created_at ? new Date(adminUser.created_at).toLocaleDateString() : '-'}
+                      </td>
+                      <td className="py-3 px-4">
+                        {adminUser.username !== user.username ? (
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            onClick={() => handleDeleteUser(adminUser.id, adminUser.username)}
+                            className="h-7 w-7 p-0 text-red-500 border-red-200 hover:bg-red-50"
+                            data-testid={`delete-user-${adminUser.id}`}
+                          >
+                            <Trash2 size={12} />
+                          </Button>
+                        ) : (
+                          <span className="text-xs text-slate-400">Current User</span>
+                        )}
+                      </td>
                     </tr>
-                  </thead>
-                  <tbody>
-                    {adminUsers.map((adminUser) => (
-                      <tr key={adminUser.id}>
-                        <td className="font-semibold">{adminUser.username}</td>
-                        <td>{adminUser.email}</td>
-                        <td>
-                          <span className={`inline-flex items-center gap-1 px-2 py-1 rounded-full text-xs font-semibold ${getRoleBadge(adminUser.role)}`}>
-                            {getRoleIcon(adminUser.role)}
-                            {adminUser.role.toUpperCase()}
-                          </span>
-                        </td>
-                        <td>{adminUser.employee_id || '-'}</td>
-                        <td>
-                          <span className={`px-2 py-1 rounded-full text-xs font-semibold ${adminUser.is_active ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'}`}>
-                            {adminUser.is_active ? 'Active' : 'Inactive'}
-                          </span>
-                        </td>
-                        <td className="text-sm">
-                          {adminUser.created_at ? new Date(adminUser.created_at).toLocaleDateString() : '-'}
-                        </td>
-                        <td>
-                          {adminUser.username !== user.username ? (
-                            <Button
-                              size="sm"
-                              variant="destructive"
-                              onClick={() => handleDeleteUser(adminUser.id, adminUser.username)}
-                              data-testid={`delete-user-${adminUser.id}`}
-                            >
-                              <Trash2 size={14} className="mr-1" />
-                              Delete
-                            </Button>
-                          ) : (
-                            <span className="text-gray-400 text-sm">Current User</span>
-                          )}
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-            )}
-          </CardContent>
-        </Card>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </div>
 
         {/* Create User Dialog */}
         <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
           <DialogContent>
             <DialogHeader>
-              <DialogTitle className="flex items-center gap-2">
+              <DialogTitle className="flex items-center gap-2 text-lg font-semibold text-slate-900">
                 <UserPlus size={20} />
                 Create New Admin/HR User
               </DialogTitle>
@@ -259,8 +234,8 @@ export default function AdminManagement({ user, onLogout }) {
                   </SelectContent>
                 </Select>
               </div>
-              <Button type="submit" className="w-full" data-testid="submit-create-admin">
-                <UserPlus size={18} className="mr-2" />
+              <Button type="submit" className="w-full bg-slate-900 hover:bg-slate-800" data-testid="submit-create-admin">
+                <UserPlus size={16} className="mr-2" />
                 Create User
               </Button>
             </form>

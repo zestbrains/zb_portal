@@ -342,204 +342,113 @@ export default function AdminWorkingHours({ user, onLogout }) {
 
   return (
     <Layout user={user} onLogout={onLogout}>
-      <div className="p-4 sm:p-6 lg:p-8" data-testid="working-hours-page">
+      <div className="p-4 md:p-8 lg:p-10" data-testid="working-hours-page">
         <div className="flex flex-col sm:flex-row sm:justify-between sm:items-center gap-4 mb-4 sm:mb-6">
           <div>
-            <h1 className="text-2xl sm:text-3xl lg:text-4xl font-bold text-gray-900 mb-1 sm:mb-2">Working Hours</h1>
-            <p className="text-sm sm:text-base text-gray-600">Track employee work hours and project time</p>
+            <h1 className="text-2xl md:text-3xl font-bold text-slate-900 tracking-tight">Working Hours</h1>
+            <p className="text-sm text-slate-500 mt-1">Track employee work hours and project time</p>
           </div>
           <div className="flex flex-wrap gap-2">
             {user.role === 'admin' && (
-              <Button onClick={() => setDeleteAllDialogOpen(true)} variant="destructive" size="sm" className="text-xs sm:text-sm" data-testid="delete-all-hours-btn">
-                <Trash2 size={14} className="mr-1 sm:mr-2 sm:w-[18px] sm:h-[18px]" />
-                <span className="hidden sm:inline">Delete All</span>
-                <span className="sm:hidden">Delete</span>
+              <Button onClick={() => setDeleteAllDialogOpen(true)} variant="outline" size="sm" className="text-xs border-red-200 text-red-600 hover:bg-red-50" data-testid="delete-all-hours-btn">
+                <Trash2 size={14} className="mr-1" /> Delete All
               </Button>
             )}
-            <Button onClick={downloadSampleCSV} variant="outline" size="sm" className="text-xs sm:text-sm">
-              <Download size={14} className="mr-1 sm:mr-2 sm:w-[18px] sm:h-[18px]" />
-              <span className="hidden sm:inline">Sample</span>
-              <span className="sm:hidden">CSV</span>
+            <Button onClick={downloadSampleCSV} variant="outline" size="sm" className="text-xs border-slate-200">
+              <Download size={14} className="mr-1" /> Sample
             </Button>
-            <input
-              type="file"
-              accept=".csv"
-              onChange={handleImport}
-              id="csv-upload-work"
-              className="hidden"
-            />
-            <Button
-              onClick={() => document.getElementById('csv-upload-work').click()}
-              variant="outline"
-              size="sm"
-              className="text-xs sm:text-sm"
-            >
-              <Upload size={14} className="mr-1 sm:mr-2 sm:w-[18px] sm:h-[18px]" />
-              Import
+            <input type="file" accept=".csv" onChange={handleImport} id="csv-upload-work" className="hidden" />
+            <Button onClick={() => document.getElementById('csv-upload-work').click()} variant="outline" size="sm" className="text-xs border-slate-200">
+              <Upload size={14} className="mr-1" /> Import
             </Button>
-            <Button onClick={handleExport} className="bg-green-600 hover:bg-green-700" size="sm">
-              <Download size={14} className="mr-1 sm:mr-2 sm:w-[18px] sm:h-[18px]" />
-              <span className="hidden sm:inline">Export</span>
+            <Button onClick={handleExport} variant="outline" size="sm" className="text-xs border-green-200 text-green-700 hover:bg-green-50">
+              <Download size={14} className="mr-1" /> Export
             </Button>
-            <Button onClick={() => setAddDialogOpen(true)} className="bg-indigo-600 hover:bg-indigo-700" size="sm">
-              <Plus size={14} className="mr-1 sm:mr-2 sm:w-[18px] sm:h-[18px]" />
-              Add
+            <Button onClick={() => setAddDialogOpen(true)} className="bg-slate-900 hover:bg-slate-800 text-xs" size="sm">
+              <Plus size={14} className="mr-1" /> Add
             </Button>
           </div>
         </div>
 
         {/* Employee Status Tabs */}
         <div className="flex flex-wrap gap-2 mb-4">
-          <Button
-            variant={filters.employeeStatus === 'active' ? 'default' : 'outline'}
-            onClick={() => { setFilters({...filters, employeeStatus: 'active'}); setPagination(p => ({...p, page: 1})); }}
-            data-testid="tab-active-employees"
-            size="sm"
-            className="text-xs sm:text-sm"
-          >
-            Active
-          </Button>
-          <Button
-            variant={filters.employeeStatus === 'ex-employee' ? 'default' : 'outline'}
-            onClick={() => { setFilters({...filters, employeeStatus: 'ex-employee'}); setPagination(p => ({...p, page: 1})); }}
-            data-testid="tab-ex-employees"
-            size="sm"
-            className="text-xs sm:text-sm"
-          >
-            Ex-Employees
-          </Button>
-          <Button
-            variant={filters.employeeStatus === 'all' ? 'default' : 'outline'}
-            onClick={() => { setFilters({...filters, employeeStatus: 'all'}); setPagination(p => ({...p, page: 1})); }}
-            data-testid="tab-all-employees"
-            size="sm"
-            className="text-xs sm:text-sm"
-          >
-            All
-          </Button>
+          {[
+            { value: 'active', label: 'Active' },
+            { value: 'ex-employee', label: 'Ex-Employees' },
+            { value: 'all', label: 'All' },
+          ].map(tab => (
+            <Button
+              key={tab.value}
+              variant={filters.employeeStatus === tab.value ? 'default' : 'outline'}
+              onClick={() => { setFilters({...filters, employeeStatus: tab.value}); setPagination(p => ({...p, page: 1})); }}
+              data-testid={`tab-${tab.value}-employees`}
+              size="sm"
+              className={`text-xs ${filters.employeeStatus === tab.value ? 'bg-slate-900 hover:bg-slate-800' : 'border-slate-200'}`}
+            >
+              {tab.label}
+            </Button>
+          ))}
         </div>
 
         {/* Filters */}
-        <Card className="mb-4 sm:mb-6">
-          <CardContent className="p-3 sm:p-4">
-            {/* Project Filter Banner */}
+        <div className="bg-white border border-slate-200 rounded-xl shadow-sm p-4 mb-6">
             {filters.project && (
-              <div className="mb-3 p-3 bg-indigo-50 border border-indigo-200 rounded-lg flex items-center justify-between">
-                <div>
-                  <span className="text-sm text-indigo-700">
-                    Showing work hours for project: <strong>{filters.project}</strong>
-                  </span>
-                </div>
-                <Button 
-                  variant="outline" 
-                  size="sm"
-                  onClick={() => {
-                    setFilters({...filters, project: ''});
-                    setSearchParams({});
-                  }}
-                  className="text-indigo-600 border-indigo-300 hover:bg-indigo-100"
-                >
-                  Clear Filter
-                </Button>
+              <div className="mb-3 p-3 bg-blue-50 border border-blue-200 rounded-lg flex items-center justify-between">
+                <span className="text-sm text-blue-700">Showing: <strong>{filters.project}</strong></span>
+                <Button variant="ghost" size="sm" onClick={() => { setFilters({...filters, project: ''}); setSearchParams({}); }} className="text-blue-600 h-7 text-xs"><X size={14} className="mr-1" /> Clear</Button>
               </div>
             )}
-            <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-2 sm:gap-4">
-              <Input
-                type="date"
-                placeholder="Start Date"
-                value={filters.startDate}
-                onChange={(e) => { setFilters({...filters, startDate: e.target.value}); setPagination(p => ({...p, page: 1})); }}
-              />
-              <Input
-                type="date"
-                placeholder="End Date"
-                value={filters.endDate}
-                onChange={(e) => { setFilters({...filters, endDate: e.target.value}); setPagination(p => ({...p, page: 1})); }}
-              />
-              <Select value={filters.department || undefined} onValueChange={(value) => { 
-                setFilters({...filters, department: value, employee: 'all'}); // Reset employee when department changes
-                setPagination(p => ({...p, page: 1})); 
-              }}>
-                <SelectTrigger>
-                  <SelectValue placeholder="Department" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="all">All Departments</SelectItem>
-                  {departments.map(dept => (
-                    <SelectItem key={dept.id} value={dept.id}>{dept.name}</SelectItem>
-                  ))}
-                </SelectContent>
+            <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-3">
+              <Input type="date" value={filters.startDate} onChange={(e) => { setFilters({...filters, startDate: e.target.value}); setPagination(p => ({...p, page: 1})); }} className="h-9 text-sm border-slate-200" />
+              <Input type="date" value={filters.endDate} onChange={(e) => { setFilters({...filters, endDate: e.target.value}); setPagination(p => ({...p, page: 1})); }} className="h-9 text-sm border-slate-200" />
+              <Select value={filters.department || undefined} onValueChange={(value) => { setFilters({...filters, department: value, employee: 'all'}); setPagination(p => ({...p, page: 1})); }}>
+                <SelectTrigger className="h-9 text-sm border-slate-200"><SelectValue placeholder="Department" /></SelectTrigger>
+                <SelectContent><SelectItem value="all">All Departments</SelectItem>{departments.map(dept => (<SelectItem key={dept.id} value={dept.id}>{dept.name}</SelectItem>))}</SelectContent>
               </Select>
               <Select value={filters.employee || undefined} onValueChange={(value) => { setFilters({...filters, employee: value}); setPagination(p => ({...p, page: 1})); }}>
-                <SelectTrigger>
-                  <SelectValue placeholder="Employee" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="all">All Employees</SelectItem>
-                  {getFilteredEmployees().map(emp => (
-                    <SelectItem key={emp.employee_id} value={emp.employee_id}>
-                      {emp.name} ({emp.employee_id})
-                    </SelectItem>
-                  ))}
-                </SelectContent>
+                <SelectTrigger className="h-9 text-sm border-slate-200"><SelectValue placeholder="Employee" /></SelectTrigger>
+                <SelectContent><SelectItem value="all">All Employees</SelectItem>{getFilteredEmployees().map(emp => (<SelectItem key={emp.employee_id} value={emp.employee_id}>{emp.name} ({emp.employee_id})</SelectItem>))}</SelectContent>
               </Select>
-              <Input
-                placeholder="Search..."
-                value={filters.search}
-                onChange={(e) => setFilters({...filters, search: e.target.value})}
-              />
+              <Input placeholder="Search..." value={filters.search} onChange={(e) => setFilters({...filters, search: e.target.value})} className="h-9 text-sm border-slate-200" />
             </div>
-          </CardContent>
-        </Card>
+        </div>
 
-        <Card className="shadow-lg">
-          <CardContent className="p-0">
+        <div className="bg-white border border-slate-200 rounded-xl shadow-sm overflow-hidden">
             {loading ? (
-              <div className="p-8 text-center text-gray-500">Loading working hours...</div>
+              <div className="p-8 text-center text-slate-400 text-sm">Loading working hours...</div>
             ) : filteredSummary.length === 0 ? (
-              <div className="p-8 text-center text-gray-500">No work entries found.</div>
+              <div className="p-12 text-center"><Clock size={36} className="mx-auto mb-3 text-slate-300" /><p className="text-sm text-slate-400">No work entries found</p></div>
             ) : (
-              <div className="table-container">
-                <table>
+              <div className="overflow-x-auto">
+                <table className="w-full">
                   <thead>
-                    <tr>
-                      <th>S.No</th>
-                      <th>Date</th>
-                      <th>Employee Name</th>
-                      <th>Projects & Hours</th>
-                      <th>Total Hours</th>
-                      <th>Actions</th>
+                    <tr className="border-b border-slate-200 bg-slate-50/50">
+                      <th className="text-left text-xs font-semibold text-slate-500 uppercase tracking-wider py-3 px-4">#</th>
+                      <th className="text-left text-xs font-semibold text-slate-500 uppercase tracking-wider py-3 px-4">Date</th>
+                      <th className="text-left text-xs font-semibold text-slate-500 uppercase tracking-wider py-3 px-4">Employee</th>
+                      <th className="text-left text-xs font-semibold text-slate-500 uppercase tracking-wider py-3 px-4">Projects & Hours</th>
+                      <th className="text-left text-xs font-semibold text-slate-500 uppercase tracking-wider py-3 px-4">Total</th>
+                      <th className="text-left text-xs font-semibold text-slate-500 uppercase tracking-wider py-3 px-4">Actions</th>
                     </tr>
                   </thead>
                   <tbody>
                     {filteredSummary.map((entry, index) => (
-                      <tr key={`${entry.employee_id}-${entry.date}`}>
-                        <td>{index + 1}</td>
-                        <td>{new Date(entry.date).toLocaleDateString()}</td>
-                        <td className="font-semibold">{entry.employee_name}</td>
-                        <td>
-                          <div className="space-y-1">
+                      <tr key={`${entry.employee_id}-${entry.date}`} className="border-b border-slate-100 last:border-0 hover:bg-slate-50/80 transition-colors">
+                        <td className="py-3 px-4 text-sm text-slate-400">{index + 1}</td>
+                        <td className="py-3 px-4 text-sm text-slate-700">{new Date(entry.date).toLocaleDateString()}</td>
+                        <td className="py-3 px-4"><span className="font-medium text-sm text-slate-800">{entry.employee_name}</span><div className="text-xs text-slate-400">{entry.employee_id}</div></td>
+                        <td className="py-3 px-4">
+                          <div className="space-y-0.5">
                             {entry.projects.map((proj, idx) => (
-                              <div key={idx} className="text-sm">
-                                <span className="font-medium">{proj.project_name}</span> - <span className="text-blue-600 font-semibold">{proj.hours}h</span>
-                              </div>
+                              <div key={idx} className="text-xs text-slate-600"><span className="font-medium text-slate-700">{proj.project_name}</span> - <span className="text-blue-600 font-bold">{proj.hours}h</span>{proj.is_compensation && <span className="ml-1.5 px-1.5 py-0.5 rounded bg-emerald-100 text-emerald-700 text-[10px] font-bold border border-emerald-200">COMP</span>}</div>
                             ))}
                           </div>
                         </td>
-                        <td className="font-bold text-lg">{entry.total_hours.toFixed(1)}h</td>
-                        <td>
-                          <div className="flex gap-2">
-                            <Button size="sm" variant="outline" onClick={() => handleView(entry)} title="View Details">
-                              <Eye size={16} />
-                            </Button>
-                            <Button 
-                              size="sm" 
-                              variant="destructive" 
-                              onClick={() => handleDeleteDateEntries(entry)}
-                              title={`Delete all ${entry.projects.length} entries for this date`}
-                            >
-                              <Trash2 size={16} />
-                            </Button>
+                        <td className="py-3 px-4 font-bold text-blue-600 text-sm">{entry.total_hours.toFixed(1)}h</td>
+                        <td className="py-3 px-4">
+                          <div className="flex gap-1">
+                            <Button size="sm" variant="outline" onClick={() => handleView(entry)} title="View" className="h-7 w-7 p-0 border-slate-200"><Eye size={12} /></Button>
+                            <Button size="sm" variant="outline" onClick={() => handleDeleteDateEntries(entry)} title="Delete" className="h-7 w-7 p-0 text-red-500 border-red-200 hover:bg-red-50"><Trash2 size={12} /></Button>
                           </div>
                         </td>
                       </tr>
@@ -551,8 +460,8 @@ export default function AdminWorkingHours({ user, onLogout }) {
             
             {/* Pagination Controls */}
             {pagination.totalPages > 1 && (
-              <div className="flex items-center justify-between px-6 py-4 border-t">
-                <div className="text-sm text-gray-600">
+              <div className="flex items-center justify-between px-4 py-3 border-t border-slate-200">
+                <div className="text-xs text-slate-400">
                   Showing page {pagination.page} of {pagination.totalPages} ({pagination.totalCount} total entries)
                 </div>
                 <div className="flex gap-2">
@@ -575,66 +484,48 @@ export default function AdminWorkingHours({ user, onLogout }) {
                 </div>
               </div>
             )}
-          </CardContent>
-        </Card>
+        </div>
 
         {/* View Details Dialog */}
         <Dialog open={viewDialogOpen} onOpenChange={setViewDialogOpen}>
           <DialogContent className="sm:max-w-xl lg:max-w-2xl">
             <DialogHeader>
-              <DialogTitle>Work Entry Details</DialogTitle>
+              <DialogTitle className="text-lg font-semibold text-slate-900">Work Entry Details</DialogTitle>
             </DialogHeader>
             {viewingEntry && (
               <div className="space-y-4">
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-sm">
-                  <div><strong>Employee:</strong> {viewingEntry.employee_name}</div>
-                  <div><strong>Employee ID:</strong> {viewingEntry.employee_id}</div>
-                  <div><strong>Date:</strong> {new Date(viewingEntry.date).toLocaleDateString()}</div>
-                  <div><strong>Total Hours:</strong> <span className="text-blue-600 font-bold">{viewingEntry.total_hours}h</span></div>
+                <div className="grid grid-cols-2 gap-3 p-4 bg-slate-50 rounded-xl border border-slate-100">
+                  <div><p className="text-xs text-slate-400 uppercase tracking-wider">Employee</p><p className="font-semibold text-sm text-slate-800">{viewingEntry.employee_name}</p></div>
+                  <div><p className="text-xs text-slate-400 uppercase tracking-wider">ID</p><p className="font-mono text-sm text-slate-600">{viewingEntry.employee_id}</p></div>
+                  <div><p className="text-xs text-slate-400 uppercase tracking-wider">Date</p><p className="text-sm text-slate-700">{new Date(viewingEntry.date).toLocaleDateString()}</p></div>
+                  <div><p className="text-xs text-slate-400 uppercase tracking-wider">Total</p><p className="text-lg font-bold text-blue-600">{viewingEntry.total_hours}h</p></div>
                 </div>
                 <div>
-                  <strong className="text-sm">Project Details:</strong>
-                  <div className="mt-2 space-y-2 sm:space-y-3">
+                  <h4 className="font-semibold text-sm text-slate-700 mb-2">Project Details</h4>
+                  <div className="space-y-2">
                     {viewingEntry.projects.map((proj, idx) => (
-                      <div key={idx} className="p-2.5 sm:p-3 bg-gray-50 rounded-lg border">
-                        <div className="flex flex-col sm:flex-row sm:justify-between sm:items-start gap-2 mb-2">
+                      <div key={idx} className={`p-3 rounded-lg border ${proj.is_compensation ? 'bg-emerald-50 border-emerald-200' : 'bg-slate-50 border-slate-100'}`}>
+                        <div className="flex justify-between items-start gap-2 mb-2">
                           <div>
-                            <div className="font-semibold text-sm">{proj.project_name}</div>
-                            <div className="text-xs text-gray-600">{proj.project_code}</div>
+                            <div className="flex items-center gap-2">
+                              <div className="font-semibold text-sm text-slate-800">{proj.project_name}</div>
+                              {proj.is_compensation && <span className="px-1.5 py-0.5 rounded-full bg-emerald-600 text-white text-[10px] font-bold">Compensation</span>}
+                            </div>
+                            <div className="text-xs text-slate-400 font-mono">{proj.project_code}</div>
                           </div>
-                          <div className="flex items-center gap-2">
-                            <div className="text-base sm:text-lg font-bold text-blue-600">{proj.hours}h</div>
-                            <Button 
-                              size="sm" 
-                              variant="outline"
-                              className="p-1.5"
-                              onClick={async () => {
-                                const entryId = await getWorkEntryId(viewingEntry.employee_id, proj.project_code, viewingEntry.date);
-                                if (entryId) {
-                                  openEditDialog({ id: entryId, date: viewingEntry.date }, proj);
-                                }
-                              }}
-                              title="Edit"
-                            >
-                              <Edit size={14} />
-                            </Button>
-                            <Button 
-                              size="sm" 
-                              variant="destructive"
-                              className="p-1.5"
-                              onClick={async () => {
-                                const entryId = await getWorkEntryId(viewingEntry.employee_id, proj.project_code, viewingEntry.date);
-                                if (entryId) handleDeleteEntry(entryId);
-                              }}
-                              title="Delete"
-                            >
-                              <Trash2 size={14} />
-                            </Button>
+                          <div className="flex items-center gap-1">
+                            <span className="text-lg font-bold text-blue-600">{proj.hours}h</span>
+                            <Button size="sm" variant="outline" className="h-7 w-7 p-0 border-slate-200"
+                              onClick={async () => { const entryId = await getWorkEntryId(viewingEntry.employee_id, proj.project_code, viewingEntry.date); if (entryId) openEditDialog({ id: entryId, date: viewingEntry.date }, proj); }}
+                              title="Edit"><Edit size={12} /></Button>
+                            <Button size="sm" variant="outline" className="h-7 w-7 p-0 text-red-500 border-red-200 hover:bg-red-50"
+                              onClick={async () => { const entryId = await getWorkEntryId(viewingEntry.employee_id, proj.project_code, viewingEntry.date); if (entryId) handleDeleteEntry(entryId); }}
+                              title="Delete"><Trash2 size={12} /></Button>
                           </div>
                         </div>
-                        <div className="text-xs sm:text-sm text-gray-700">
-                          <strong>Work Details:</strong>
-                          <div className="mt-1 whitespace-pre-wrap break-words" dangerouslySetInnerHTML={{ 
+                        <div className="text-xs text-slate-600">
+                          <strong className="text-slate-700">Details:</strong>
+                          <div className="mt-1 whitespace-pre-wrap break-words bg-white p-2 rounded border border-slate-100" dangerouslySetInnerHTML={{ 
                             __html: (proj.work_details || '').replace(/&nbsp;/g, ' ').replace(/\n/g, '<br/>') 
                           }} />
                         </div>
@@ -801,7 +692,7 @@ export default function AdminWorkingHours({ user, onLogout }) {
               </DialogTitle>
             </DialogHeader>
             <div className="py-4">
-              <p className="text-gray-700 mb-4 text-sm sm:text-base">
+              <p className="text-slate-700 mb-4 text-sm sm:text-base">
                 Are you sure you want to delete <strong>ALL working hours entries</strong>?
               </p>
               <p className="text-red-600 text-xs sm:text-sm bg-red-50 p-3 rounded">

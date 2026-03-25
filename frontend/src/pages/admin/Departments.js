@@ -4,10 +4,9 @@ import { api } from '../../utils/api';
 import { Button } from '../../components/ui/button';
 import { Input } from '../../components/ui/input';
 import { Label } from '../../components/ui/label';
-import { Card, CardHeader, CardTitle, CardContent } from '../../components/ui/card';
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '../../components/ui/dialog';
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from '../../components/ui/dialog';
 import { toast } from 'sonner';
-import { Plus, Edit, Trash2, Power, PowerOff } from 'lucide-react';
+import { Plus, Edit, Trash2, Power, PowerOff, Building2 } from 'lucide-react';
 
 export default function AdminDepartments({ user, onLogout }) {
   const [departments, setDepartments] = useState([]);
@@ -84,118 +83,145 @@ export default function AdminDepartments({ user, onLogout }) {
     setDialogOpen(true);
   };
 
+  const activeDepts = departments.filter(d => d.is_active).length;
+
   return (
     <Layout user={user} onLogout={onLogout}>
-      <div className="p-8" data-testid="departments-page">
-        <div className="flex justify-between items-center mb-8">
+      <div className="p-4 md:p-8 lg:p-10" data-testid="departments-page">
+        <div className="flex flex-col sm:flex-row sm:justify-between sm:items-center gap-4 mb-6">
           <div>
-            <h1 className="text-4xl font-bold text-gray-900 mb-2">Departments</h1>
-            <p className="text-gray-600">Manage company departments</p>
+            <h1 className="text-2xl md:text-3xl font-bold text-slate-900 tracking-tight">Departments</h1>
+            <p className="text-sm text-slate-500 mt-1">Manage company departments</p>
           </div>
-          <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
-            <DialogTrigger asChild>
-              <Button onClick={openNewDialog} className="bg-indigo-600 hover:bg-indigo-700" data-testid="add-department-button">
-                <Plus size={18} className="mr-2" />
-                Add Department
-              </Button>
-            </DialogTrigger>
-            <DialogContent data-testid="department-dialog">
-              <DialogHeader>
-                <DialogTitle>{editingDept ? 'Edit Department' : 'Add Department'}</DialogTitle>
-              </DialogHeader>
-              <form onSubmit={handleSubmit} className="space-y-4">
-                <div>
-                  <Label htmlFor="name">Department Name</Label>
-                  <Input
-                    id="name"
-                    value={formData.name}
-                    onChange={(e) => setFormData({ ...formData, name: e.target.value })}
-                    required
-                    data-testid="department-name-input"
-                  />
-                </div>
-                <div>
-                  <Label htmlFor="description">Description</Label>
-                  <Input
-                    id="description"
-                    value={formData.description}
-                    onChange={(e) => setFormData({ ...formData, description: e.target.value })}
-                    data-testid="department-description-input"
-                  />
-                </div>
-                <Button type="submit" className="w-full" data-testid="save-department-button">
-                  {editingDept ? 'Update' : 'Create'}
-                </Button>
-              </form>
-            </DialogContent>
-          </Dialog>
+          <Button onClick={openNewDialog} className="bg-slate-900 hover:bg-slate-800 text-xs" size="sm" data-testid="add-department-button">
+            <Plus size={14} className="mr-1" />
+            Add Department
+          </Button>
         </div>
 
-        <Card className="shadow-lg">
-          <CardContent className="p-0">
-            {loading ? (
-              <div className="p-8 text-center text-gray-500">Loading departments...</div>
-            ) : departments.length === 0 ? (
-              <div className="p-8 text-center text-gray-500">No departments found. Create one to get started.</div>
-            ) : (
-              <div className="table-container">
-                <table data-testid="departments-table">
-                  <thead>
-                    <tr>
-                      <th>Name</th>
-                      <th>Description</th>
-                      <th>Status</th>
-                      <th>Created At</th>
-                      <th>Actions</th>
+        {/* Stats */}
+        <div className="grid grid-cols-2 gap-4 mb-6">
+          <div className="bg-white border border-slate-200 rounded-xl p-5 shadow-sm">
+            <div className="flex items-center gap-3">
+              <div className="w-10 h-10 rounded-lg flex items-center justify-center bg-slate-100 text-slate-700"><Building2 size={20} /></div>
+              <div><p className="text-xs font-medium text-slate-500 uppercase tracking-wider">Total</p><p className="text-2xl font-bold text-slate-900">{departments.length}</p></div>
+            </div>
+          </div>
+          <div className="bg-white border border-slate-200 rounded-xl p-5 shadow-sm">
+            <div className="flex items-center gap-3">
+              <div className="w-10 h-10 rounded-lg flex items-center justify-center bg-green-50 text-green-600"><Power size={20} /></div>
+              <div><p className="text-xs font-medium text-slate-500 uppercase tracking-wider">Active</p><p className="text-2xl font-bold text-green-600">{activeDepts}</p></div>
+            </div>
+          </div>
+        </div>
+
+        {/* Departments Table */}
+        <div className="bg-white border border-slate-200 rounded-xl shadow-sm overflow-hidden">
+          <div className="flex items-center justify-between p-4 border-b border-slate-200">
+            <h3 className="text-sm font-semibold text-slate-700">All Departments</h3>
+          </div>
+          {loading ? (
+            <div className="p-8 text-center text-slate-400 text-sm">Loading departments...</div>
+          ) : departments.length === 0 ? (
+            <div className="p-12 text-center">
+              <Building2 size={36} className="mx-auto mb-3 text-slate-300" />
+              <p className="text-sm text-slate-400">No departments found</p>
+              <p className="text-xs text-slate-300 mt-1">Create one to get started</p>
+            </div>
+          ) : (
+            <div className="overflow-x-auto">
+              <table className="w-full" data-testid="departments-table">
+                <thead>
+                  <tr className="border-b border-slate-200 bg-slate-50/50">
+                    <th className="text-left text-xs font-semibold text-slate-500 uppercase tracking-wider py-3 px-4">Name</th>
+                    <th className="text-left text-xs font-semibold text-slate-500 uppercase tracking-wider py-3 px-4">Description</th>
+                    <th className="text-left text-xs font-semibold text-slate-500 uppercase tracking-wider py-3 px-4">Status</th>
+                    <th className="text-left text-xs font-semibold text-slate-500 uppercase tracking-wider py-3 px-4">Created At</th>
+                    <th className="text-left text-xs font-semibold text-slate-500 uppercase tracking-wider py-3 px-4">Actions</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {departments.map((dept) => (
+                    <tr key={dept.id} className="border-b border-slate-100 last:border-0 hover:bg-slate-50/80 transition-colors" data-testid={`department-row-${dept.id}`}>
+                      <td className="py-3 px-4 font-medium text-sm text-slate-800">{dept.name}</td>
+                      <td className="py-3 px-4 text-sm text-slate-500">{dept.description || '-'}</td>
+                      <td className="py-3 px-4">
+                        <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium border ${dept.is_active ? 'bg-green-100 text-green-700 border-green-200' : 'bg-red-100 text-red-700 border-red-200'}`}>
+                          {dept.is_active ? 'Active' : 'Inactive'}
+                        </span>
+                      </td>
+                      <td className="py-3 px-4 text-sm text-slate-500">{new Date(dept.created_at).toLocaleDateString()}</td>
+                      <td className="py-3 px-4">
+                        <div className="flex gap-1">
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            onClick={() => handleEdit(dept)}
+                            className="h-7 w-7 p-0 border-slate-200"
+                            data-testid={`edit-department-${dept.id}`}
+                          >
+                            <Edit size={12} />
+                          </Button>
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            onClick={() => handleToggleStatus(dept)}
+                            className={`h-7 w-7 p-0 border-slate-200 ${dept.is_active ? 'text-amber-500' : 'text-green-500'}`}
+                            data-testid={`toggle-department-${dept.id}`}
+                          >
+                            {dept.is_active ? <PowerOff size={12} /> : <Power size={12} />}
+                          </Button>
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            onClick={() => handleDelete(dept.id)}
+                            className="h-7 w-7 p-0 text-red-500 border-red-200 hover:bg-red-50"
+                            data-testid={`delete-department-${dept.id}`}
+                          >
+                            <Trash2 size={12} />
+                          </Button>
+                        </div>
+                      </td>
                     </tr>
-                  </thead>
-                  <tbody>
-                    {departments.map((dept) => (
-                      <tr key={dept.id} data-testid={`department-row-${dept.id}`}>
-                        <td className="font-semibold">{dept.name}</td>
-                        <td>{dept.description || '-'}</td>
-                        <td>
-                          <span className={`badge ${dept.is_active ? 'badge-success' : 'badge-danger'}`}>
-                            {dept.is_active ? 'Active' : 'Inactive'}
-                          </span>
-                        </td>
-                        <td>{new Date(dept.created_at).toLocaleDateString()}</td>
-                        <td>
-                          <div className="flex gap-2">
-                            <Button
-                              size="sm"
-                              variant="outline"
-                              onClick={() => handleEdit(dept)}
-                              data-testid={`edit-department-${dept.id}`}
-                            >
-                              <Edit size={16} />
-                            </Button>
-                            <Button
-                              size="sm"
-                              variant="outline"
-                              onClick={() => handleToggleStatus(dept)}
-                              data-testid={`toggle-department-${dept.id}`}
-                            >
-                              {dept.is_active ? <PowerOff size={16} /> : <Power size={16} />}
-                            </Button>
-                            <Button
-                              size="sm"
-                              variant="destructive"
-                              onClick={() => handleDelete(dept.id)}
-                              data-testid={`delete-department-${dept.id}`}
-                            >
-                              <Trash2 size={16} />
-                            </Button>
-                          </div>
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </div>
+
+        {/* Add/Edit Department Dialog */}
+        <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
+          <DialogContent data-testid="department-dialog">
+            <DialogHeader>
+              <DialogTitle className="text-lg font-semibold text-slate-900">{editingDept ? 'Edit Department' : 'Add Department'}</DialogTitle>
+            </DialogHeader>
+            <form onSubmit={handleSubmit} className="space-y-4">
+              <div>
+                <Label htmlFor="name">Department Name</Label>
+                <Input
+                  id="name"
+                  value={formData.name}
+                  onChange={(e) => setFormData({ ...formData, name: e.target.value })}
+                  required
+                  data-testid="department-name-input"
+                />
               </div>
-            )}
-          </CardContent>
-        </Card>
+              <div>
+                <Label htmlFor="description">Description</Label>
+                <Input
+                  id="description"
+                  value={formData.description}
+                  onChange={(e) => setFormData({ ...formData, description: e.target.value })}
+                  data-testid="department-description-input"
+                />
+              </div>
+              <Button type="submit" className="w-full bg-slate-900 hover:bg-slate-800" data-testid="save-department-button">
+                {editingDept ? 'Update' : 'Create'}
+              </Button>
+            </form>
+          </DialogContent>
+        </Dialog>
       </div>
     </Layout>
   );
