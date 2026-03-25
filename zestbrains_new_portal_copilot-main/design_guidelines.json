@@ -1,0 +1,141 @@
+{
+  "design_system": {
+    "typography": {
+      "font_family": {
+        "headings": "Manrope, sans-serif",
+        "body": "Inter, sans-serif",
+        "mono": "JetBrains Mono, monospace"
+      },
+      "scale": {
+        "h1": "text-3xl md:text-4xl font-bold tracking-tight",
+        "h2": "text-2xl md:text-3xl font-semibold tracking-tight",
+        "h3": "text-xl md:text-2xl font-semibold",
+        "body": "text-sm md:text-base leading-relaxed",
+        "small": "text-xs font-medium text-muted-foreground"
+      }
+    },
+    "colors": {
+      "palette": {
+        "primary": {
+          "DEFAULT": "hsl(222.2 47.4% 11.2%)",
+          "foreground": "hsl(210 40% 98%)",
+          "description": "Deep Navy for trust and authority"
+        },
+        "secondary": {
+          "DEFAULT": "hsl(210 40% 96.1%)",
+          "foreground": "hsl(222.2 47.4% 11.2%)",
+          "description": "Soft Gray for backgrounds and secondary actions"
+        },
+        "accent": {
+          "DEFAULT": "hsl(24.6 95% 53.1%)",
+          "foreground": "hsl(210 40% 98%)",
+          "description": "Zest Orange for CTAs and highlights"
+        },
+        "background": "hsl(0 0% 100%)",
+        "foreground": "hsl(222.2 84% 4.9%)",
+        "muted": "hsl(210 40% 96.1%)",
+        "muted_foreground": "hsl(215.4 16.3% 46.9%)",
+        "border": "hsl(214.3 31.8% 91.4%)"
+      },
+      "usage": {
+        "dashboard_bg": "bg-slate-50/50",
+        "card_bg": "bg-white",
+        "sidebar_bg": "bg-slate-900 text-slate-50"
+      }
+    },
+    "spacing": {
+      "container": "container mx-auto px-4 md:px-6 lg:px-8",
+      "section": "py-8 md:py-12",
+      "card_padding": "p-4 md:p-6"
+    },
+    "shadows": {
+      "card": "shadow-sm hover:shadow-md transition-shadow duration-200",
+      "dropdown": "shadow-lg border border-border/50"
+    },
+    "border_radius": {
+      "card": "rounded-xl",
+      "button": "rounded-md",
+      "input": "rounded-md"
+    }
+  },
+  "layout_strategies": {
+    "dashboard_structure": {
+      "mobile": "Vertical stack. Header with Hamburger Menu -> Drawer Navigation. Content below.",
+      "desktop": "Fixed Sidebar (w-64) on left. Header + Content on right. Grid layout for widgets.",
+      "grid_responsive": "grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 md:gap-6"
+    },
+    "responsive_tables": {
+      "strategy": "Card Transformation",
+      "mobile_implementation": "Hidden <table> on mobile. Use grid of Cards for rows. Each card displays 'Label: Value' pairs.",
+      "desktop_implementation": "Standard Shadcn Table component.",
+      "classes": "hidden md:table (for table), block md:hidden (for card view)"
+    },
+    "navigation": {
+      "mobile": "Sheet (Drawer) component from Shadcn. Triggered by Menu icon in top header.",
+      "desktop": "Sidebar component. Fixed position or sticky."
+    },
+    "forms": {
+      "mobile": "Dialogs/Modals take full screen (w-full h-full max-w-none rounded-none). Inputs stack vertically.",
+      "desktop": "Dialogs are centered with max-width (sm:max-w-[425px])."
+    }
+  },
+  "components": {
+    "buttons": {
+      "primary": "bg-primary text-primary-foreground hover:bg-primary/90 shadow-sm",
+      "secondary": "bg-secondary text-secondary-foreground hover:bg-secondary/80",
+      "ghost": "hover:bg-accent hover:text-accent-foreground",
+      "destructive": "bg-destructive text-destructive-foreground hover:bg-destructive/90"
+    },
+    "cards": {
+      "base": "bg-card text-card-foreground rounded-xl border shadow-sm",
+      "stat_card": "p-6 flex flex-row items-center justify-between space-y-0 pb-2"
+    },
+    "charts": {
+      "library": "recharts",
+      "wrapper": "h-[300px] w-full",
+      "responsive": "ResponsiveContainer width='100%' height='100%'"
+    }
+  },
+  "assets": {
+    "icons": "lucide-react",
+    "images": {
+      "login_bg": "https://images.unsplash.com/photo-1760611656007-f767a8082758?crop=entropy&cs=srgb&fm=jpg&ixid=M3w3NDk1ODB8MHwxfHNlYXJjaHwxfHxtb2Rlcm4lMjBvZmZpY2UlMjB0ZWFtJTIwbWVldGluZ3xlbnwwfHx8fDE3NzIwMDU0MTd8MA&ixlib=rb-4.1.0&q=85",
+      "avatars": [
+        "https://images.unsplash.com/photo-1576558656222-ba66febe3dec?crop=entropy&cs=srgb&fm=jpg&ixid=M3w3NDk1ODF8MHwxfHNlYXJjaHwxfHxwcm9mZXNzaW9uYWwlMjBoZWFkc2hvdCUyMHBvcnRyYWl0fGVufDB8fHx8MTc3MTkxMjg2MHww&ixlib=rb-4.1.0&q=85",
+        "https://images.unsplash.com/photo-1762522926157-bcc04bf0b10a?crop=entropy&cs=srgb&fm=jpg&ixid=M3w3NDk1ODF8MHwxfHNlYXJjaHw0fHxwcm9mZXNzaW9uYWwlMjBoZWFkc2hvdCUyMHBvcnRyYWl0fGVufDB8fHx8MTc3MTkxMjg2MHww&ixlib=rb-4.1.0&q=85",
+        "https://images.unsplash.com/photo-1562228802-4b1052d0f845?crop=entropy&cs=srgb&fm=jpg&ixid=M3w3NDk1ODF8MHwxfHNlYXJjaHwyfHxwcm9mZXNzaW9uYWwlMjBoZWFkc2hvdCUyMHBvcnRyYWl0fGVufDB8fHx8MTc3MTkxMjg2MHww&ixlib=rb-4.1.0&q=85"
+      ],
+      "logo_placeholder": "https://via.placeholder.com/150x50?text=Zestbrains"
+    }
+  },
+  "instructions_to_main_agent": [
+    "1. REFRAIN from using 'Inter' for headings. Use 'Manrope' via Google Fonts or similar.",
+    "2. IMPLEMENT the 'Card Transformation' pattern for all tables on mobile. Do not just use 'overflow-x-auto'.",
+    "3. ENSURE the Sidebar is hidden on mobile and accessible via a Hamburger menu (Sheet component).",
+    "4. USE the 'Zest Orange' (hsl(24.6 95% 53.1%)) sparingly for primary actions and active states to maintain professionalism.",
+    "5. UPDATE tailwind.config.js with the new color palette.",
+    "6. REFACTOR App.css styles into Tailwind classes where possible to ensure consistency.",
+    "7. ADD 'data-testid' to all interactive elements.",
+    "8. ENSURE all charts are wrapped in a responsive container that adapts to mobile width."
+  ],
+  "UNIVERSAL_GUIDELINES_FOR_MAIN_AGENT": [
+    "Dark colors look good when used independently without gradients. DO NOT use dark colors as gradients",
+    "Don't make generic centered layouts, simplistic gradients, and uniform styling.",
+    "Create depth through layered design elements with z-index hierarchy",
+    "Use glass-morphism effects with backdrop filters (12-24px blur)",
+    "You MUST NOT apply universal transition. Eg: transition: all. This results in breaking transforms. Always add transitions for specific interactive elements like button, input excluding transforms",
+    "You MUST NOT center align the app container, ie do not add .App { text-align: center; } in the css file. This disrupts the human natural reading flow of text",
+    "Always use modern button styles like pill-shaped, or sharp button with interaction animations & color relevant to the app style",
+    "NEVER: use AI assistant Emoji characters like 🤖🧠💭💡🔮🎯📚🎭🎬🎪🎉🎊🎁🎀🎂🍰🎈🎨🎰💰💵💳🏦💎🪙💸🤑📊📈📉💹🔢🏆🥇 etc for icons.",
+    "Every interaction needs micro-animations - hover states, transitions, parallax effects, and entrance animations. Static = dead.",
+    "Use 2-3x more spacing than feels comfortable. Cramped designs look cheap.",
+    "Subtle grain textures, noise overlays, custom cursors, selection states, and loading animations: separates good from extraordinary.",
+    "Main agent relies on these image URLs. Missing categories (especially sponsor logos) = main agent will use placeholder text which is FORBIDDEN",
+    "Prioritize using pre-existing components from src/components/ui when applicable",
+    "Create new components that match the style and conventions of existing components when needed",
+    "Examine existing components to understand the project's component patterns before creating new ones",
+    "Components MUST use named exports (export const ComponentName = ...)",
+    "Pages MUST use default exports (export default function PageName() {...})",
+    "Use 'sonner' for toasts. Sonner component are located in /app/src/components/ui/sonner.tsx"
+  ]
+}

@@ -1,0 +1,32 @@
+[
+  {
+    "_id": "69944a54a752b822248166a0",
+    "id": "5de392e8-3a42-4e85-ac7d-0d175436a174",
+    "employee_id": "1",
+    "encash_month": "March 2026",
+    "pl_encashed": 16,
+    "processed_by": "admin",
+    "processed_date": "2026-02-17T11:00:36.639995+00:00",
+    "created_at": "2026-02-17T11:00:36.639995+00:00"
+  },
+  {
+    "_id": "699460c7d606c00df3eef4ec",
+    "id": "fe4cd17c-ff34-47ce-bc09-9c14a0a67b3e",
+    "employee_id": "EMP202",
+    "encash_month": "January 2024",
+    "pl_encashed": 6.0,
+    "processed_by": "admin",
+    "processed_date": "2026-02-17T12:36:23.935503+00:00",
+    "created_at": "2026-02-17T12:36:23.935503+00:00"
+  },
+  {
+    "_id": "69946961d606c00df3eef510",
+    "id": "1d8b0707-b238-401c-880d-999e405d260c",
+    "employee_id": "EMP203",
+    "encash_month": "April 2023",
+    "pl_encashed": 6.0,
+    "processed_by": "admin",
+    "processed_date": "2026-02-17T13:13:05.880956+00:00",
+    "created_at": "2026-02-17T13:13:05.880956+00:00"
+  }
+]

@@ -1,0 +1,1 @@
+{"indexes":[{"v":{"$numberInt":"2"},"key":{"_id":{"$numberInt":"1"}},"name":"_id_"}],"uuid":"f2d05765e1f442339bc3e6fcfc93ae59","collectionName":"leave_records","type":"collection"}

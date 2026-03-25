@@ -1,0 +1,66 @@
+[
+  {
+    "_id": "69a1729ea59dfb604ebfb8aa",
+    "id": "235b46a6-8608-48c8-b860-e569a98d72db",
+    "name": "Makarsankranti",
+    "date": "2026-01-14",
+    "description": "",
+    "created_at": "2026-02-27T16:01:58.869835+05:30"
+  },
+  {
+    "_id": "69a172b4a59dfb604ebfb8ab",
+    "id": "7e7489ed-af06-4f48-be76-61e320c61fa9",
+    "name": "Republic Day",
+    "date": "2026-01-26",
+    "description": "",
+    "created_at": "2026-02-27T16:02:20.031373+05:30"
+  },
+  {
+    "_id": "69a172c3a59dfb604ebfb8ac",
+    "id": "ed1efdad-8d60-420f-b317-8f68fadae4fe",
+    "name": "Holi/Dhuleti",
+    "date": "2026-03-04",
+    "description": "",
+    "created_at": "2026-02-27T16:02:35.887270+05:30"
+  },
+  {
+    "_id": "69a172d3a59dfb604ebfb8ad",
+    "id": "b3263f90-2178-442e-a9e7-1e403b6df862",
+    "name": "Independence Day",
+    "date": "2026-08-15",
+    "description": "",
+    "created_at": "2026-02-27T16:02:51.828736+05:30"
+  },
+  {
+    "_id": "69a172dfa59dfb604ebfb8ae",
+    "id": "8499d9ea-46f9-4ae5-9d81-5bf1fb0bab52",
+    "name": "Raksha Bandhan",
+    "date": "2026-08-28",
+    "description": "",
+    "created_at": "2026-02-27T16:03:03.924366+05:30"
+  },
+  {
+    "_id": "69a172eaa59dfb604ebfb8af",
+    "id": "e865d0d3-b4b0-4254-8949-a0011dbce714",
+    "name": "Diwali",
+    "date": "2026-11-05",
+    "description": "",
+    "created_at": "2026-02-27T16:03:14.738018+05:30"
+  },
+  {
+    "_id": "69a172f8a59dfb604ebfb8b0",
+    "id": "792f2827-1a0e-446a-9987-adec503123d6",
+    "name": "New Year",
+    "date": "2026-11-06",
+    "description": "",
+    "created_at": "2026-02-27T16:03:28.922881+05:30"
+  },
+  {
+    "_id": "69a17325a59dfb604ebfb8b1",
+    "id": "66dee13b-b1f1-48cc-bf0d-6cbf0a47197f",
+    "name": "Bhai Dooj",
+    "date": "2026-11-07",
+    "description": "",
+    "created_at": "2026-02-27T16:04:13.543981+05:30"
+  }
+]

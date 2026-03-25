@@ -1,0 +1,26 @@
+[
+  {
+    "_id": "69aaaa45c27d7d342441408f",
+    "id": "314716ee-7ac3-43e5-ac89-ae75ad4811e7",
+    "name": "Zestbrains HDFC",
+    "is_active": true,
+    "created_at": "2026-03-06T15:49:49.583734+05:30",
+    "updated_at": "2026-03-06T15:54:00.232113+05:30"
+  },
+  {
+    "_id": "69aaaa51c27d7d3424414091",
+    "id": "e10d3fd6-bb70-425c-8d5a-b4d487279ccb",
+    "name": "Zestbrains ICICI",
+    "is_active": true,
+    "created_at": "2026-03-06T15:50:01.095813+05:30",
+    "updated_at": "2026-03-06T15:53:51.881344+05:30"
+  },
+  {
+    "_id": "69aaaab6c27d7d3424414092",
+    "id": "47a4282c-d22c-4690-8ebd-db927cda214d",
+    "name": "Hexeros yes bank",
+    "is_active": true,
+    "created_at": "2026-03-06T15:51:42.024825+05:30",
+    "updated_at": "2026-03-06T15:51:42.024835+05:30"
+  }
+]
