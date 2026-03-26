@@ -2618,12 +2618,24 @@ async def admin_edit_leave_application(leave_id: str, leave_update: AdminLeaveAp
         # Add/update records for new dates if approved
         if new_status == "approved":
             for ld in new_leave_dates:
-                if ld.get("leave_type", "").lower() != "rejected":
+                lt = ld.get("leave_type", "")
+                if lt.lower() != "rejected":
+                    # Calculate leave_days based on leave type
+                    if "Half" in lt or "/2" in lt:
+                        leave_days = 0.5
+                    else:
+                        leave_days = 1.0
+                    
+                    # Determine if PL or CL for the record type
+                    record_type = "PL" if "PL" in lt else "CL"
+                    
                     await db.leave_records.update_one(
                         {"employee_id": employee_id, "date": ld["date"]},
                         {"$set": {
-                            "leave_type": ld["leave_type"],
+                            "leave_type": record_type,
+                            "leave_days": leave_days,
                             "application_id": leave_id,
+                            "status": "Taken",
                             "updated_at": get_ist_now_iso()
                         }},
                         upsert=True
@@ -3604,8 +3616,8 @@ async def get_leave_tracker(
                 logging.warning(f"Invalid date in leave record {r.get('id')}: {r.get('date')} - {e}")
                 continue
         
-        pl_taken = sum(r["leave_days"] for r in current_year_leaves if r["leave_type"] == "PL")
-        cl_taken = sum(r["leave_days"] for r in current_year_leaves if r["leave_type"] == "CL")
+        pl_taken = sum(r.get("leave_days", 1.0) for r in current_year_leaves if r.get("leave_type") == "PL")
+        cl_taken = sum(r.get("leave_days", 1.0) for r in current_year_leaves if r.get("leave_type") == "CL")
         available_pl = 16 - pl_taken
         
         tracker.append({
