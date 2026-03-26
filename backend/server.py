@@ -3727,6 +3727,9 @@ async def get_admin_dashboard_analytics(user: dict = Depends(require_role(["admi
     employees = await db.employees.find({}, {"_id": 0}).to_list(1000)
     emp_map = {emp["employee_id"]: emp["name"] for emp in employees}
     
+    # Get only active employees for performance tracking
+    active_employees = {emp["employee_id"] for emp in employees if emp.get("status") == "active"}
+    
     # Employee-wise project analysis - track ALL assigned employees even if not in our system
     employee_performance = defaultdict(lambda: {
         "name": "",
@@ -3758,12 +3761,14 @@ async def get_admin_dashboard_analytics(user: dict = Depends(require_role(["admi
             else:
                 employee_performance[emp_id]["ongoing"] += 1
     
-    # Top performers (least late) and Low performers (most late)
+    # Top performers (least late) and Low performers (most late) - ONLY ACTIVE EMPLOYEES
     performance_list = list(employee_performance.values())
-    performance_list.sort(key=lambda x: (-x["completed_on_time"], x["completed_late"]))
+    # Filter to only include active employees
+    active_performance_list = [p for p in performance_list if p["employee_id"] in active_employees]
+    active_performance_list.sort(key=lambda x: (-x["completed_on_time"], x["completed_late"]))
     
-    top_performers = [p for p in performance_list if p["total_assigned"] > 0][:5]
-    low_performers = sorted([p for p in performance_list if p["completed_late"] > 0], 
+    top_performers = [p for p in active_performance_list if p["total_assigned"] > 0][:5]
+    low_performers = sorted([p for p in active_performance_list if p["completed_late"] > 0], 
                            key=lambda x: x["completed_late"], reverse=True)[:5]
     
     # Monthly project completion trends (last 6 months)
@@ -3831,8 +3836,9 @@ async def get_admin_dashboard_analytics(user: dict = Depends(require_role(["admi
         "late_by_employee": [
             {"employee_id": k, "name": v["name"], "count": v["count"], "projects": v["projects"][:3]}
             for k, v in sorted(late_by_employee.items(), key=lambda x: x[1]["count"], reverse=True)
+            if k in active_employees  # Only include active employees
         ][:10],
-        "employee_performance": performance_list,
+        "employee_performance": active_performance_list,  # Only active employees
         "top_performers": top_performers,
         "low_performers": low_performers,
         "monthly_trends": monthly_trends
