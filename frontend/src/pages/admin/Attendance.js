@@ -112,6 +112,7 @@ export default function Attendance({ user, onLogout }) {
       'OT/2': 'bg-indigo-50 text-indigo-600 border-indigo-200',
       'WO': 'bg-slate-100 text-slate-500 border-slate-200',
       'H': 'bg-violet-100 text-violet-700 border-violet-200',
+      'NJ': 'bg-gray-200 text-gray-400 border-gray-300',
     };
     return colors[status] || 'bg-white text-slate-600 border-slate-200';
   };
@@ -128,6 +129,7 @@ export default function Attendance({ user, onLogout }) {
       case 'OT/2': return 'Half Overtime';
       case 'WO': return 'Week Off';
       case 'H': return 'Holiday';
+      case 'NJ': return 'Not Joined';
       default: return status;
     }
   };

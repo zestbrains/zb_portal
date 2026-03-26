@@ -4272,12 +4272,29 @@ async def get_attendance(year: int, month: int, user: dict = Depends(require_rol
         emp_id = emp["employee_id"]
         attendance[emp_id] = {}
         
+        # Get employee's joining date to check if they had joined yet
+        joining_date_str = emp.get("joining_date", "")
+        emp_joining_date = None
+        if joining_date_str:
+            try:
+                emp_joining_date = datetime.fromisoformat(joining_date_str.replace('Z', '+00:00'))
+                if emp_joining_date.tzinfo is not None:
+                    emp_joining_date = emp_joining_date.replace(tzinfo=None)
+            except:
+                emp_joining_date = None
+        
         for day in dates:
             date_str = f"{year}-{month:02d}-{day:02d}"
-            day_of_week = datetime(year, month, day).weekday()
+            current_date = datetime(year, month, day)
+            day_of_week = current_date.weekday()
             
             is_holiday = date_str in holiday_dates
             is_weekend = day_of_week >= 5
+            
+            # Check if employee had joined by this date
+            is_before_joining = False
+            if emp_joining_date and current_date < emp_joining_date:
+                is_before_joining = True
             
             # Check for future dates
             is_future_date = False
@@ -4286,8 +4303,11 @@ async def get_attendance(year: int, month: int, user: dict = Depends(require_rol
             elif is_future_month:
                 is_future_date = True
             
+            # If date is before employee's joining date, mark as "NJ" (Not Joined)
+            if is_before_joining:
+                attendance[emp_id][day] = "NJ"
             # Check if employee has leave on this date
-            if emp_id in leave_map and date_str in leave_map[emp_id]:
+            elif emp_id in leave_map and date_str in leave_map[emp_id]:
                 attendance[emp_id][day] = leave_map[emp_id][date_str]
             elif (is_weekend or is_holiday) and not is_future_date:
                 # Check if employee worked (OT)
@@ -4517,6 +4537,28 @@ async def get_salary(year: int, month: int, user: dict = Depends(require_role(["
         esic_str = emp.get("esic", "") or ""
         epf_str = emp.get("epf", "") or ""
         cpf_str = emp.get("cpf", "") or ""
+        
+        # Get employee's joining date for pro-rata calculation
+        joining_date_str = emp.get("joining_date", "")
+        emp_joining_date = None
+        joining_day = 1  # Default to 1st of month if no joining date
+        not_joined_days = 0  # Days before joining date
+        
+        if joining_date_str:
+            try:
+                emp_joining_date = datetime.fromisoformat(joining_date_str.replace('Z', '+00:00'))
+                if emp_joining_date.tzinfo is not None:
+                    emp_joining_date = emp_joining_date.replace(tzinfo=None)
+                
+                # Check if employee joined in this month
+                if emp_joining_date.year == year and emp_joining_date.month == month:
+                    joining_day = emp_joining_date.day
+                    not_joined_days = joining_day - 1  # Days before joining
+                elif emp_joining_date.year > year or (emp_joining_date.year == year and emp_joining_date.month > month):
+                    # Employee hasn't joined yet in this month
+                    not_joined_days = num_days
+            except:
+                pass
 
         try:
             salary = float(salary_str) if salary_str else 0
@@ -4550,15 +4592,26 @@ async def get_salary(year: int, month: int, user: dict = Depends(require_role(["
         day_types = []  # (day_num, date_str, status)
         for day in range(1, num_days + 1):
             date_str = f"{year}-{month:02d}-{day:02d}"
-            day_of_week = datetime(year, month, day).weekday()
+            current_date = datetime(year, month, day)
+            day_of_week = current_date.weekday()
             is_holiday = date_str in holiday_dates
             is_weekend = day_of_week >= 5
+            
+            # Check if day is before employee's joining date
+            is_before_joining = False
+            if emp_joining_date and current_date < emp_joining_date:
+                is_before_joining = True
 
             is_future_date = False
             if is_current_month:
                 is_future_date = day > today.day
             elif is_future_month:
                 is_future_date = True
+            
+            # Skip days before joining - mark as 'notjoined'
+            if is_before_joining:
+                day_types.append((day, date_str, 'notjoined'))
+                continue
 
             # Check leave FIRST - approved leaves for future dates still count
             if emp_id in leave_map and date_str in leave_map[emp_id]:
@@ -4630,9 +4683,10 @@ async def get_salary(year: int, month: int, user: dict = Depends(require_role(["
         ot_amount = round(per_day * ot_count, 2)
         sandwich_amount = round(per_day * sandwich_count, 2)
         late_coming_amount = round(per_day * late_coming_deduction_days, 2)
+        not_joined_amount = round(per_day * not_joined_days, 2)  # Deduction for days before joining
         per_hour = (per_day / 8.5) if per_day > 0 else 0
         extra_hours_amount = round(per_hour * extra_hours, 2)
-        gross_salary = round(salary - pt - esic - epf - cpf - cl_amount - sandwich_amount - late_coming_amount + ot_amount + other_income + extra_hours_amount, 2)
+        gross_salary = round(salary - pt - esic - epf - cpf - cl_amount - sandwich_amount - late_coming_amount - not_joined_amount + ot_amount + other_income + extra_hours_amount, 2)
 
         # Till Date Salary: what to pay if employee leaves today
         if is_current_month:
@@ -4647,6 +4701,7 @@ async def get_salary(year: int, month: int, user: dict = Depends(require_role(["
         salary_data.append({
             "employee_id": emp_id,
             "employee_name": emp.get("name", "Unknown"),
+            "joining_date": emp.get("joining_date", ""),
             "bank_id": emp.get("bank_id", ""),
             "bank_name": banks_map.get(emp.get("bank_id", ""), "No Bank"),
             "salary": salary,
@@ -4663,6 +4718,8 @@ async def get_salary(year: int, month: int, user: dict = Depends(require_role(["
             "late_coming_count": late_coming_count,
             "late_coming_deduction_days": late_coming_deduction_days,
             "late_coming_amount": late_coming_amount,
+            "not_joined_days": not_joined_days,
+            "not_joined_amount": not_joined_amount,
             "other_income": other_income,
             "extra_hours": extra_hours,
             "extra_hours_amount": extra_hours_amount,

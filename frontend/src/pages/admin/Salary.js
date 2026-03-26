@@ -132,7 +132,8 @@ export default function Salary({ user, onLogout }) {
     const perHour = perDay / 8.5;
     const ehAmt = Math.round(perHour * eh * 100) / 100;
     const lateDeduction = emp.late_coming_amount || 0;
-    const gross = Math.round((emp.salary - emp.pt - emp.esic - emp.epf - emp.cpf - emp.cl_amount - (emp.sandwich_amount || 0) - lateDeduction + emp.ot_amount + oi + ehAmt) * 100) / 100;
+    const notJoinedDeduction = emp.not_joined_amount || 0;
+    const gross = Math.round((emp.salary - emp.pt - emp.esic - emp.epf - emp.cpf - emp.cl_amount - (emp.sandwich_amount || 0) - lateDeduction - notJoinedDeduction + emp.ot_amount + oi + ehAmt) * 100) / 100;
     return { oi, eh, ehAmt, gross };
   };
 
@@ -284,6 +285,7 @@ export default function Salary({ user, onLogout }) {
                           <th className="text-right text-[10px] font-semibold text-slate-500 uppercase tracking-wider py-3 px-2">CLs Amt</th>
                           <th className="text-right text-[10px] font-semibold text-slate-500 uppercase tracking-wider py-3 px-2">Sandwich</th>
                           <th className="text-right text-[10px] font-semibold text-slate-500 uppercase tracking-wider py-3 px-2">Late</th>
+                          <th className="text-right text-[10px] font-semibold text-slate-500 uppercase tracking-wider py-3 px-2">Not Joined</th>
                           <th className="text-right text-[10px] font-semibold text-slate-500 uppercase tracking-wider py-3 px-2">OT Amt</th>
                           <th className="text-center text-[10px] font-semibold text-slate-500 uppercase tracking-wider py-3 px-2">Other Inc</th>
                           <th className="text-center text-[10px] font-semibold text-slate-500 uppercase tracking-wider py-3 px-2">Extra Hrs</th>
@@ -341,6 +343,10 @@ export default function Salary({ user, onLogout }) {
                                 {(emp.late_coming_count || 0) > 0 && <div className="text-[10px] text-orange-400">{emp.late_coming_count} late{emp.late_coming_deduction_days > 0 ? ` (-${emp.late_coming_deduction_days}d)` : ''}</div>}
                               </td>
                               <td className="py-2 px-2 text-right text-xs">
+                                <div className={(emp.not_joined_amount || 0) > 0 ? 'text-purple-600' : 'text-slate-400'}>{(emp.not_joined_amount || 0) > 0 ? `-${fmt(emp.not_joined_amount)}` : '0'}</div>
+                                {(emp.not_joined_days || 0) > 0 && <div className="text-[10px] text-purple-400">{emp.not_joined_days}d</div>}
+                              </td>
+                              <td className="py-2 px-2 text-right text-xs">
                                 <div className={emp.ot_amount > 0 ? 'text-green-600' : 'text-slate-400'}>{emp.ot_amount > 0 ? `+${fmt(emp.ot_amount)}` : '0'}</div>
                                 {emp.ot_count > 0 && <div className="text-[10px] text-slate-400">{emp.ot_count}d</div>}
                               </td>
@@ -382,6 +388,7 @@ export default function Salary({ user, onLogout }) {
                           <td className="py-3 px-2 text-right text-xs font-bold text-red-600">-{fmt(bankEmployees.reduce((s, e) => s + e.cl_amount, 0))}</td>
                           <td className="py-3 px-2 text-right text-xs font-bold text-orange-600">-{fmt(bankEmployees.reduce((s, e) => s + (e.sandwich_amount || 0), 0))}</td>
                           <td className="py-3 px-2 text-right text-xs font-bold text-orange-600">-{fmt(bankEmployees.reduce((s, e) => s + (e.late_coming_amount || 0), 0))}</td>
+                          <td className="py-3 px-2 text-right text-xs font-bold text-purple-600">-{fmt(bankEmployees.reduce((s, e) => s + (e.not_joined_amount || 0), 0))}</td>
                           <td className="py-3 px-2 text-right text-xs font-bold text-green-600">+{fmt(bankEmployees.reduce((s, e) => s + e.ot_amount, 0))}</td>
                           <td className="py-3 px-2 text-right text-xs font-bold text-green-600">+{fmt(bankEmployees.reduce((s, e) => s + computeLocal(e).oi, 0))}</td>
                           <td className="py-3 px-2"></td>
