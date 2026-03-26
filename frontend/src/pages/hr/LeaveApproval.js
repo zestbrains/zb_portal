@@ -168,6 +168,21 @@ export default function HRLeaveApproval({ user, onLogout }) {
     setEditLeaveDates(updated);
   };
 
+  const handleRemoveEditDate = (index) => {
+    const updated = editLeaveDates.filter((_, i) => i !== index);
+    setEditLeaveDates(updated);
+    
+    // Update from_date and to_date based on remaining dates
+    if (updated.length > 0) {
+      const sortedDates = updated.map(d => d.date).sort();
+      setEditFormData(prev => ({
+        ...prev,
+        from_date: sortedDates[0],
+        to_date: sortedDates[sortedDates.length - 1]
+      }));
+    }
+  };
+
   const handleRejectReasonChange = (index, reason) => {
     const updated = [...leaveDates];
     updated[index].reject_reason = reason;
@@ -638,32 +653,47 @@ export default function HRLeaveApproval({ user, onLogout }) {
                 {editLeaveDates.length > 0 && (
                   <div>
                     <Label className="text-base font-semibold">Edit Leave Types</Label>
-                    <p className="text-sm text-slate-500 mb-3">Modify the leave type for each date</p>
+                    <p className="text-sm text-slate-500 mb-3">Modify the leave type or remove dates from this application</p>
                     <div className="space-y-2 max-h-48 overflow-y-auto border rounded-lg p-3">
                       {editLeaveDates.map((ld, index) => (
-                        <div key={index} className="flex items-center justify-between p-2 bg-white rounded border">
-                          <span className="font-medium text-sm">{formatDate(ld.date)}</span>
-                          <Select 
-                            value={ld.leave_type} 
-                            onValueChange={(value) => handleEditLeaveTypeChange(index, value)}
-                          >
-                            <SelectTrigger className="w-40">
-                              <SelectValue />
-                            </SelectTrigger>
-                            <SelectContent>
-                              <SelectItem value="PL">PL (Full Day)</SelectItem>
-                              <SelectItem value="CL">CL (Full Day)</SelectItem>
-                              <SelectItem value="Half PL">Half PL</SelectItem>
-                              <SelectItem value="Half CL">Half CL</SelectItem>
-                              <SelectItem value="PL/2 & CL/2">PL/2 & CL/2</SelectItem>
-                            </SelectContent>
-                          </Select>
+                        <div key={index} className="flex items-center justify-between p-2 bg-white rounded border gap-2">
+                          <span className="font-medium text-sm flex-shrink-0">{formatDate(ld.date)}</span>
+                          <div className="flex items-center gap-2">
+                            <Select 
+                              value={ld.leave_type} 
+                              onValueChange={(value) => handleEditLeaveTypeChange(index, value)}
+                            >
+                              <SelectTrigger className="w-36">
+                                <SelectValue />
+                              </SelectTrigger>
+                              <SelectContent>
+                                <SelectItem value="PL">PL (Full Day)</SelectItem>
+                                <SelectItem value="CL">CL (Full Day)</SelectItem>
+                                <SelectItem value="Half PL">Half PL</SelectItem>
+                                <SelectItem value="Half CL">Half CL</SelectItem>
+                                <SelectItem value="PL/2 & CL/2">PL/2 & CL/2</SelectItem>
+                              </SelectContent>
+                            </Select>
+                            <Button 
+                              type="button"
+                              variant="outline" 
+                              size="sm"
+                              className="h-8 w-8 p-0 text-red-500 border-red-200 hover:bg-red-50 flex-shrink-0"
+                              onClick={() => handleRemoveEditDate(index)}
+                              title="Remove this date"
+                            >
+                              <Trash2 size={14} />
+                            </Button>
+                          </div>
                         </div>
                       ))}
                     </div>
+                    {editLeaveDates.length === 0 && (
+                      <p className="text-sm text-red-500 mt-2">At least one leave date is required</p>
+                    )}
                   </div>
                 )}
-                <Button type="submit" className="w-full">
+                <Button type="submit" className="w-full" disabled={editLeaveDates.length === 0}>
                   Update Application
                 </Button>
               </form>

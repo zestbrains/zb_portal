@@ -2547,10 +2547,106 @@ async def admin_edit_leave_application(leave_id: str, leave_update: AdminLeaveAp
     if not leave_app:
         raise HTTPException(status_code=404, detail="Leave application not found")
     
-    # Calculate new days
-    from_date = datetime.fromisoformat(leave_update.from_date)
-    to_date = datetime.fromisoformat(leave_update.to_date)
-    days_count = (to_date - from_date).days + 1
+    employee_id = leave_app["employee_id"]
+    old_status = leave_app.get("status", "pending")
+    old_leave_dates = leave_app.get("leave_dates", [])
+    new_leave_dates = [ld.dict() for ld in leave_update.leave_dates] if leave_update.leave_dates else old_leave_dates
+    new_status = leave_update.status if leave_update.status else old_status
+    
+    # Calculate leave balance changes if status is approved or was approved
+    if old_status == "approved" or new_status == "approved":
+        # Calculate old leave totals (only if was approved)
+        old_pl = 0.0
+        old_cl = 0.0
+        if old_status == "approved":
+            for ld in old_leave_dates:
+                lt = ld.get("leave_type", "")
+                if lt.lower() == "rejected":
+                    continue
+                if lt == "PL/2 & CL/2":
+                    old_pl += 0.5
+                    old_cl += 0.5
+                elif "PL" in lt:
+                    old_pl += 0.5 if "Half" in lt else 1.0
+                else:
+                    old_cl += 0.5 if "Half" in lt else 1.0
+        
+        # Calculate new leave totals (only if will be approved)
+        new_pl = 0.0
+        new_cl = 0.0
+        if new_status == "approved":
+            for ld in new_leave_dates:
+                lt = ld.get("leave_type", "")
+                if lt.lower() == "rejected":
+                    continue
+                if lt == "PL/2 & CL/2":
+                    new_pl += 0.5
+                    new_cl += 0.5
+                elif "PL" in lt:
+                    new_pl += 0.5 if "Half" in lt else 1.0
+                else:
+                    new_cl += 0.5 if "Half" in lt else 1.0
+        
+        # Calculate difference and update employee leave balance
+        pl_diff = new_pl - old_pl
+        cl_diff = new_cl - old_cl
+        
+        if pl_diff != 0 or cl_diff != 0:
+            update_balance = {}
+            if pl_diff != 0:
+                update_balance["pl_taken"] = pl_diff
+            if cl_diff != 0:
+                update_balance["cl_taken"] = cl_diff
+            
+            await db.employees.update_one(
+                {"employee_id": employee_id},
+                {"$inc": update_balance}
+            )
+        
+        # Handle leave_records: Delete old and create new if approved
+        old_dates_set = {ld["date"] for ld in old_leave_dates if ld.get("leave_type", "").lower() != "rejected"}
+        new_dates_set = {ld["date"] for ld in new_leave_dates if ld.get("leave_type", "").lower() != "rejected"}
+        
+        # Delete records for removed dates
+        dates_to_remove = old_dates_set - new_dates_set
+        if dates_to_remove and old_status == "approved":
+            await db.leave_records.delete_many({
+                "employee_id": employee_id,
+                "date": {"$in": list(dates_to_remove)}
+            })
+        
+        # Add/update records for new dates if approved
+        if new_status == "approved":
+            for ld in new_leave_dates:
+                if ld.get("leave_type", "").lower() != "rejected":
+                    await db.leave_records.update_one(
+                        {"employee_id": employee_id, "date": ld["date"]},
+                        {"$set": {
+                            "leave_type": ld["leave_type"],
+                            "application_id": leave_id,
+                            "updated_at": get_ist_now_iso()
+                        }},
+                        upsert=True
+                    )
+    
+    # Calculate new days count based on leave_dates
+    if leave_update.leave_dates:
+        days_count = len([ld for ld in new_leave_dates if ld.get("leave_type", "").lower() != "rejected"])
+        # Sum up actual day values (half days = 0.5)
+        actual_days = 0
+        for ld in new_leave_dates:
+            lt = ld.get("leave_type", "")
+            if lt.lower() == "rejected":
+                continue
+            if "Half" in lt or "PL/2" in lt or "CL/2" in lt:
+                actual_days += 0.5
+            else:
+                actual_days += 1
+    else:
+        from_date = datetime.fromisoformat(leave_update.from_date)
+        to_date = datetime.fromisoformat(leave_update.to_date)
+        days_count = (to_date - from_date).days + 1
+        actual_days = days_count
     
     now = get_ist_now_iso()
     
@@ -2558,7 +2654,7 @@ async def admin_edit_leave_application(leave_id: str, leave_update: AdminLeaveAp
         "from_date": leave_update.from_date,
         "to_date": leave_update.to_date,
         "reason": leave_update.reason,
-        "days_count": days_count,
+        "days_count": actual_days,
         "updated_at": now,
         "last_modified_by": user["username"]
     }
@@ -2566,7 +2662,7 @@ async def admin_edit_leave_application(leave_id: str, leave_update: AdminLeaveAp
     if leave_update.status:
         update_data["status"] = leave_update.status
     if leave_update.leave_dates:
-        update_data["leave_dates"] = [ld.dict() for ld in leave_update.leave_dates]
+        update_data["leave_dates"] = new_leave_dates
     if leave_update.comments:
         update_data["comments"] = leave_update.comments
     if leave_update.reject_reason:
