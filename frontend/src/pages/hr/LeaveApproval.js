@@ -30,6 +30,7 @@ export default function HRLeaveApproval({ user, onLogout }) {
     reason: '',
     status: ''
   });
+  const [editLeaveDates, setEditLeaveDates] = useState([]);
 
   useEffect(() => {
     fetchApplications();
@@ -130,6 +131,25 @@ export default function HRLeaveApproval({ user, onLogout }) {
       reason: app.reason,
       status: app.status
     });
+    // Populate leave dates for editing if they exist
+    if (app.leave_dates && app.leave_dates.length > 0) {
+      setEditLeaveDates(app.leave_dates.map(ld => ({
+        date: ld.date,
+        leave_type: ld.leave_type
+      })));
+    } else {
+      // Generate dates from range if no leave_dates
+      const dates = [];
+      const start = new Date(app.from_date);
+      const end = new Date(app.to_date);
+      for (let d = new Date(start); d <= end; d.setDate(d.getDate() + 1)) {
+        dates.push({
+          date: new Date(d).toISOString().split('T')[0],
+          leave_type: 'PL'
+        });
+      }
+      setEditLeaveDates(dates);
+    }
   };
 
   const handleLeaveTypeChange = (index, newType) => {
@@ -140,6 +160,12 @@ export default function HRLeaveApproval({ user, onLogout }) {
       updated[index].reject_reason = '';
     }
     setLeaveDates(updated);
+  };
+
+  const handleEditLeaveTypeChange = (index, newType) => {
+    const updated = [...editLeaveDates];
+    updated[index].leave_type = newType;
+    setEditLeaveDates(updated);
   };
 
   const handleRejectReasonChange = (index, reason) => {
@@ -201,9 +227,14 @@ export default function HRLeaveApproval({ user, onLogout }) {
   const handleAdminEdit = async (e) => {
     e.preventDefault();
     try {
-      await api.put(`/leaves/applications/${editApp.id}/admin-edit`, editFormData);
+      const payload = {
+        ...editFormData,
+        leave_dates: editLeaveDates
+      };
+      await api.put(`/leaves/applications/${editApp.id}/admin-edit`, payload);
       toast.success('Leave application updated');
       setEditApp(null);
+      setEditLeaveDates([]);
       fetchApplications();
       fetchAllApplications();
     } catch (error) {
@@ -548,8 +579,8 @@ export default function HRLeaveApproval({ user, onLogout }) {
 
         {/* Edit Dialog */}
         {editApp && (
-          <Dialog open={!!editApp} onOpenChange={() => setEditApp(null)}>
-            <DialogContent>
+          <Dialog open={!!editApp} onOpenChange={() => { setEditApp(null); setEditLeaveDates([]); }}>
+            <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
               <DialogHeader>
                 <DialogTitle className="flex items-center gap-2">
                   <Edit size={20} />
@@ -602,6 +633,36 @@ export default function HRLeaveApproval({ user, onLogout }) {
                     required
                   />
                 </div>
+                
+                {/* Edit Leave Types Section */}
+                {editLeaveDates.length > 0 && (
+                  <div>
+                    <Label className="text-base font-semibold">Edit Leave Types</Label>
+                    <p className="text-sm text-slate-500 mb-3">Modify the leave type for each date</p>
+                    <div className="space-y-2 max-h-48 overflow-y-auto border rounded-lg p-3">
+                      {editLeaveDates.map((ld, index) => (
+                        <div key={index} className="flex items-center justify-between p-2 bg-white rounded border">
+                          <span className="font-medium text-sm">{formatDate(ld.date)}</span>
+                          <Select 
+                            value={ld.leave_type} 
+                            onValueChange={(value) => handleEditLeaveTypeChange(index, value)}
+                          >
+                            <SelectTrigger className="w-40">
+                              <SelectValue />
+                            </SelectTrigger>
+                            <SelectContent>
+                              <SelectItem value="PL">PL (Full Day)</SelectItem>
+                              <SelectItem value="CL">CL (Full Day)</SelectItem>
+                              <SelectItem value="Half PL">Half PL</SelectItem>
+                              <SelectItem value="Half CL">Half CL</SelectItem>
+                              <SelectItem value="PL/2 & CL/2">PL/2 & CL/2</SelectItem>
+                            </SelectContent>
+                          </Select>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
                 <Button type="submit" className="w-full">
                   Update Application
                 </Button>
