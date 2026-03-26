@@ -4336,8 +4336,74 @@ async def get_attendance(year: int, month: int, user: dict = Depends(require_rol
         "num_days": num_days,
         "dates": dates,
         "employees": employees,
-        "attendance": attendance
+        "attendance": attendance,
+        "sandwich_dates": await calculate_sandwich_dates(employees, attendance, year, month, num_days, holiday_dates)
     }
+
+async def calculate_sandwich_dates(employees, attendance, year, month, num_days, holiday_dates):
+    """Calculate sandwich leave dates for all employees"""
+    sandwich_map = {}
+    
+    for emp in employees:
+        emp_id = emp["employee_id"]
+        emp_attendance = attendance.get(emp_id, {})
+        
+        # Build day types for sandwich detection
+        day_types = []  # (day_num, date_str, status)
+        for day in range(1, num_days + 1):
+            date_str = f"{year}-{month:02d}-{day:02d}"
+            current_date = datetime(year, month, day)
+            day_of_week = current_date.weekday()
+            is_holiday = date_str in holiday_dates
+            is_weekend = day_of_week >= 5
+            
+            status = emp_attendance.get(day, "P")
+            
+            # Classify the day
+            if status == "NJ":
+                day_types.append((day, date_str, 'notjoined'))
+            elif status in ["PL", "CL", "PL/2", "CL/2", "PL/2 & CL/2", "Half PL", "Half CL"]:
+                day_types.append((day, date_str, 'leave'))
+            elif status in ["WO", "H"]:
+                day_types.append((day, date_str, 'nonworking'))
+            else:
+                day_types.append((day, date_str, 'present'))
+        
+        # Detect sandwich leaves (same logic as salary calculation)
+        # Group consecutive nonworking days (weekends/holidays)
+        nw_groups = []
+        i = 0
+        while i < len(day_types):
+            if day_types[i][2] == 'nonworking':
+                start = i
+                while i < len(day_types) and day_types[i][2] == 'nonworking':
+                    i += 1
+                nw_groups.append((start, i - 1))
+            else:
+                i += 1
+        
+        # Find sandwich patterns: leave-nonworking-leave
+        sandwich_indices = set()
+        for g in range(len(nw_groups) - 1):
+            end_first = nw_groups[g][1]
+            start_second = nw_groups[g + 1][0]
+            between_start = end_first + 1
+            between_end = start_second - 1
+            if between_start > between_end:
+                continue
+            all_leave = all(day_types[j][2] == 'leave' for j in range(between_start, between_end + 1))
+            if all_leave:
+                for j in range(nw_groups[g][0], nw_groups[g][1] + 1):
+                    sandwich_indices.add(j)
+                for j in range(nw_groups[g + 1][0], nw_groups[g + 1][1] + 1):
+                    sandwich_indices.add(j)
+        
+        # Get the actual day numbers that are sandwich
+        sandwich_days = sorted([day_types[j][0] for j in sandwich_indices])
+        if sandwich_days:
+            sandwich_map[emp_id] = sandwich_days
+    
+    return sandwich_map
 
 # Salary Calculation
 # Late Coming - Admin marks employees who came late

@@ -55,6 +55,10 @@ export default function Attendance({ user, onLogout }) {
     return lateComingData[employeeId]?.includes(day);
   };
 
+  const isSandwich = (employeeId, day) => {
+    return attendanceData?.sandwich_dates?.[employeeId]?.includes(day);
+  };
+
   const handleToggleLate = async (employeeId, day, status) => {
     // Only allow toggling late for Present status
     if (status !== 'P') return;
@@ -100,7 +104,12 @@ export default function Attendance({ user, onLogout }) {
     }
   };
 
-  const getStatusColor = (status) => {
+  const getStatusColor = (status, isSandwichDay = false) => {
+    // If it's a sandwich leave (WO or H between leaves), show in pink/magenta
+    if (isSandwichDay && (status === 'WO' || status === 'H')) {
+      return 'bg-pink-200 text-pink-800 border-pink-300';
+    }
+    
     const colors = {
       'P': 'bg-green-100 text-green-700 border-green-200',
       'PL': 'bg-blue-100 text-blue-700 border-blue-200',
@@ -117,7 +126,10 @@ export default function Attendance({ user, onLogout }) {
     return colors[status] || 'bg-white text-slate-600 border-slate-200';
   };
 
-  const getStatusLabel = (status) => {
+  const getStatusLabel = (status, isSandwichDay = false) => {
+    if (isSandwichDay && (status === 'WO' || status === 'H')) {
+      return `${status === 'WO' ? 'Week Off' : 'Holiday'} (Sandwich)`;
+    }
     switch (status) {
       case 'P': return 'Present';
       case 'PL': return 'Paid Leave';
@@ -242,6 +254,7 @@ export default function Attendance({ user, onLogout }) {
                       {attendanceData.dates.map((day) => {
                         const status = attendanceData.attendance[employee.employee_id]?.[day] || '-';
                         const late = isLate(employee.employee_id, day);
+                        const sandwich = isSandwich(employee.employee_id, day);
                         const key = `${employee.employee_id}-${day}`;
                         const isToggling = toggling[key];
                         const canToggle = status === 'P';
@@ -250,18 +263,18 @@ export default function Attendance({ user, onLogout }) {
                           <td key={day} className="px-2 py-3 text-center border-b border-slate-100">
                             <div 
                               className="relative inline-flex items-center justify-center"
-                              title={`${employee.name} - ${day} ${months[month - 1]}: ${status === '-' ? 'Future' : getStatusLabel(status)}${late ? ' (Late)' : ''}${canToggle ? '\nClick to toggle late mark' : ''}`}
+                              title={`${employee.name} - ${day} ${months[month - 1]}: ${status === '-' ? 'Future' : getStatusLabel(status, sandwich)}${late ? ' (Late)' : ''}${canToggle ? '\nClick to toggle late mark' : ''}`}
                             >
                               <button
                                 onClick={() => canToggle && handleToggleLate(employee.employee_id, day, status)}
                                 disabled={!canToggle || isToggling}
                                 className={`w-9 h-9 rounded-lg border text-[10px] font-bold flex items-center justify-center transition-all
-                                  ${status === '-' ? 'bg-slate-50 text-slate-300 border-slate-100 cursor-default' : getStatusColor(status)}
+                                  ${status === '-' ? 'bg-slate-50 text-slate-300 border-slate-100 cursor-default' : getStatusColor(status, sandwich)}
                                   ${canToggle ? 'cursor-pointer hover:ring-2 hover:ring-orange-300 hover:ring-offset-1' : 'cursor-default'}
                                   ${isToggling ? 'opacity-50' : ''}
                                 `}
                               >
-                                {status}
+                                {sandwich && (status === 'WO' || status === 'H') ? 'SW' : status}
                               </button>
                               {late && status === 'P' && (
                                 <div className="absolute -top-1 -right-1 w-4 h-4 bg-orange-500 rounded-full flex items-center justify-center border border-white shadow-sm" title="Late Coming">
@@ -284,10 +297,20 @@ export default function Attendance({ user, onLogout }) {
         <div className="bg-white rounded-xl border border-slate-200 p-4 shadow-sm">
           <h3 className="text-xs font-semibold text-slate-500 uppercase tracking-wider mb-3">Legend</h3>
           <div className="flex flex-wrap gap-2">
-            {['P', 'PL', 'CL', 'PL/2', 'CL/2', 'PL/2 & CL/2', 'OT', 'OT/2', 'WO', 'H', '-'].map((status) => (
+            {['P', 'PL', 'CL', 'PL/2', 'CL/2', 'PL/2 & CL/2', 'OT', 'OT/2', 'WO', 'H', 'SW', 'NJ', '-'].map((status) => (
               <div key={status} className="flex items-center gap-1.5">
-                <div className={`w-8 h-7 flex items-center justify-center rounded-lg border text-[10px] font-bold ${status === '-' ? 'bg-slate-50 text-slate-300 border-slate-100' : getStatusColor(status)}`}>{status}</div>
-                <span className="text-xs text-slate-500">{status === '-' ? 'Future' : getStatusLabel(status)}</span>
+                <div className={`w-8 h-7 flex items-center justify-center rounded-lg border text-[10px] font-bold ${
+                  status === '-' ? 'bg-slate-50 text-slate-300 border-slate-100' : 
+                  status === 'SW' ? 'bg-pink-200 text-pink-800 border-pink-300' :
+                  status === 'NJ' ? 'bg-gray-200 text-gray-400 border-gray-300' :
+                  getStatusColor(status)
+                }`}>{status}</div>
+                <span className="text-xs text-slate-500">
+                  {status === '-' ? 'Future' : 
+                   status === 'SW' ? 'Sandwich Leave' : 
+                   status === 'NJ' ? 'Not Joined' :
+                   getStatusLabel(status)}
+                </span>
               </div>
             ))}
           </div>
