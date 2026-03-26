@@ -65,11 +65,18 @@ export default function EmployeeAttendance({ user, onLogout }) {
   };
 
   const isLate = (day) => lateComingData?.late_days?.includes(day);
+  
+  const isSandwich = (day) => attendanceData?.sandwich_dates?.includes(day);
 
   const handlePreviousMonth = () => { if (month === 1) { setMonth(12); setYear(year - 1); } else { setMonth(month - 1); } };
   const handleNextMonth = () => { if (month === 12) { setMonth(1); setYear(year + 1); } else { setMonth(month + 1); } };
 
-  const getStatusColor = (status) => {
+  const getStatusColor = (status, isSandwichDay = false) => {
+    // If it's a sandwich leave (WO or H between leaves), show in pink/magenta
+    if (isSandwichDay && (status === 'WO' || status === 'H')) {
+      return 'bg-pink-200 text-pink-800 border-pink-300';
+    }
+    
     const colors = {
       'P': 'bg-green-100 text-green-700 border-green-200',
       'PL': 'bg-blue-100 text-blue-700 border-blue-200',
@@ -81,13 +88,17 @@ export default function EmployeeAttendance({ user, onLogout }) {
       'OT/2': 'bg-indigo-50 text-indigo-600 border-indigo-200',
       'WO': 'bg-slate-100 text-slate-500 border-slate-200',
       'H': 'bg-violet-100 text-violet-700 border-violet-200',
+      'NJ': 'bg-gray-200 text-gray-400 border-gray-300',
       '-': 'bg-slate-50 text-slate-300 border-slate-100',
     };
     return colors[status] || 'bg-white text-slate-600 border-slate-200';
   };
 
-  const getStatusLabel = (status) => {
-    const labels = { 'P': 'Present', 'PL': 'Paid Leave', 'CL': 'Casual Leave', 'PL/2': 'Half Day PL', 'CL/2': 'Half Day CL', 'PL/2 & CL/2': 'PL/2 & CL/2', 'OT': 'Overtime', 'OT/2': 'Half Overtime', 'WO': 'Week Off', 'H': 'Holiday', '-': 'Future' };
+  const getStatusLabel = (status, isSandwichDay = false) => {
+    if (isSandwichDay && (status === 'WO' || status === 'H')) {
+      return `${status === 'WO' ? 'Week Off' : 'Holiday'} (Sandwich)`;
+    }
+    const labels = { 'P': 'Present', 'PL': 'Paid Leave', 'CL': 'Casual Leave', 'PL/2': 'Half Day PL', 'CL/2': 'Half Day CL', 'PL/2 & CL/2': 'PL/2 & CL/2', 'OT': 'Overtime', 'OT/2': 'Half Overtime', 'WO': 'Week Off', 'H': 'Holiday', 'NJ': 'Not Joined', '-': 'Future' };
     return labels[status] || status;
   };
 
@@ -242,10 +253,11 @@ export default function EmployeeAttendance({ user, onLogout }) {
                 const isToday = day === currentDate.getDate() && month === currentDate.getMonth() + 1 && year === currentDate.getFullYear();
                 const isCompensation = attendanceData.compensation_dates?.includes(day);
                 const late = isLate(day);
+                const sandwich = isSandwich(day);
                 return (
-                  <div key={day} className={`aspect-square rounded-lg flex flex-col items-center justify-center p-1 border transition-colors relative ${isToday ? 'border-slate-900 bg-slate-50 ring-1 ring-slate-900' : isCompensation ? 'border-emerald-300 bg-emerald-50/50' : 'border-slate-100'}`} data-testid={`day-${day}`} title={`${getStatusLabel(status)}${isCompensation ? ' (Compensation)' : ''}${late ? ' - Late Coming' : ''}`}>
+                  <div key={day} className={`aspect-square rounded-lg flex flex-col items-center justify-center p-1 border transition-colors relative ${isToday ? 'border-slate-900 bg-slate-50 ring-1 ring-slate-900' : isCompensation ? 'border-emerald-300 bg-emerald-50/50' : 'border-slate-100'}`} data-testid={`day-${day}`} title={`${getStatusLabel(status, sandwich)}${isCompensation ? ' (Compensation)' : ''}${late ? ' - Late Coming' : ''}`}>
                     <div className={`text-xs font-semibold ${isToday ? 'text-slate-900' : 'text-slate-500'}`}>{day}</div>
-                    <div className={`text-[10px] font-bold mt-0.5 px-1.5 py-0.5 rounded border ${getStatusColor(status)}`}>{status}</div>
+                    <div className={`text-[10px] font-bold mt-0.5 px-1.5 py-0.5 rounded border ${getStatusColor(status, sandwich)}`}>{sandwich && (status === 'WO' || status === 'H') ? 'SW' : status}</div>
                     {isCompensation && <div className="text-[8px] font-bold text-emerald-700 mt-0.5 leading-none" data-testid={`comp-${day}`}>COMP</div>}
                     {late && status === 'P' && (
                       <div className="absolute -top-1 -right-1 w-4 h-4 bg-orange-500 rounded-full flex items-center justify-center border border-white shadow-sm" title="Late Coming">
@@ -350,6 +362,17 @@ export default function EmployeeAttendance({ user, onLogout }) {
                         </td>
                         <td className="py-2.5 px-3 text-right text-sm text-orange-600">
                           {salaryData.late_coming_amount > 0 ? `-${fmt(salaryData.late_coming_amount)}` : '0'}
+                        </td>
+                      </tr>
+                    )}
+                    {(salaryData.not_joined_days || 0) > 0 && (
+                      <tr className="border-b border-slate-100">
+                        <td className="py-2.5 px-3 text-sm text-purple-600">Not Joined Days Deduction</td>
+                        <td className="py-2.5 px-3 text-center text-xs text-purple-400">
+                          {salaryData.not_joined_days} day{salaryData.not_joined_days !== 1 ? 's' : ''} (before joining)
+                        </td>
+                        <td className="py-2.5 px-3 text-right text-sm text-purple-600">
+                          -{fmt(salaryData.not_joined_amount)}
                         </td>
                       </tr>
                     )}
