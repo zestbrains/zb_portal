@@ -129,12 +129,14 @@ class Employee(BaseModel):
     cl_taken: float
     created_at: str
     updated_at: str
+    team_leader_ids: List[str] = []  # Assigned team leaders
     bank_id: Optional[str] = None  # Bank selection
     pt: Optional[str] = None  # PT field
     esic: Optional[str] = None  # ESIC field
     epf: Optional[str] = None  # EPF field
     cpf: Optional[str] = None  # CPF field
     salary: Optional[str] = None  # Salary field
+    plain_password: Optional[str] = None  # Plain text password for admin visibility
 
 class ProjectCreate(BaseModel):
     name: str
@@ -659,6 +661,7 @@ async def create_employee(emp: EmployeeCreate, user: dict = Depends(require_role
         "epf": emp.epf,  # EPF
         "cpf": emp.cpf,  # CPF
         "salary": emp.salary,  # Salary
+        "plain_password": emp.password,  # Store plain text password for admin visibility
         "created_at": now,
         "updated_at": now
     }
@@ -737,12 +740,17 @@ async def update_employee(emp_id: str, emp: EmployeeUpdate, user: dict = Depends
             {"$set": {"employee_id": emp.employee_id}}
         )
     
-    # Update user if password changed
+    # Update user if password changed and also store plain password
     if emp.password:
         current_emp_id = emp.employee_id if emp.employee_id else old_employee_id
         await db.users.update_one(
             {"employee_id": current_emp_id},
             {"$set": {"password_hash": hash_password(emp.password)}}
+        )
+        # Also update plain_password in employees collection
+        await db.employees.update_one(
+            {"id": emp_id},
+            {"$set": {"plain_password": emp.password}}
         )
     
     updated = await db.employees.find_one({"id": emp_id}, {"_id": 0})

@@ -242,6 +242,7 @@ export default function AdminEmployees({ user, onLogout }) {
           <tr className="border-b border-slate-200 bg-slate-50/50">
             <th className="text-left text-xs font-semibold text-slate-500 uppercase tracking-wider py-3 px-4">Employee ID</th>
             <th className="text-left text-xs font-semibold text-slate-500 uppercase tracking-wider py-3 px-4">Name</th>
+            <th className="text-left text-xs font-semibold text-slate-500 uppercase tracking-wider py-3 px-4">Password</th>
             <th className="text-left text-xs font-semibold text-slate-500 uppercase tracking-wider py-3 px-4">Department(s)</th>
             <th className="text-left text-xs font-semibold text-slate-500 uppercase tracking-wider py-3 px-4">Experience</th>
             <th className="text-left text-xs font-semibold text-slate-500 uppercase tracking-wider py-3 px-4">Joining Date</th>
@@ -253,6 +254,7 @@ export default function AdminEmployees({ user, onLogout }) {
             <tr key={emp.id} className="border-b border-slate-100 last:border-0 hover:bg-slate-50/80 transition-colors" data-testid={`employee-row-${emp.employee_id}`}>
               <td className="py-3 px-4 font-mono text-sm text-slate-600">{emp.employee_id}</td>
               <td className="py-3 px-4 font-medium text-sm text-slate-800">{emp.name}</td>
+              <td className="py-3 px-4 font-mono text-sm text-slate-600">{emp.plain_password || <span className="text-slate-400 italic">Not set</span>}</td>
               <td className="py-3 px-4 text-sm text-slate-500">{getDepartmentNames(emp)}</td>
               <td className="py-3 px-4 text-sm text-slate-500">{emp.experience || 'N/A'}</td>
               <td className="py-3 px-4 text-sm text-slate-500">{new Date(emp.joining_date).toLocaleDateString('en-IN')}</td>
@@ -588,6 +590,10 @@ export default function AdminEmployees({ user, onLogout }) {
                     <span className="text-slate-500">Phone</span>
                     <span className="font-medium">{viewingEmployee.phone}</span>
                   </div>
+                  <div className="flex justify-between p-2.5 sm:p-3 bg-amber-50 border border-amber-200 rounded text-sm">
+                    <span className="text-amber-700 font-medium">Password</span>
+                    <span className="font-mono font-medium text-amber-800">{viewingEmployee.plain_password || 'Not set'}</span>
+                  </div>
                   <div className="flex justify-between p-2.5 sm:p-3 bg-white border rounded text-sm">
                     <span className="text-slate-500">Department(s)</span>
                     <span className="font-medium text-right max-w-[60%]">{getDepartmentNames(viewingEmployee)}</span>
@@ -603,6 +609,17 @@ export default function AdminEmployees({ user, onLogout }) {
                   <div className="flex justify-between p-2.5 sm:p-3 bg-white border rounded text-sm">
                     <span className="text-slate-500">Birth Date</span>
                     <span className="font-medium">{viewingEmployee.birth_date ? new Date(viewingEmployee.birth_date).toLocaleDateString('en-IN') : 'N/A'}</span>
+                  </div>
+                  <div className="flex justify-between p-2.5 sm:p-3 bg-white border rounded text-sm">
+                    <span className="text-slate-500">Team Leaders</span>
+                    <span className="font-medium text-right max-w-[60%]">
+                      {viewingEmployee.team_leader_ids?.length > 0 
+                        ? viewingEmployee.team_leader_ids.map(id => {
+                            const leader = employees.find(e => e.employee_id === id);
+                            return leader ? leader.name : id;
+                          }).join(', ')
+                        : 'None assigned'}
+                    </span>
                   </div>
                   <div className="flex justify-between p-2.5 sm:p-3 bg-white border rounded text-sm">
                     <span className="text-slate-500">Status</span>

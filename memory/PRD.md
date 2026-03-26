@@ -48,4 +48,4 @@ HR Management Portal for Zestbrains - migrated from another Emergent account
 - None - deployment complete
 
 ## URL
-https://code-db-sync.preview.emergentagent.com
+https://team-leader-pass.preview.emergentagent.com
