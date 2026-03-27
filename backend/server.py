@@ -714,6 +714,10 @@ async def update_employee(emp_id: str, emp: EmployeeUpdate, user: dict = Depends
         update_data["team_leader_ids"] = emp.team_leader_ids
     if emp.bank_id is not None:
         update_data["bank_id"] = emp.bank_id
+    if emp.bank_account_number is not None:
+        update_data["bank_account_number"] = emp.bank_account_number
+    if emp.ifsc_code is not None:
+        update_data["ifsc_code"] = emp.ifsc_code
     if emp.pt is not None:
         update_data["pt"] = emp.pt
     if emp.esic is not None:
