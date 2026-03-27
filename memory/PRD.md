@@ -43,10 +43,17 @@ HR Management Portal for Zestbrains - migrated from another Emergent account
 - Late Marks for delayed projects
 - Bank-wise salary grouping
 
-## Recent Changes (March 26, 2026)
+## Recent Changes (December 2025)
 - **Fixed**: Team Leader assignment in Employee Edit dialog now saves correctly
 - **Added**: Password visibility in Employees table and View dialog (plain_password field)
 - **Backend**: Added `team_leader_ids` and `plain_password` to Employee Pydantic response model
+- **Added**: NJ (Not Joined) attendance status and pro-rated salary for mid-month joins
+- **Added**: Edit/delete individual leave dates within approved applications
+- **Added**: Visual Sandwich Leave ("SW") indicators in Attendance module
+- **Fixed**: Dashboard Top Performers/Performance graphs to exclude ex-employees
+- **Added**: Bank Account Number and IFSC Code fields for employees
+- **Added**: ICICI Salary Sheet download feature (openpyxl)
+- **Fixed**: ICICI Salary Sheet now correctly filters by `salary_status` (Active vs Hold) instead of employee status
 
 ## Admin Credentials
 - **Username**: renish
@@ -58,4 +65,4 @@ HR Management Portal for Zestbrains - migrated from another Emergent account
 - P2: Refactor server.py (5000+ lines) into modular routes/models
 
 ## URL
-https://team-leader-pass.preview.emergentagent.com
+https://payroll-filter-1.preview.emergentagent.com

@@ -4,7 +4,7 @@ import json
 from datetime import datetime, timedelta
 
 class CompanyPortalAPITester:
-    def __init__(self, base_url="https://team-leader-pass.preview.emergentagent.com"):
+    def __init__(self, base_url="https://payroll-filter-1.preview.emergentagent.com"):
         self.base_url = base_url
         self.admin_token = None
         self.hr_token = None

@@ -4991,13 +4991,52 @@ async def download_salary_sheet(
     remarks = f"{month_name} Salary"
     
     # Get all active employees assigned to this bank with salary data
-    employees = await db.employees.find(
+    all_employees = await db.employees.find(
         {"bank_id": request.bank_id, "status": "active"},
         {"_id": 0}
     ).to_list(1000)
     
-    if not employees:
+    if not all_employees:
         raise HTTPException(status_code=404, detail="No active employees found for this bank")
+    
+    # Filter by salary_status (only include employees with "active" salary status)
+    # Step 1: Get late projects and build late_project_map
+    late_projects = await db.projects.find(
+        {"status": "late"},
+        {"_id": 0, "id": 1, "assigned_employees": 1}
+    ).to_list(None)
+    
+    late_project_emp_ids = set()
+    for project in late_projects:
+        for emp_id in project.get("assigned_employees", []):
+            late_project_emp_ids.add(emp_id)
+    
+    # Step 2: Get saved salary hold statuses for this month
+    month_key = f"{request.year}-{request.month:02d}"
+    salary_holds = await db.late_mark_salary_holds.find(
+        {"month_key": month_key},
+        {"_id": 0, "employee_id": 1, "salary_status": 1}
+    ).to_list(None)
+    salary_hold_map = {sh["employee_id"]: sh["salary_status"] for sh in salary_holds}
+    
+    # Step 3: Filter employees with "active" salary_status only
+    employees = []
+    for emp in all_employees:
+        emp_id = emp.get("employee_id")
+        has_late_mark = emp_id in late_project_emp_ids
+        
+        # Determine salary status (same logic as /late-marks endpoint)
+        if emp_id in salary_hold_map:
+            salary_status = salary_hold_map[emp_id]
+        else:
+            salary_status = "hold" if has_late_mark else "active"
+        
+        # Only include employees with active salary status
+        if salary_status == "active":
+            employees.append(emp)
+    
+    if not employees:
+        raise HTTPException(status_code=404, detail="No employees with active salary status found for this bank")
     
     # Get salary data for these employees
     from calendar import monthrange
