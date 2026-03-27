@@ -24,7 +24,7 @@ export default function AdminEmployees({ user, onLogout }) {
   const [formData, setFormData] = useState({
     employee_id: '', name: '', email: '', phone: '', department_ids: [],
     experience: '', password: '', joining_date: '', birth_date: '', team_leader_ids: [],
-    bank_id: '', pt: '', esic: '', epf: '', cpf: '', salary: ''
+    bank_id: '', bank_account_number: '', ifsc_code: '', pt: '', esic: '', epf: '', cpf: '', salary: ''
   });
   const [teamLeaderSearch, setTeamLeaderSearch] = useState('');
   const [searchQuery, setSearchQuery] = useState('');
@@ -97,7 +97,7 @@ export default function AdminEmployees({ user, onLogout }) {
     setFormData({
       employee_id: '', name: '', email: '', phone: '', department_ids: [],
       experience: '', password: '', joining_date: '', birth_date: '', team_leader_ids: [],
-      bank_id: '', pt: '', esic: '', epf: '', cpf: '', salary: ''
+      bank_id: '', bank_account_number: '', ifsc_code: '', pt: '', esic: '', epf: '', cpf: '', salary: ''
     });
     setTeamLeaderSearch('');
   };
@@ -116,6 +116,8 @@ export default function AdminEmployees({ user, onLogout }) {
       birth_date: emp.birth_date || '',
       team_leader_ids: emp.team_leader_ids || [],
       bank_id: emp.bank_id || '',
+      bank_account_number: emp.bank_account_number || '',
+      ifsc_code: emp.ifsc_code || '',
       pt: emp.pt || '',
       esic: emp.esic || '',
       epf: emp.epf || '',
@@ -426,6 +428,26 @@ export default function AdminEmployees({ user, onLogout }) {
                               </option>
                             ))}
                           </select>
+                        </div>
+                        <div>
+                          <Label htmlFor="bank_account_number">Bank Account Number</Label>
+                          <Input
+                            id="bank_account_number"
+                            type="text"
+                            placeholder="Enter account number"
+                            value={formData.bank_account_number || ''}
+                            onChange={(e) => setFormData({ ...formData, bank_account_number: e.target.value })}
+                          />
+                        </div>
+                        <div>
+                          <Label htmlFor="ifsc_code">IFSC Code</Label>
+                          <Input
+                            id="ifsc_code"
+                            type="text"
+                            placeholder="Enter IFSC code"
+                            value={formData.ifsc_code || ''}
+                            onChange={(e) => setFormData({ ...formData, ifsc_code: e.target.value })}
+                          />
                         </div>
                         <div>
                           <Label htmlFor="pt">PT</Label>

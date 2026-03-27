@@ -103,6 +103,8 @@ class EmployeeUpdate(BaseModel):
     joining_date: Optional[str] = None  # Now editable
     team_leader_ids: Optional[List[str]] = None  # Team leaders (fixed per employee)
     bank_id: Optional[str] = None  # Bank selection
+    bank_account_number: Optional[str] = None  # Bank account number
+    ifsc_code: Optional[str] = None  # IFSC code
     pt: Optional[str] = None  # PT field
     esic: Optional[str] = None  # ESIC field
     epf: Optional[str] = None  # EPF field
@@ -131,6 +133,8 @@ class Employee(BaseModel):
     updated_at: str
     team_leader_ids: List[str] = []  # Assigned team leaders
     bank_id: Optional[str] = None  # Bank selection
+    bank_account_number: Optional[str] = None  # Bank account number
+    ifsc_code: Optional[str] = None  # IFSC code
     pt: Optional[str] = None  # PT field
     esic: Optional[str] = None  # ESIC field
     epf: Optional[str] = None  # EPF field
@@ -4245,11 +4249,13 @@ logging.basicConfig(
 
 class BankCreate(BaseModel):
     name: str
+    account_number: Optional[str] = ""
 
 class Bank(BaseModel):
     model_config = ConfigDict(extra="ignore")
     id: str
     name: str
+    account_number: Optional[str] = ""
     is_active: bool = True
     created_at: str
     updated_at: str
@@ -4273,6 +4279,7 @@ async def create_bank(bank: BankCreate, user: dict = Depends(require_role(["admi
     new_bank = {
         "id": str(uuid.uuid4()),
         "name": bank.name.strip(),
+        "account_number": bank.account_number.strip() if bank.account_number else "",
         "is_active": True,
         "created_at": get_ist_now_iso(),
         "updated_at": get_ist_now_iso()
@@ -4299,6 +4306,7 @@ async def update_bank(bank_id: str, bank: BankCreate, user: dict = Depends(requi
         {"id": bank_id},
         {"$set": {
             "name": bank.name.strip(),
+            "account_number": bank.account_number.strip() if bank.account_number else "",
             "updated_at": get_ist_now_iso()
         }}
     )

@@ -34,7 +34,7 @@ export default function Banks({ user, onLogout }) {
   const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
   const [editingBank, setEditingBank] = useState(null);
   const [deletingBank, setDeletingBank] = useState(null);
-  const [formData, setFormData] = useState({ name: '' });
+  const [formData, setFormData] = useState({ name: '', account_number: '' });
 
   useEffect(() => {
     fetchBanks();
@@ -87,7 +87,7 @@ export default function Banks({ user, onLogout }) {
           'Content-Type': 'application/json',
           Authorization: `Bearer ${token}`
         },
-        body: JSON.stringify({ name: formData.name.trim() })
+        body: JSON.stringify({ name: formData.name.trim(), account_number: formData.account_number.trim() })
       });
 
       if (!response.ok) {
@@ -97,7 +97,7 @@ export default function Banks({ user, onLogout }) {
 
       toast.success(editingBank ? 'Bank updated successfully' : 'Bank created successfully');
       setIsDialogOpen(false);
-      setFormData({ name: '' });
+      setFormData({ name: '', account_number: '' });
       setEditingBank(null);
       fetchBanks();
     } catch (error) {
@@ -109,7 +109,7 @@ export default function Banks({ user, onLogout }) {
 
   const handleEdit = (bank) => {
     setEditingBank(bank);
-    setFormData({ name: bank.name });
+    setFormData({ name: bank.name, account_number: bank.account_number || '' });
     setIsDialogOpen(true);
   };
 
@@ -156,7 +156,7 @@ export default function Banks({ user, onLogout }) {
 
   const openAddDialog = () => {
     setEditingBank(null);
-    setFormData({ name: '' });
+    setFormData({ name: '', account_number: '' });
     setIsDialogOpen(true);
   };
 
@@ -218,6 +218,9 @@ export default function Banks({ user, onLogout }) {
                   Bank Name
                 </th>
                 <th className="px-6 py-3 text-left text-xs font-medium text-slate-500 uppercase tracking-wider">
+                  Account Number
+                </th>
+                <th className="px-6 py-3 text-left text-xs font-medium text-slate-500 uppercase tracking-wider">
                   Status
                 </th>
                 <th className="px-6 py-3 text-left text-xs font-medium text-slate-500 uppercase tracking-wider">
@@ -231,13 +234,13 @@ export default function Banks({ user, onLogout }) {
             <tbody className="divide-y divide-gray-200">
               {loading && banks.length === 0 ? (
                 <tr>
-                  <td colSpan="4" className="px-6 py-8 text-center text-slate-500">
+                  <td colSpan="5" className="px-6 py-8 text-center text-slate-500">
                     Loading...
                   </td>
                 </tr>
               ) : filteredBanks.length === 0 ? (
                 <tr>
-                  <td colSpan="4" className="px-6 py-8 text-center text-slate-500">
+                  <td colSpan="5" className="px-6 py-8 text-center text-slate-500">
                     {searchTerm ? 'No banks found matching your search' : 'No banks added yet'}
                   </td>
                 </tr>
@@ -246,6 +249,9 @@ export default function Banks({ user, onLogout }) {
                   <tr key={bank.id} className="hover:bg-slate-50">
                     <td className="px-6 py-4 whitespace-nowrap">
                       <div className="font-medium text-slate-900">{bank.name}</div>
+                    </td>
+                    <td className="px-6 py-4 whitespace-nowrap">
+                      <div className="text-sm text-slate-600 font-mono">{bank.account_number || '-'}</div>
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap">
                       <span
@@ -324,6 +330,15 @@ export default function Banks({ user, onLogout }) {
                   autoFocus
                 />
               </div>
+              <div className="space-y-2">
+                <Label htmlFor="account_number">Account Number</Label>
+                <Input
+                  id="account_number"
+                  placeholder="Enter account number"
+                  value={formData.account_number}
+                  onChange={(e) => setFormData({ ...formData, account_number: e.target.value })}
+                />
+              </div>
             </div>
             <DialogFooter>
               <Button
@@ -332,7 +347,7 @@ export default function Banks({ user, onLogout }) {
                 onClick={() => {
                   setIsDialogOpen(false);
                   setEditingBank(null);
-                  setFormData({ name: '' });
+                  setFormData({ name: '', account_number: '' });
                 }}
               >
                 Cancel
