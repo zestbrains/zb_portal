@@ -4,6 +4,8 @@ import { api } from '../../utils/api';
 import { Button } from '../../components/ui/button';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../../components/ui/select';
 import { Input } from '../../components/ui/input';
+import { Label } from '../../components/ui/label';
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '../../components/ui/dialog';
 import { toast } from 'sonner';
 import { IndianRupee, Search, Download, Save, AlertTriangle, CheckCircle } from 'lucide-react';
 
@@ -46,6 +48,12 @@ export default function Salary({ user, onLogout }) {
   const [search, setSearch] = useState('');
   const [edits, setEdits] = useState({});
   const [saving, setSaving] = useState({});
+  const [downloadDialogOpen, setDownloadDialogOpen] = useState(false);
+  const [downloadBankId, setDownloadBankId] = useState('');
+  const [downloadBankName, setDownloadBankName] = useState('');
+  const [sheetName, setSheetName] = useState('');
+  const [paymentDate, setPaymentDate] = useState('');
+  const [downloading, setDownloading] = useState(false);
 
   useEffect(() => {
     fetchSalary();
@@ -178,6 +186,52 @@ export default function Salary({ user, onLogout }) {
     toast.success('Exported successfully');
   };
 
+  const openDownloadDialog = (bankId, bankName) => {
+    setDownloadBankId(bankId);
+    setDownloadBankName(bankName);
+    const monthLabel = MONTHS.find(m => m.value === month)?.label || month;
+    setSheetName(`ICICI_${monthLabel}_${year}`);
+    setPaymentDate('');
+    setDownloadDialogOpen(true);
+  };
+
+  const handleDownloadSheet = async () => {
+    if (!paymentDate) {
+      toast.error('Please enter payment date');
+      return;
+    }
+    
+    setDownloading(true);
+    try {
+      const response = await api.post('/salary/download-sheet', {
+        bank_id: downloadBankId,
+        year: parseInt(year),
+        month: parseInt(month),
+        sheet_name: sheetName,
+        payment_date: paymentDate
+      }, {
+        responseType: 'blob'
+      });
+      
+      // Create download link
+      const url = window.URL.createObjectURL(new Blob([response.data]));
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `${sheetName}.xlsx`;
+      document.body.appendChild(a);
+      a.click();
+      window.URL.revokeObjectURL(url);
+      document.body.removeChild(a);
+      
+      toast.success('Salary sheet downloaded successfully');
+      setDownloadDialogOpen(false);
+    } catch (error) {
+      toast.error(error.response?.data?.detail || 'Failed to download sheet');
+    } finally {
+      setDownloading(false);
+    }
+  };
+
   const availableMonths = getAvailableMonths(year);
 
   return (
@@ -263,9 +317,25 @@ export default function Salary({ user, onLogout }) {
                         <p className="text-xs text-slate-500">{bankEmployees.length} employee{bankEmployees.length > 1 ? 's' : ''}</p>
                       </div>
                     </div>
-                    <div className="text-right">
-                      <p className="text-xs text-slate-500">Bank Total</p>
-                      <p className="text-lg font-bold text-blue-600">{fmt(bankTotal)}</p>
+                    <div className="flex items-center gap-4">
+                      {bankName.toLowerCase().includes('icici') && (
+                        <Button 
+                          size="sm" 
+                          variant="outline" 
+                          className="text-xs border-blue-200 text-blue-700 hover:bg-blue-50"
+                          onClick={() => {
+                            // Find bank_id from first employee
+                            const bankId = bankEmployees[0]?.bank_id;
+                            if (bankId) openDownloadDialog(bankId, bankName);
+                          }}
+                        >
+                          <Download size={14} className="mr-1" /> Download Sheet
+                        </Button>
+                      )}
+                      <div className="text-right">
+                        <p className="text-xs text-slate-500">Bank Total</p>
+                        <p className="text-lg font-bold text-blue-600">{fmt(bankTotal)}</p>
+                      </div>
                     </div>
                   </div>
                   
@@ -424,6 +494,48 @@ export default function Salary({ user, onLogout }) {
             </div>
           </div>
         )}
+
+        {/* Download Sheet Dialog */}
+        <Dialog open={downloadDialogOpen} onOpenChange={setDownloadDialogOpen}>
+          <DialogContent className="max-w-md">
+            <DialogHeader>
+              <DialogTitle className="flex items-center gap-2">
+                <Download size={20} />
+                Download Salary Sheet - {downloadBankName}
+              </DialogTitle>
+            </DialogHeader>
+            <div className="space-y-4 py-4">
+              <div>
+                <Label htmlFor="sheet-name">Sheet Name</Label>
+                <Input
+                  id="sheet-name"
+                  placeholder="Enter sheet name"
+                  value={sheetName}
+                  onChange={(e) => setSheetName(e.target.value)}
+                />
+                <p className="text-xs text-slate-500 mt-1">This will be the Excel file name</p>
+              </div>
+              <div>
+                <Label htmlFor="payment-date">Payment Date *</Label>
+                <Input
+                  id="payment-date"
+                  placeholder="DD-MMM-YYYY (e.g., 10-Mar-2026)"
+                  value={paymentDate}
+                  onChange={(e) => setPaymentDate(e.target.value)}
+                />
+                <p className="text-xs text-slate-500 mt-1">Format: DD-MMM-YYYY (e.g., 10-Mar-2026)</p>
+              </div>
+            </div>
+            <DialogFooter>
+              <Button variant="outline" onClick={() => setDownloadDialogOpen(false)}>
+                Cancel
+              </Button>
+              <Button onClick={handleDownloadSheet} disabled={downloading || !paymentDate}>
+                {downloading ? 'Downloading...' : 'Download'}
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
       </div>
     </Layout>
   );

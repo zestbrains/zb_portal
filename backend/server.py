@@ -1,5 +1,6 @@
 from fastapi import FastAPI, APIRouter, HTTPException, Depends, status, UploadFile, File, Query, Body
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
+from fastapi.responses import StreamingResponse
 from dotenv import load_dotenv
 from starlette.middleware.cors import CORSMiddleware
 from motor.motor_asyncio import AsyncIOMotorClient
@@ -19,6 +20,8 @@ import smtplib
 from email.mime.text import MIMEText
 from email.mime.multipart import MIMEMultipart
 import ssl
+import openpyxl
+from openpyxl.utils import get_column_letter
 
 # IST Timezone
 IST = ZoneInfo("Asia/Kolkata")
@@ -4952,6 +4955,318 @@ async def save_salary_adjustment(
         upsert=True
     )
     return {"message": "Adjustment saved"}
+
+
+
+class SalarySheetRequest(BaseModel):
+    bank_id: str
+    year: int
+    month: int
+    sheet_name: str
+    payment_date: str  # Format: DD-MMM-YYYY
+
+@api_router.post("/salary/download-sheet")
+async def download_salary_sheet(
+    request: SalarySheetRequest,
+    user: dict = Depends(require_role(["admin"]))
+):
+    """Download salary sheet in ICICI bank format for a specific bank"""
+    
+    # Get bank details
+    bank = await db.banks.find_one({"id": request.bank_id}, {"_id": 0})
+    if not bank:
+        raise HTTPException(status_code=404, detail="Bank not found")
+    
+    debit_account = bank.get("account_number", "")
+    if not debit_account:
+        raise HTTPException(status_code=400, detail="Bank account number not set. Please update bank details.")
+    
+    # Get month name for remarks
+    month_names = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"]
+    month_name = month_names[request.month - 1]
+    remarks = f"{month_name} Salary"
+    
+    # Get all active employees assigned to this bank with salary data
+    employees = await db.employees.find(
+        {"bank_id": request.bank_id, "status": "active"},
+        {"_id": 0}
+    ).to_list(1000)
+    
+    if not employees:
+        raise HTTPException(status_code=404, detail="No active employees found for this bank")
+    
+    # Get salary data for these employees
+    from calendar import monthrange
+    num_days = monthrange(request.year, request.month)[1]
+    start_date = f"{request.year}-{request.month:02d}-01"
+    end_date = f"{request.year}-{request.month:02d}-{num_days:02d}"
+    
+    today = datetime.now(IST)
+    is_future_month = request.year > today.year or (request.year == today.year and request.month > today.month)
+    is_current_month = request.year == today.year and request.month == today.month
+    
+    # Get holidays
+    holidays_list = await db.holidays.find({"date": {"$gte": start_date, "$lte": end_date}}, {"_id": 0}).to_list(None)
+    holiday_dates = {h["date"] for h in holidays_list}
+    
+    # Get leave applications
+    leave_apps = await db.leave_applications.find(
+        {"status": "approved"},
+        {"_id": 0, "employee_id": 1, "leave_dates": 1}
+    ).to_list(None)
+    
+    leave_map = {}
+    for la in leave_apps:
+        emp_id = la["employee_id"]
+        for ld in (la.get("leave_dates") or []):
+            date = ld.get("date")
+            lt = ld.get("leave_type", "PL")
+            if lt != "Rejected" and date >= start_date and date <= end_date:
+                if emp_id not in leave_map:
+                    leave_map[emp_id] = {}
+                leave_map[emp_id][date] = lt
+    
+    # Get work entries for OT calculation
+    emp_ids = [e["employee_id"] for e in employees]
+    work_entries = await db.work_entries.find(
+        {"employee_id": {"$in": emp_ids}, "date": {"$gte": start_date, "$lte": end_date}},
+        {"_id": 0, "employee_id": 1, "date": 1, "hours": 1, "is_compensation": 1}
+    ).to_list(None)
+    
+    work_hours_map = {}
+    for entry in work_entries:
+        if entry.get("is_compensation", False):
+            continue
+        emp_id = entry.get("employee_id")
+        d = entry.get("date")
+        if emp_id not in work_hours_map:
+            work_hours_map[emp_id] = {}
+        if d not in work_hours_map[emp_id]:
+            work_hours_map[emp_id][d] = 0
+        work_hours_map[emp_id][d] += entry.get("hours", 0)
+    
+    # Get salary adjustments
+    adjustments = await db.salary_adjustments.find(
+        {"year": request.year, "month": request.month},
+        {"_id": 0}
+    ).to_list(None)
+    adjustments_map = {a["employee_id"]: a for a in adjustments}
+    
+    # Get late coming marks
+    month_key = f"{request.year}-{request.month:02d}"
+    late_coming_list = await db.late_coming.find(
+        {"month_key": month_key},
+        {"_id": 0, "employee_id": 1, "day": 1}
+    ).to_list(None)
+    
+    late_coming_map = {}
+    for lc in late_coming_list:
+        emp_id = lc["employee_id"]
+        if emp_id not in late_coming_map:
+            late_coming_map[emp_id] = []
+        late_coming_map[emp_id].append(lc["day"])
+    
+    # Create Excel workbook
+    wb = openpyxl.Workbook()
+    ws = wb.active
+    ws.title = request.sheet_name if request.sheet_name else "Sheet1"
+    
+    # Define headers (21 columns as per ICICI format)
+    headers = [
+        "Debit A/c Number",
+        "Beneficiary A/c Number",
+        "Beneficiary Name",
+        "Amount",
+        "Payment Type (Mandatory for all types of payments)",
+        "Payment date",
+        "IFSC Code",
+        "Payable Location",
+        "Print Location",
+        "Beneficiary.Mobile No.",
+        "Beneficiary email-id",
+        "Bene Address 1",
+        "Bene Address 2",
+        "Bene Address 3",
+        "Bene Address 4",
+        "Add detail 1",
+        "Add detail 2",
+        "Add detail 3",
+        "Add detail 4",
+        "Add detail 5",
+        "Remarks"
+    ]
+    
+    # Write headers
+    for col, header in enumerate(headers, 1):
+        ws.cell(row=1, column=col, value=header)
+    
+    # Calculate salary for each employee and write rows
+    row_num = 2
+    for emp in employees:
+        emp_id = emp["employee_id"]
+        
+        # Get employee's joining date
+        joining_date_str = emp.get("joining_date", "")
+        emp_joining_date = None
+        not_joined_days = 0
+        
+        if joining_date_str:
+            try:
+                emp_joining_date = datetime.fromisoformat(joining_date_str.replace('Z', '+00:00'))
+                if emp_joining_date.tzinfo is not None:
+                    emp_joining_date = emp_joining_date.replace(tzinfo=None)
+                
+                if emp_joining_date.year == request.year and emp_joining_date.month == request.month:
+                    not_joined_days = emp_joining_date.day - 1
+                elif emp_joining_date.year > request.year or (emp_joining_date.year == request.year and emp_joining_date.month > request.month):
+                    not_joined_days = num_days
+            except:
+                pass
+        
+        # Get base values
+        try:
+            salary = float(emp.get("salary") or 0)
+        except:
+            salary = 0
+        try:
+            pt = float(emp.get("pt") or 0)
+        except:
+            pt = 0
+        try:
+            esic = float(emp.get("esic") or 0)
+        except:
+            esic = 0
+        try:
+            epf = float(emp.get("epf") or 0)
+        except:
+            epf = 0
+        try:
+            cpf = float(emp.get("cpf") or 0)
+        except:
+            cpf = 0
+        
+        adj = adjustments_map.get(emp_id, {})
+        other_income = float(adj.get("other_income", 0) or 0)
+        extra_hours = float(adj.get("extra_hours", 0) or 0)
+        
+        # Calculate CL, OT, and sandwich leaves
+        cl_count = 0
+        ot_count = 0
+        day_types = []
+        
+        for day in range(1, num_days + 1):
+            date_str = f"{request.year}-{request.month:02d}-{day:02d}"
+            current_date = datetime(request.year, request.month, day)
+            day_of_week = current_date.weekday()
+            is_holiday = date_str in holiday_dates
+            is_weekend = day_of_week >= 5
+            
+            is_before_joining = emp_joining_date and current_date < emp_joining_date
+            is_future_date = (is_current_month and day > today.day) or is_future_month
+            
+            if is_before_joining:
+                day_types.append('notjoined')
+                continue
+            
+            if emp_id in leave_map and date_str in leave_map[emp_id]:
+                lt = leave_map[emp_id][date_str]
+                if lt == "CL":
+                    cl_count += 1
+                elif lt == "Half CL":
+                    cl_count += 0.5
+                elif lt == "PL/2 & CL/2":
+                    cl_count += 0.5
+                day_types.append('leave')
+            elif is_weekend or is_holiday:
+                if not is_future_date:
+                    total_hours = work_hours_map.get(emp_id, {}).get(date_str, 0)
+                    if total_hours >= 8.5:
+                        ot_count += 1
+                        day_types.append('present')
+                    elif total_hours >= 4.5:
+                        ot_count += 0.5
+                        day_types.append('present')
+                    else:
+                        day_types.append('nonworking')
+                else:
+                    day_types.append('nonworking')
+            elif is_future_date:
+                day_types.append('future')
+            else:
+                day_types.append('present')
+        
+        # Calculate sandwich leaves
+        nw_groups = []
+        i = 0
+        while i < len(day_types):
+            if day_types[i] == 'nonworking':
+                start = i
+                while i < len(day_types) and day_types[i] == 'nonworking':
+                    i += 1
+                nw_groups.append((start, i - 1))
+            else:
+                i += 1
+        
+        sandwich_count = 0
+        for g in range(len(nw_groups) - 1):
+            end_first = nw_groups[g][1]
+            start_second = nw_groups[g + 1][0]
+            between_start = end_first + 1
+            between_end = start_second - 1
+            if between_start > between_end:
+                continue
+            all_leave = all(day_types[j] == 'leave' for j in range(between_start, between_end + 1))
+            if all_leave:
+                sandwich_count += (nw_groups[g][1] - nw_groups[g][0] + 1)
+                sandwich_count += (nw_groups[g + 1][1] - nw_groups[g + 1][0] + 1)
+        
+        # Calculate late coming deduction
+        late_coming_days = late_coming_map.get(emp_id, [])
+        late_coming_count = len(late_coming_days)
+        late_coming_deduction_days = (late_coming_count // 3) * 0.5 if late_coming_count >= 3 else 0
+        
+        # Calculate amounts
+        per_day = salary / num_days if num_days > 0 and salary > 0 else 0
+        cl_amount = round(per_day * cl_count, 2)
+        ot_amount = round(per_day * ot_count, 2)
+        sandwich_amount = round(per_day * sandwich_count, 2)
+        late_coming_amount = round(per_day * late_coming_deduction_days, 2)
+        not_joined_amount = round(per_day * not_joined_days, 2)
+        per_hour = (per_day / 8.5) if per_day > 0 else 0
+        extra_hours_amount = round(per_hour * extra_hours, 2)
+        
+        gross_salary = round(salary - pt - esic - epf - cpf - cl_amount - sandwich_amount - late_coming_amount - not_joined_amount + ot_amount + other_income + extra_hours_amount, 2)
+        
+        # Skip if gross salary is 0 or negative
+        if gross_salary <= 0:
+            continue
+        
+        # Write row
+        ws.cell(row=row_num, column=1, value=debit_account)  # Debit A/c Number
+        ws.cell(row=row_num, column=2, value=emp.get("bank_account_number", ""))  # Beneficiary A/c Number
+        ws.cell(row=row_num, column=3, value=emp.get("name", ""))  # Beneficiary Name
+        ws.cell(row=row_num, column=4, value=int(gross_salary))  # Amount (integer)
+        ws.cell(row=row_num, column=5, value="I")  # Payment Type
+        ws.cell(row=row_num, column=6, value=request.payment_date)  # Payment date
+        ws.cell(row=row_num, column=21, value=remarks)  # Remarks
+        
+        row_num += 1
+    
+    if row_num == 2:
+        raise HTTPException(status_code=404, detail="No employees with positive salary found")
+    
+    # Save to bytes
+    output = io.BytesIO()
+    wb.save(output)
+    output.seek(0)
+    
+    # Return as downloadable file
+    filename = f"{request.sheet_name or 'salary_sheet'}.xlsx"
+    return StreamingResponse(
+        output,
+        media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        headers={"Content-Disposition": f'attachment; filename="{filename}"'}
+    )
 
 
 # Late Marks - Monthly late mark management with salary hold status
