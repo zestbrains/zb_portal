@@ -5109,10 +5109,10 @@ async def download_salary_sheet(
             late_coming_map[emp_id] = []
         late_coming_map[emp_id].append(lc["day"])
     
-    # Create Excel workbook
-    wb = openpyxl.Workbook()
-    ws = wb.active
-    ws.title = request.sheet_name if request.sheet_name else "Sheet1"
+    # Create Excel workbook using xlwt for .xls format
+    import xlwt
+    wb = xlwt.Workbook()
+    ws = wb.add_sheet(request.sheet_name if request.sheet_name else "Sheet1")
     
     # Define headers (21 columns as per ICICI format)
     headers = [
@@ -5139,12 +5139,12 @@ async def download_salary_sheet(
         "Remarks"
     ]
     
-    # Write headers
-    for col, header in enumerate(headers, 1):
-        ws.cell(row=1, column=col, value=header)
+    # Write headers (xlwt uses 0-based indexing)
+    for col, header in enumerate(headers):
+        ws.write(0, col, header)
     
     # Calculate salary for each employee and write rows
-    row_num = 2
+    row_num = 1  # Start from row 1 (row 0 is header in xlwt)
     for emp in employees:
         emp_id = emp["employee_id"]
         
@@ -5284,18 +5284,19 @@ async def download_salary_sheet(
         if gross_salary <= 0:
             continue
         
-        # Write row
-        ws.cell(row=row_num, column=1, value=debit_account)  # Debit A/c Number
-        ws.cell(row=row_num, column=2, value=emp.get("bank_account_number", ""))  # Beneficiary A/c Number
-        ws.cell(row=row_num, column=3, value=emp.get("name", ""))  # Beneficiary Name
-        ws.cell(row=row_num, column=4, value=int(gross_salary))  # Amount (integer)
-        ws.cell(row=row_num, column=5, value="I")  # Payment Type
-        ws.cell(row=row_num, column=6, value=request.payment_date)  # Payment date
-        ws.cell(row=row_num, column=21, value=remarks)  # Remarks
+        # Write row (xlwt uses 0-based indexing)
+        ws.write(row_num, 0, debit_account)  # Debit A/c Number
+        ws.write(row_num, 1, emp.get("bank_account_number", ""))  # Beneficiary A/c Number
+        ws.write(row_num, 2, emp.get("name", ""))  # Beneficiary Name
+        ws.write(row_num, 3, int(gross_salary))  # Amount (integer)
+        ws.write(row_num, 4, "I")  # Payment Type
+        ws.write(row_num, 5, request.payment_date)  # Payment date
+        ws.write(row_num, 6, emp.get("ifsc_code", ""))  # IFSC Code
+        ws.write(row_num, 20, remarks)  # Remarks (column 21, index 20)
         
         row_num += 1
     
-    if row_num == 2:
+    if row_num == 1:
         raise HTTPException(status_code=404, detail="No employees with positive salary found")
     
     # Save to bytes
@@ -5303,11 +5304,11 @@ async def download_salary_sheet(
     wb.save(output)
     output.seek(0)
     
-    # Return as downloadable file
-    filename = f"{request.sheet_name or 'salary_sheet'}.xlsx"
+    # Return as downloadable file with .xls extension
+    filename = f"{request.sheet_name or 'salary_sheet'}.xls"
     return StreamingResponse(
         output,
-        media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        media_type="application/vnd.ms-excel",
         headers={"Content-Disposition": f'attachment; filename="{filename}"'}
     )
 
