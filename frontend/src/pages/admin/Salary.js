@@ -51,6 +51,7 @@ export default function Salary({ user, onLogout }) {
   const [downloadDialogOpen, setDownloadDialogOpen] = useState(false);
   const [downloadBankId, setDownloadBankId] = useState('');
   const [downloadBankName, setDownloadBankName] = useState('');
+  const [downloadBankType, setDownloadBankType] = useState('icici'); // 'icici' or 'hexeros'
   const [sheetName, setSheetName] = useState('');
   const [paymentDate, setPaymentDate] = useState('');
   const [downloading, setDownloading] = useState(false);
@@ -186,30 +187,44 @@ export default function Salary({ user, onLogout }) {
     toast.success('Exported successfully');
   };
 
-  const openDownloadDialog = (bankId, bankName) => {
+  const openDownloadDialog = (bankId, bankName, bankType = 'icici') => {
     setDownloadBankId(bankId);
     setDownloadBankName(bankName);
+    setDownloadBankType(bankType);
     const monthLabel = MONTHS.find(m => m.value === month)?.label || month;
-    setSheetName(`ICICI_${monthLabel}_${year}`);
+    if (bankType === 'hexeros') {
+      setSheetName(`Hexeros_${monthLabel}_${year}`);
+    } else {
+      setSheetName(`ICICI_${monthLabel}_${year}`);
+    }
     setPaymentDate('');
     setDownloadDialogOpen(true);
   };
 
   const handleDownloadSheet = async () => {
-    if (!paymentDate) {
+    // Payment date is only required for ICICI
+    if (downloadBankType === 'icici' && !paymentDate) {
       toast.error('Please enter payment date');
       return;
     }
     
     setDownloading(true);
     try {
-      const response = await api.post('/salary/download-sheet', {
+      let endpoint = '/salary/download-sheet';
+      let payload = {
         bank_id: downloadBankId,
         year: parseInt(year),
         month: parseInt(month),
-        sheet_name: sheetName,
-        payment_date: paymentDate
-      }, {
+        sheet_name: sheetName
+      };
+      
+      if (downloadBankType === 'hexeros') {
+        endpoint = '/salary/download-sheet-hexeros';
+      } else {
+        payload.payment_date = paymentDate;
+      }
+      
+      const response = await api.post(endpoint, payload, {
         responseType: 'blob'
       });
       
@@ -326,7 +341,20 @@ export default function Salary({ user, onLogout }) {
                           onClick={() => {
                             // Find bank_id from first employee
                             const bankId = bankEmployees[0]?.bank_id;
-                            if (bankId) openDownloadDialog(bankId, bankName);
+                            if (bankId) openDownloadDialog(bankId, bankName, 'icici');
+                          }}
+                        >
+                          <Download size={14} className="mr-1" /> Download Sheet
+                        </Button>
+                      )}
+                      {bankName.toLowerCase().includes('hexeros') && (
+                        <Button 
+                          size="sm" 
+                          variant="outline" 
+                          className="text-xs border-green-200 text-green-700 hover:bg-green-50"
+                          onClick={() => {
+                            const bankId = bankEmployees[0]?.bank_id;
+                            if (bankId) openDownloadDialog(bankId, bankName, 'hexeros');
                           }}
                         >
                           <Download size={14} className="mr-1" /> Download Sheet
@@ -515,22 +543,24 @@ export default function Salary({ user, onLogout }) {
                 />
                 <p className="text-xs text-slate-500 mt-1">This will be the Excel file name</p>
               </div>
-              <div>
-                <Label htmlFor="payment-date">Payment Date *</Label>
-                <Input
-                  id="payment-date"
-                  placeholder="DD-MMM-YYYY (e.g., 10-Mar-2026)"
-                  value={paymentDate}
-                  onChange={(e) => setPaymentDate(e.target.value)}
-                />
-                <p className="text-xs text-slate-500 mt-1">Format: DD-MMM-YYYY (e.g., 10-Mar-2026)</p>
-              </div>
+              {downloadBankType === 'icici' && (
+                <div>
+                  <Label htmlFor="payment-date">Payment Date *</Label>
+                  <Input
+                    id="payment-date"
+                    placeholder="DD-MMM-YYYY (e.g., 10-Mar-2026)"
+                    value={paymentDate}
+                    onChange={(e) => setPaymentDate(e.target.value)}
+                  />
+                  <p className="text-xs text-slate-500 mt-1">Format: DD-MMM-YYYY (e.g., 10-Mar-2026)</p>
+                </div>
+              )}
             </div>
             <DialogFooter>
               <Button variant="outline" onClick={() => setDownloadDialogOpen(false)}>
                 Cancel
               </Button>
-              <Button onClick={handleDownloadSheet} disabled={downloading || !paymentDate}>
+              <Button onClick={handleDownloadSheet} disabled={downloading || (downloadBankType === 'icici' && !paymentDate)}>
                 {downloading ? 'Downloading...' : 'Download'}
               </Button>
             </DialogFooter>

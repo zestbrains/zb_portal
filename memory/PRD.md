@@ -54,6 +54,7 @@ HR Management Portal for Zestbrains - migrated from another Emergent account
 - **Added**: Bank Account Number and IFSC Code fields for employees
 - **Added**: ICICI Salary Sheet download feature (openpyxl)
 - **Fixed**: ICICI Salary Sheet now correctly filters by `salary_status` (Active vs Hold) instead of employee status
+- **Added**: Hexeros Yes Bank Salary Sheet download feature with 5-column format (Name, Account, IFSC, Amount, Description)
 
 ## Admin Credentials
 - **Username**: renish
