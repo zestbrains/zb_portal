@@ -1879,7 +1879,7 @@ async def get_detailed_work_summary(
         query["project_code"] = project_code
     
     # Get all work entries
-    entries = await db.work_entries.find(query, {"_id": 0}).to_list(50000)
+    entries = await db.work_entries.find(query, {"_id": 0}).sort("date", -1).to_list(100000)
     
     # Get all employees for filtering
     employees = await db.employees.find({}, {"_id": 0}).to_list(1000)

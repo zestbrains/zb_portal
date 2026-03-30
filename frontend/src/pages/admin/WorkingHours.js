@@ -10,7 +10,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from '../../componen
 import { Label } from '../../components/ui/label';
 import { Textarea } from '../../components/ui/textarea';
 import { toast } from 'sonner';
-import { Upload, Download, Eye, Plus, Trash2, Edit, AlertTriangle } from 'lucide-react';
+import { Upload, Download, Eye, Plus, Trash2, Edit, AlertTriangle, Clock } from 'lucide-react';
 
 export default function AdminWorkingHours({ user, onLogout }) {
   const [searchParams, setSearchParams] = useSearchParams();
