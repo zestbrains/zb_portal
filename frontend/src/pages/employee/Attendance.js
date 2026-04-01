@@ -271,7 +271,7 @@ export default function EmployeeAttendance({ user, onLogout }) {
           </div>
         )}
 
-        {/* Salary Summary */}
+        {/* Salary Summary - HIDDEN (uncomment to show)
         {salaryData && salaryData.salary > 0 && (
           <div className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden" data-testid="salary-summary">
             <div className="p-4 border-b border-slate-200">
@@ -421,6 +421,7 @@ export default function EmployeeAttendance({ user, onLogout }) {
             </div>
           </div>
         )}
+        */}
 
         {/* Legend */}
         <div className="bg-white rounded-xl border border-slate-200 p-4 shadow-sm">
