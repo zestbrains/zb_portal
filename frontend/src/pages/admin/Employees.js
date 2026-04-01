@@ -580,10 +580,10 @@ export default function AdminEmployees({ user, onLogout }) {
             )}
         </div>
 
-        {/* View Employee Dialog */}
+        {/* View Employee Dialog - Redesigned with all details */}
         {viewingEmployee && (
           <Dialog open={viewDialogOpen} onOpenChange={setViewDialogOpen}>
-            <DialogContent className="sm:max-w-md">
+            <DialogContent className="sm:max-w-2xl max-h-[90vh] overflow-y-auto">
               <DialogHeader>
                 <DialogTitle className="flex items-center gap-2">
                   <Eye size={20} />
@@ -591,66 +591,193 @@ export default function AdminEmployees({ user, onLogout }) {
                 </DialogTitle>
               </DialogHeader>
               <div className="space-y-4">
-                <div className="p-4 bg-slate-50 rounded-xl border border-slate-100">
-                  <div className="text-center mb-4">
-                    <div className="w-14 h-14 bg-slate-200 rounded-full flex items-center justify-center mx-auto mb-2">
-                      <span className="text-xl font-bold text-slate-700">
+                {/* Header with Avatar and Basic Info */}
+                <div className="p-4 bg-gradient-to-r from-slate-50 to-slate-100 rounded-xl border border-slate-200">
+                  <div className="flex items-center gap-4">
+                    <div className="w-16 h-16 bg-indigo-100 rounded-full flex items-center justify-center flex-shrink-0">
+                      <span className="text-2xl font-bold text-indigo-600">
                         {viewingEmployee.name.charAt(0).toUpperCase()}
                       </span>
                     </div>
-                    <h3 className="text-lg font-semibold text-slate-900">{viewingEmployee.name}</h3>
-                    <p className="text-slate-400 text-sm">{viewingEmployee.employee_id}</p>
+                    <div className="flex-1 min-w-0">
+                      <h3 className="text-xl font-semibold text-slate-900">{viewingEmployee.name}</h3>
+                      <p className="text-slate-500 text-sm">Employee ID: {viewingEmployee.employee_id}</p>
+                      <div className="flex items-center gap-2 mt-1">
+                        <span className={`px-2 py-0.5 rounded text-xs font-semibold ${
+                          viewingEmployee.status === 'active' ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'
+                        }`}>
+                          {viewingEmployee.status?.toUpperCase()}
+                        </span>
+                        <span className="text-xs text-slate-400">|</span>
+                        <span className="text-xs text-slate-500">{viewingEmployee.role || 'Employee'}</span>
+                      </div>
+                    </div>
                   </div>
                 </div>
+
+                {/* Tabs for organized view */}
+                <Tabs defaultValue="personal" className="w-full">
+                  <TabsList className="grid w-full grid-cols-4 mb-4">
+                    <TabsTrigger value="personal" className="text-xs">Personal</TabsTrigger>
+                    <TabsTrigger value="work" className="text-xs">Work</TabsTrigger>
+                    <TabsTrigger value="bank" className="text-xs">Bank</TabsTrigger>
+                    <TabsTrigger value="salary" className="text-xs">Salary</TabsTrigger>
+                  </TabsList>
+
+                  {/* Personal Information Tab */}
+                  <TabsContent value="personal" className="space-y-2">
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                      <div className="p-3 bg-white border rounded-lg">
+                        <p className="text-xs text-slate-500 mb-1">Email</p>
+                        <p className="font-medium text-sm text-slate-900 break-all">{viewingEmployee.email}</p>
+                      </div>
+                      <div className="p-3 bg-white border rounded-lg">
+                        <p className="text-xs text-slate-500 mb-1">Phone</p>
+                        <p className="font-medium text-sm text-slate-900">{viewingEmployee.phone || 'N/A'}</p>
+                      </div>
+                      <div className="p-3 bg-amber-50 border border-amber-200 rounded-lg">
+                        <p className="text-xs text-amber-700 mb-1">Password</p>
+                        <p className="font-mono font-medium text-sm text-amber-800">{viewingEmployee.plain_password || 'Not set'}</p>
+                      </div>
+                      <div className="p-3 bg-white border rounded-lg">
+                        <p className="text-xs text-slate-500 mb-1">Birth Date</p>
+                        <p className="font-medium text-sm text-slate-900">
+                          {viewingEmployee.birth_date ? new Date(viewingEmployee.birth_date).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' }) : 'N/A'}
+                        </p>
+                      </div>
+                    </div>
+                  </TabsContent>
+
+                  {/* Work Information Tab */}
+                  <TabsContent value="work" className="space-y-2">
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                      <div className="p-3 bg-white border rounded-lg">
+                        <p className="text-xs text-slate-500 mb-1">Department(s)</p>
+                        <p className="font-medium text-sm text-slate-900">{getDepartmentNames(viewingEmployee) || 'N/A'}</p>
+                      </div>
+                      <div className="p-3 bg-white border rounded-lg">
+                        <p className="text-xs text-slate-500 mb-1">Experience</p>
+                        <p className="font-medium text-sm text-slate-900">{viewingEmployee.experience || 'N/A'}</p>
+                      </div>
+                      <div className="p-3 bg-white border rounded-lg">
+                        <p className="text-xs text-slate-500 mb-1">Joining Date</p>
+                        <p className="font-medium text-sm text-slate-900">
+                          {viewingEmployee.joining_date ? new Date(viewingEmployee.joining_date).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' }) : 'N/A'}
+                        </p>
+                      </div>
+                      <div className="p-3 bg-white border rounded-lg">
+                        <p className="text-xs text-slate-500 mb-1">Probation End Date</p>
+                        <p className="font-medium text-sm text-slate-900">
+                          {viewingEmployee.probation_end_date ? new Date(viewingEmployee.probation_end_date).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' }) : 'N/A'}
+                        </p>
+                      </div>
+                      <div className="p-3 bg-white border rounded-lg sm:col-span-2">
+                        <p className="text-xs text-slate-500 mb-1">Team Leaders</p>
+                        <p className="font-medium text-sm text-slate-900">
+                          {viewingEmployee.team_leader_ids?.length > 0 
+                            ? viewingEmployee.team_leader_ids.map(id => {
+                                const leader = employees.find(e => e.employee_id === id);
+                                return leader ? leader.name : id;
+                              }).join(', ')
+                            : 'None assigned'}
+                        </p>
+                      </div>
+                    </div>
+                    
+                    {/* Leave Summary */}
+                    <div className="mt-4 p-3 bg-indigo-50 border border-indigo-100 rounded-lg">
+                      <p className="text-xs text-indigo-700 font-medium mb-2">Leave Summary</p>
+                      <div className="grid grid-cols-3 gap-2 text-center">
+                        <div className="bg-white rounded p-2">
+                          <p className="text-lg font-bold text-indigo-600">{viewingEmployee.annual_pl_allocation || 16}</p>
+                          <p className="text-xs text-slate-500">Annual PL</p>
+                        </div>
+                        <div className="bg-white rounded p-2">
+                          <p className="text-lg font-bold text-orange-600">{viewingEmployee.pl_taken || 0}</p>
+                          <p className="text-xs text-slate-500">PL Taken</p>
+                        </div>
+                        <div className="bg-white rounded p-2">
+                          <p className="text-lg font-bold text-red-600">{viewingEmployee.cl_taken || 0}</p>
+                          <p className="text-xs text-slate-500">CL Taken</p>
+                        </div>
+                      </div>
+                    </div>
+                  </TabsContent>
+
+                  {/* Bank Information Tab */}
+                  <TabsContent value="bank" className="space-y-2">
+                    <div className="grid grid-cols-1 gap-2">
+                      <div className="p-3 bg-white border rounded-lg">
+                        <p className="text-xs text-slate-500 mb-1">Bank Name</p>
+                        <p className="font-medium text-sm text-slate-900">
+                          {viewingEmployee.bank_id 
+                            ? (banks.find(b => b.id === viewingEmployee.bank_id)?.name || 'Unknown Bank')
+                            : 'Not assigned'}
+                        </p>
+                      </div>
+                      <div className="p-3 bg-white border rounded-lg">
+                        <p className="text-xs text-slate-500 mb-1">Account Number</p>
+                        <p className="font-mono font-medium text-sm text-slate-900">{viewingEmployee.bank_account_number || 'N/A'}</p>
+                      </div>
+                      <div className="p-3 bg-white border rounded-lg">
+                        <p className="text-xs text-slate-500 mb-1">IFSC Code</p>
+                        <p className="font-mono font-medium text-sm text-slate-900">{viewingEmployee.ifsc_code || 'N/A'}</p>
+                      </div>
+                    </div>
+                  </TabsContent>
+
+                  {/* Salary & Deductions Tab */}
+                  <TabsContent value="salary" className="space-y-2">
+                    <div className="p-4 bg-green-50 border border-green-200 rounded-lg mb-3">
+                      <p className="text-xs text-green-700 mb-1">Monthly Salary (CTC)</p>
+                      <p className="text-2xl font-bold text-green-800">
+                        ₹ {viewingEmployee.salary ? Number(viewingEmployee.salary).toLocaleString('en-IN') : '0'}
+                      </p>
+                    </div>
+                    
+                    <p className="text-xs text-slate-500 font-medium uppercase tracking-wide">Deductions</p>
+                    <div className="grid grid-cols-2 gap-2">
+                      <div className="p-3 bg-white border rounded-lg">
+                        <p className="text-xs text-slate-500 mb-1">Professional Tax (PT)</p>
+                        <p className="font-medium text-sm text-slate-900">₹ {viewingEmployee.pt || '0'}</p>
+                      </div>
+                      <div className="p-3 bg-white border rounded-lg">
+                        <p className="text-xs text-slate-500 mb-1">ESIC</p>
+                        <p className="font-medium text-sm text-slate-900">₹ {viewingEmployee.esic || '0'}</p>
+                      </div>
+                      <div className="p-3 bg-white border rounded-lg">
+                        <p className="text-xs text-slate-500 mb-1">EPF (Employee)</p>
+                        <p className="font-medium text-sm text-slate-900">₹ {viewingEmployee.epf || '0'}</p>
+                      </div>
+                      <div className="p-3 bg-white border rounded-lg">
+                        <p className="text-xs text-slate-500 mb-1">CPF (Company)</p>
+                        <p className="font-medium text-sm text-slate-900">₹ {viewingEmployee.cpf || '0'}</p>
+                      </div>
+                    </div>
+                    
+                    {/* Net Salary Calculation */}
+                    <div className="mt-3 p-3 bg-slate-100 border rounded-lg">
+                      <div className="flex justify-between items-center">
+                        <span className="text-sm text-slate-600">Estimated Net Salary</span>
+                        <span className="font-bold text-lg text-slate-900">
+                          ₹ {(
+                            Number(viewingEmployee.salary || 0) - 
+                            Number(viewingEmployee.pt || 0) - 
+                            Number(viewingEmployee.esic || 0) - 
+                            Number(viewingEmployee.epf || 0) - 
+                            Number(viewingEmployee.cpf || 0)
+                          ).toLocaleString('en-IN')}
+                        </span>
+                      </div>
+                      <p className="text-xs text-slate-400 mt-1">*Before any leave/attendance deductions</p>
+                    </div>
+                  </TabsContent>
+                </Tabs>
                 
-                <div className="space-y-2">
-                  <div className="flex justify-between p-2.5 sm:p-3 bg-white border rounded text-sm">
-                    <span className="text-slate-500">Email</span>
-                    <span className="font-medium truncate ml-2 max-w-[60%]">{viewingEmployee.email}</span>
-                  </div>
-                  <div className="flex justify-between p-2.5 sm:p-3 bg-white border rounded text-sm">
-                    <span className="text-slate-500">Phone</span>
-                    <span className="font-medium">{viewingEmployee.phone}</span>
-                  </div>
-                  <div className="flex justify-between p-2.5 sm:p-3 bg-amber-50 border border-amber-200 rounded text-sm">
-                    <span className="text-amber-700 font-medium">Password</span>
-                    <span className="font-mono font-medium text-amber-800">{viewingEmployee.plain_password || 'Not set'}</span>
-                  </div>
-                  <div className="flex justify-between p-2.5 sm:p-3 bg-white border rounded text-sm">
-                    <span className="text-slate-500">Department(s)</span>
-                    <span className="font-medium text-right max-w-[60%]">{getDepartmentNames(viewingEmployee)}</span>
-                  </div>
-                  <div className="flex justify-between p-2.5 sm:p-3 bg-white border rounded text-sm">
-                    <span className="text-slate-500">Experience</span>
-                    <span className="font-medium">{viewingEmployee.experience || 'N/A'}</span>
-                  </div>
-                  <div className="flex justify-between p-2.5 sm:p-3 bg-white border rounded text-sm">
-                    <span className="text-slate-500">Joining Date</span>
-                    <span className="font-medium">{new Date(viewingEmployee.joining_date).toLocaleDateString('en-IN')}</span>
-                  </div>
-                  <div className="flex justify-between p-2.5 sm:p-3 bg-white border rounded text-sm">
-                    <span className="text-slate-500">Birth Date</span>
-                    <span className="font-medium">{viewingEmployee.birth_date ? new Date(viewingEmployee.birth_date).toLocaleDateString('en-IN') : 'N/A'}</span>
-                  </div>
-                  <div className="flex justify-between p-2.5 sm:p-3 bg-white border rounded text-sm">
-                    <span className="text-slate-500">Team Leaders</span>
-                    <span className="font-medium text-right max-w-[60%]">
-                      {viewingEmployee.team_leader_ids?.length > 0 
-                        ? viewingEmployee.team_leader_ids.map(id => {
-                            const leader = employees.find(e => e.employee_id === id);
-                            return leader ? leader.name : id;
-                          }).join(', ')
-                        : 'None assigned'}
-                    </span>
-                  </div>
-                  <div className="flex justify-between p-2.5 sm:p-3 bg-white border rounded text-sm">
-                    <span className="text-slate-500">Status</span>
-                    <span className={`px-2 py-1 rounded text-xs font-semibold ${
-                      viewingEmployee.status === 'active' ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'
-                    }`}>
-                      {viewingEmployee.status.toUpperCase()}
-                    </span>
-                  </div>
+                {/* Footer with timestamps */}
+                <div className="pt-2 border-t text-xs text-slate-400 flex justify-between">
+                  <span>Created: {viewingEmployee.created_at ? new Date(viewingEmployee.created_at).toLocaleDateString('en-IN') : 'N/A'}</span>
+                  <span>Updated: {viewingEmployee.updated_at ? new Date(viewingEmployee.updated_at).toLocaleDateString('en-IN') : 'N/A'}</span>
                 </div>
                 
                 <Button variant="outline" onClick={() => setViewDialogOpen(false)} className="w-full">
