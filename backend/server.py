@@ -6251,18 +6251,28 @@ async def get_my_salary(year: int, month: int, user: dict = Depends(require_role
             if lt == "CL":
                 cl_count += 1
                 cl_dates.append(day)
+                day_types.append((day, date_str, 'leave'))  # Full day CL
             elif lt == "Half CL":
                 cl_count += 0.5
                 cl_dates.append(day)
+                day_types.append((day, date_str, 'present'))  # Half day = present, no sandwich
             elif lt == "PL/2 & CL/2":
                 cl_count += 0.5
                 cl_dates.append(day)
                 pl_count += 0.5
+                day_types.append((day, date_str, 'present'))  # Half day = present, no sandwich
             elif lt == "PL":
                 pl_count += 1
-            elif lt == "PL/2":
+                day_types.append((day, date_str, 'leave'))  # Full day PL
+            elif lt in ["PL/2", "Half PL"]:
                 pl_count += 0.5
-            day_types.append((day, date_str, 'leave'))
+                day_types.append((day, date_str, 'present'))  # Half day = present, no sandwich
+            else:
+                # Other leave types - check if half day
+                if "/2" in lt or "Half" in lt:
+                    day_types.append((day, date_str, 'present'))  # Half day = no sandwich
+                else:
+                    day_types.append((day, date_str, 'leave'))  # Full day leave
         elif is_weekend or is_holiday:
             if not is_future_date:
                 total_hours = work_hours_map.get(date_str, 0)
