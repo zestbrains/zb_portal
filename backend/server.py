@@ -408,6 +408,156 @@ async def send_leave_notification_email(
         logging.error(f"Failed to send email: {str(e)}")
         return False
 
+
+async def send_leave_application_email(
+    employee_name: str,
+    employee_email: str,
+    employee_id: str,
+    leave_type: str,
+    from_date: str,
+    to_date: str,
+    reason: str,
+    days_count: float,
+    leave_dates_info: List[dict] = None
+):
+    """Send email notification when employee applies for leave - to Admin/HR and Team Leader"""
+    try:
+        # Get email configuration from database
+        email_config = await db.email_config.find_one({}, {"_id": 0})
+        if not email_config or not email_config.get("is_enabled"):
+            logging.info("Email notifications disabled or not configured")
+            return False
+        
+        smtp_host = email_config.get("smtp_host", "smtp.gmail.com")
+        smtp_port = email_config.get("smtp_port", 587)
+        smtp_email = email_config.get("smtp_email", "hr.zestbrains@gmail.com")
+        smtp_password = email_config.get("smtp_password", "")
+        enable_ssl = email_config.get("enable_ssl", True)
+        cc_emails = email_config.get("cc_emails", "")
+        
+        if not smtp_password:
+            logging.warning("SMTP password not configured")
+            return False
+        
+        # Build recipient list: Admin emails (cc_emails) + Team Leader emails
+        recipients = []
+        
+        # Add CC emails from email config (Admin/HR emails)
+        if cc_emails:
+            recipients.extend([e.strip() for e in cc_emails.split(',') if e.strip()])
+        
+        # Get team leader emails for this employee
+        employee = await db.employees.find_one({"employee_id": employee_id}, {"_id": 0, "team_leader_ids": 1})
+        if employee and employee.get("team_leader_ids"):
+            team_leader_ids = employee["team_leader_ids"]
+            # Get team leader emails
+            team_leaders = await db.employees.find(
+                {"employee_id": {"$in": team_leader_ids}},
+                {"_id": 0, "email": 1, "name": 1}
+            ).to_list(None)
+            for tl in team_leaders:
+                if tl.get("email") and tl["email"] not in recipients:
+                    recipients.append(tl["email"])
+        
+        if not recipients:
+            logging.warning("No recipients configured for leave application notification")
+            return False
+        
+        # Build email content
+        now_ist = get_ist_now().strftime("%d %b %Y, %I:%M %p IST")
+        
+        subject = f"New Leave Application - {employee_name}"
+        
+        # Build dates info HTML
+        dates_html = ""
+        if leave_dates_info:
+            dates_html = "<ul>"
+            for ld in leave_dates_info:
+                day_type = ld.get('day_type', 'full')
+                day_type_label = 'Full Day' if day_type == 'full' else 'Half Day (First Half)' if day_type == 'first_half' else 'Half Day (Second Half)' if day_type == 'second_half' else 'Half Day'
+                dates_html += f"<li>{ld['date']} - {day_type_label}</li>"
+            dates_html += "</ul>"
+        else:
+            dates_html = f"<p>{from_date} to {to_date}</p>"
+        
+        html_body = f"""
+        <html>
+        <body style="font-family: Arial, sans-serif; line-height: 1.6; color: #333;">
+            <div style="max-width: 600px; margin: 0 auto; padding: 20px;">
+                <h2 style="color: #4f46e5;">Zestbrains - New Leave Application</h2>
+                <hr style="border: 1px solid #e5e7eb;">
+                
+                <p>A new leave application has been submitted and requires your attention.</p>
+                
+                <table style="width: 100%; border-collapse: collapse; margin: 20px 0;">
+                    <tr>
+                        <td style="padding: 8px; border: 1px solid #e5e7eb; background: #f9fafb; width: 40%;"><strong>Employee Name</strong></td>
+                        <td style="padding: 8px; border: 1px solid #e5e7eb;">{employee_name}</td>
+                    </tr>
+                    <tr>
+                        <td style="padding: 8px; border: 1px solid #e5e7eb; background: #f9fafb;"><strong>Employee Email</strong></td>
+                        <td style="padding: 8px; border: 1px solid #e5e7eb;">{employee_email}</td>
+                    </tr>
+                    <tr>
+                        <td style="padding: 8px; border: 1px solid #e5e7eb; background: #f9fafb;"><strong>Leave Type</strong></td>
+                        <td style="padding: 8px; border: 1px solid #e5e7eb;">{leave_type or 'PL'}</td>
+                    </tr>
+                    <tr>
+                        <td style="padding: 8px; border: 1px solid #e5e7eb; background: #f9fafb;"><strong>Total Days</strong></td>
+                        <td style="padding: 8px; border: 1px solid #e5e7eb;">{days_count}</td>
+                    </tr>
+                    <tr>
+                        <td style="padding: 8px; border: 1px solid #e5e7eb; background: #f9fafb;"><strong>Applied On</strong></td>
+                        <td style="padding: 8px; border: 1px solid #e5e7eb;">{now_ist}</td>
+                    </tr>
+                </table>
+                
+                <h3 style="color: #4f46e5;">Leave Dates:</h3>
+                {dates_html}
+                
+                <h3 style="color: #4f46e5;">Reason:</h3>
+                <p style="background: #f9fafb; padding: 10px; border-radius: 5px;">{reason or 'No reason provided'}</p>
+                
+                <div style="margin-top: 20px; padding: 15px; background: #fef3c7; border-radius: 5px;">
+                    <p style="margin: 0; color: #92400e;"><strong>Action Required:</strong> Please login to the HR Portal to approve or reject this leave application.</p>
+                </div>
+                
+                <hr style="border: 1px solid #e5e7eb; margin-top: 30px;">
+                <p style="color: #6b7280; font-size: 12px;">
+                    This is an automated email from Zestbrains HR Portal. Please do not reply to this email.
+                </p>
+            </div>
+        </body>
+        </html>
+        """
+        
+        # Create message
+        msg = MIMEMultipart('alternative')
+        msg['Subject'] = subject
+        msg['From'] = smtp_email
+        msg['To'] = ', '.join(recipients)
+        
+        msg.attach(MIMEText(html_body, 'html'))
+        
+        # Send email
+        if enable_ssl:
+            context = ssl.create_default_context()
+            with smtplib.SMTP(smtp_host, smtp_port) as server:
+                server.starttls(context=context)
+                server.login(smtp_email, smtp_password)
+                server.sendmail(smtp_email, recipients, msg.as_string())
+        else:
+            with smtplib.SMTP(smtp_host, smtp_port) as server:
+                server.login(smtp_email, smtp_password)
+                server.sendmail(smtp_email, recipients, msg.as_string())
+        
+        logging.info(f"Leave application email sent to {', '.join(recipients)}")
+        return True
+        
+    except Exception as e:
+        logging.error(f"Failed to send leave application email: {str(e)}")
+        return False
+
 # Utility Functions
 def hash_password(password: str) -> str:
     return pwd_context.hash(password)
@@ -2472,6 +2622,24 @@ async def apply_leave(leave: LeaveApplication, user: dict = Depends(get_current_
     await db.leave_applications.insert_one(leave_doc)
     # Return without _id
     created_leave = await db.leave_applications.find_one({"id": leave_id}, {"_id": 0})
+    
+    # Send email notification to Admin/HR and Team Leader
+    try:
+        await send_leave_application_email(
+            employee_name=employee["name"],
+            employee_email=employee["email"],
+            employee_id=employee["employee_id"],
+            leave_type=leave.leave_type,
+            from_date=leave.from_date,
+            to_date=leave.to_date,
+            reason=leave.reason,
+            days_count=days_count,
+            leave_dates_info=leave_dates_info
+        )
+    except Exception as e:
+        logging.error(f"Failed to send leave application email: {str(e)}")
+        # Don't fail the API call if email fails
+    
     return created_leave
 
 class LeaveApplicationUpdate(BaseModel):
