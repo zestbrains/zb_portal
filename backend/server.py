@@ -743,7 +743,8 @@ async def delete_department(dept_id: str, user: dict = Depends(require_role(["ad
 
 # Employee Routes
 @api_router.get("/employees", response_model=List[Employee])
-async def get_employees(status: Optional[str] = None, user: dict = Depends(get_current_user)):
+async def get_employees(status: Optional[str] = None, user: dict = Depends(require_role(["admin", "hr"]))):
+    """Get all employees - Admin/HR only (contains sensitive data like salary, bank details)"""
     query = {}
     if status and status != "all":
         query["status"] = status
@@ -751,8 +752,34 @@ async def get_employees(status: Optional[str] = None, user: dict = Depends(get_c
     employees = await db.employees.find(query, {"_id": 0}).to_list(1000)
     return employees
 
+@api_router.get("/employees/basic")
+async def get_employees_basic(status: Optional[str] = None, user: dict = Depends(get_current_user)):
+    """Get basic employee info for all users (name, email, department - no sensitive data)"""
+    query = {}
+    if status and status != "all":
+        query["status"] = status
+    
+    # Only return non-sensitive fields
+    projection = {
+        "_id": 0,
+        "id": 1,
+        "employee_id": 1,
+        "name": 1,
+        "email": 1,
+        "phone": 1,
+        "department_ids": 1,
+        "department_id": 1,
+        "role": 1,
+        "status": 1,
+        "team_leader_ids": 1
+    }
+    
+    employees = await db.employees.find(query, projection).to_list(1000)
+    return employees
+
 @api_router.get("/employees/{emp_id}", response_model=Employee)
-async def get_employee(emp_id: str, user: dict = Depends(get_current_user)):
+async def get_employee(emp_id: str, user: dict = Depends(require_role(["admin", "hr"]))):
+    """Get single employee details - Admin/HR only"""
     employee = await db.employees.find_one({"id": emp_id}, {"_id": 0})
     if not employee:
         raise HTTPException(status_code=404, detail="Employee not found")
