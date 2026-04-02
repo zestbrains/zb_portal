@@ -42,28 +42,27 @@ HR Management Portal for Zestbrains - migrated from another Emergent account
 - Late Coming attendance tracking with salary deductions
 - Late Marks for delayed projects
 - Bank-wise salary grouping
+- ICICI & Hexeros Yes Bank Salary Sheet downloads
+- Sandwich Leave detection & salary deduction
+- Email notifications on leave application
+- Secured /api/employees endpoint (admin/hr only)
+- Employee Attendance: Late marks & deduction summary (no full salary details exposed)
+- Sandwich Leave Warning on leave application (pre-submission check)
 
-## Recent Changes (December 2025)
-- **Fixed**: Team Leader assignment in Employee Edit dialog now saves correctly
-- **Added**: Password visibility in Employees table and View dialog (plain_password field)
-- **Backend**: Added `team_leader_ids` and `plain_password` to Employee Pydantic response model
-- **Added**: NJ (Not Joined) attendance status and pro-rated salary for mid-month joins
-- **Added**: Edit/delete individual leave dates within approved applications
-- **Added**: Visual Sandwich Leave ("SW") indicators in Attendance module
-- **Fixed**: Dashboard Top Performers/Performance graphs to exclude ex-employees
-- **Added**: Bank Account Number and IFSC Code fields for employees
-- **Added**: ICICI Salary Sheet download feature (openpyxl)
-- **Fixed**: ICICI Salary Sheet now correctly filters by `salary_status` (Active vs Hold) instead of employee status
-- **Added**: Hexeros Yes Bank Salary Sheet download feature with 5-column format (Name, Account, IFSC, Amount, Description)
+## Recent Changes (April 2026)
+- **Added**: Employee Attendance page now shows "Late Marks & Deduction" section (only visible when late marks exist) - replaces hidden salary summary
+- **Added**: Sandwich Leave Warning on Apply Leave page - checks proposed leave dates against sandwich rules before submission, shows clear warning with affected dates and deduction impact
+- **Backend**: New `POST /api/leaves/check-sandwich` endpoint for sandwich leave pre-check
 
 ## Admin Credentials
 - **Username**: renish
 - **Password**: Zb@0075588
 
 ## Next Action Items
+- P1: Verify weekend working hours slow loading (needs user clarification)
 - P2: Configure dynamic thresholds for Late Coming salary deductions (currently hardcoded)
 - P2: Bulk bank assignment for employees
-- P2: Refactor server.py (5000+ lines) into modular routes/models
+- P2: Refactor server.py (6000+ lines) into modular routes/models
 
 ## URL
 https://leave-sync-hub.preview.emergentagent.com
