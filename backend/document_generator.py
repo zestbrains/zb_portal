@@ -20,13 +20,14 @@ class LetterPDF(FPDF):
     """Custom PDF class with Zestbrains letterhead"""
 
     def __init__(self):
-        super().__init__(orientation='P', unit='mm', format='A4')
-        self.set_auto_page_break(auto=True, margin=45)
+        super().__init__(orientation='P', unit='mm', format='Letter')
+        self.set_auto_page_break(auto=True, margin=55)
 
     def header(self):
         if os.path.exists(HEADER_IMG):
-            self.image(HEADER_IMG, x=0, y=0, w=210)
-            self.set_y(40)
+            # Header: full width, positioned at very top
+            self.image(HEADER_IMG, x=0, y=0, w=215.9)
+            self.set_y(44)
         else:
             self.set_y(15)
             self.set_font("Helvetica", "B", 18)
@@ -35,22 +36,23 @@ class LetterPDF(FPDF):
 
     def footer(self):
         if os.path.exists(FOOTER_IMG):
-            self.image(FOOTER_IMG, x=0, y=262, w=210)
+            # Footer: full width, positioned at bottom of US Letter page (279.4mm)
+            self.image(FOOTER_IMG, x=0, y=225, w=215.9)
 
     def add_signature(self):
         """Add authorized signatory at bottom"""
-        y_pos = self.get_y() + 10
-        if y_pos > 230:
+        y_pos = self.get_y() + 8
+        if y_pos > 195:
             self.add_page()
-            y_pos = self.get_y() + 10
+            y_pos = self.get_y() + 8
         self.set_y(y_pos)
         self.set_font("Helvetica", "B", 10)
         self.cell(0, 6, "For ZESTBRAINS PVT. LTD", new_x="LMARGIN", new_y="NEXT")
         if os.path.exists(SIGNATURE_IMG):
-            self.image(SIGNATURE_IMG, x=self.get_x(), y=self.get_y() + 2, w=35)
-            self.set_y(self.get_y() + 30)
+            self.image(SIGNATURE_IMG, x=self.get_x(), y=self.get_y() + 2, w=30)
+            self.set_y(self.get_y() + 25)
         else:
-            self.set_y(self.get_y() + 20)
+            self.set_y(self.get_y() + 15)
         self.set_font("Helvetica", "B", 10)
         self.cell(0, 5, "Authorised Signatory", new_x="LMARGIN", new_y="NEXT")
 
