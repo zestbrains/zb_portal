@@ -10,7 +10,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '../../components/ui/ta
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '../../components/ui/dialog';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../../components/ui/select';
 import { toast } from 'sonner';
-import { Calendar, Clock, CheckCircle, XCircle, AlertCircle, Send, Edit, Trash2, Plus, X } from 'lucide-react';
+import { Calendar, Clock, CheckCircle, XCircle, AlertCircle, Send, Edit, Trash2, Plus, X, AlertTriangle } from 'lucide-react';
 
 export default function EmployeeLeaveApply({ user, onLogout }) {
   const [applications, setApplications] = useState([]);
@@ -21,6 +21,8 @@ export default function EmployeeLeaveApply({ user, onLogout }) {
   const [editDialogOpen, setEditDialogOpen] = useState(false);
   const [editingApp, setEditingApp] = useState(null);
   const [editFormData, setEditFormData] = useState({ from_date: '', to_date: '', reason: '' });
+  const [sandwichWarning, setSandwichWarning] = useState(null);
+  const [checkingSandwich, setCheckingSandwich] = useState(false);
 
   useEffect(() => { fetchApplications(); fetchLeaveBalance(); }, []);
 
@@ -31,6 +33,29 @@ export default function EmployeeLeaveApply({ user, onLogout }) {
   const removeLeaveDate = (index) => { if (leaveDates.length > 1) setLeaveDates(leaveDates.filter((_, i) => i !== index)); };
   const updateLeaveDate = (index, field, value) => { const u = [...leaveDates]; u[index] = { ...u[index], [field]: value }; setLeaveDates(u); };
   const calculateTotalDays = () => leaveDates.reduce((t, ld) => t + (ld.date ? (ld.day_type === 'first_half' || ld.day_type === 'second_half' ? 0.5 : 1) : 0), 0);
+
+  const checkSandwich = async (dates) => {
+    const validDates = dates.filter(ld => ld.date);
+    if (validDates.length === 0) { setSandwichWarning(null); return; }
+    setCheckingSandwich(true);
+    try {
+      const resp = await api.post('/leaves/check-sandwich', {
+        leave_dates: validDates.map(ld => ({ date: ld.date, day_type: ld.day_type }))
+      });
+      if (resp.data.has_sandwich) {
+        setSandwichWarning(resp.data);
+      } else {
+        setSandwichWarning(null);
+      }
+    } catch { setSandwichWarning(null); }
+    setCheckingSandwich(false);
+  };
+
+  // Debounced sandwich check when dates change
+  useEffect(() => {
+    const timer = setTimeout(() => { checkSandwich(leaveDates); }, 500);
+    return () => clearTimeout(timer);
+  }, [leaveDates]);
 
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -176,8 +201,33 @@ export default function EmployeeLeaveApply({ user, onLogout }) {
                 <div className="p-3 bg-slate-50 rounded-lg border border-slate-100">
                   <p className="text-xs text-slate-500">Your application will be sent to Admin/HR for approval. Leave type (PL/CL) assigned during approval.</p>
                 </div>
+
+                {/* Sandwich Leave Warning */}
+                {sandwichWarning && sandwichWarning.has_sandwich && (
+                  <div className="p-4 bg-amber-50 border-2 border-amber-300 rounded-xl" data-testid="sandwich-warning">
+                    <div className="flex items-start gap-3">
+                      <div className="p-2 bg-amber-100 rounded-full flex-shrink-0">
+                        <AlertTriangle className="w-5 h-5 text-amber-600" />
+                      </div>
+                      <div className="flex-1">
+                        <h4 className="font-bold text-amber-800 text-sm">Sandwich Leave Warning</h4>
+                        {sandwichWarning.warnings.map((w, idx) => (
+                          <p key={idx} className="text-sm text-amber-700 mt-1">{w}</p>
+                        ))}
+                        <div className="mt-2 p-2 bg-amber-100/50 rounded-lg border border-amber-200">
+                          <p className="text-xs text-amber-600">
+                            <strong>Note:</strong> Sandwich leave rule means if you take leave on working days between two non-working days (weekend/holiday), 
+                            those non-working days will also be counted as leave days with salary deduction.
+                          </p>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                )}
+
                 <Button type="submit" className="w-full bg-slate-900 hover:bg-slate-800 text-white h-10 rounded-lg font-medium" data-testid="submit-leave-button">
                   <Send size={16} className="mr-2" /> Submit Application ({calculateTotalDays()} days)
+                  {sandwichWarning?.has_sandwich && <span className="ml-1 text-amber-300">(Sandwich applies)</span>}
                 </Button>
               </form>
             </TabsContent>

@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react';
 import Layout from '../../components/layout/Layout';
 import { api } from '../../utils/api';
 import { Button } from '../../components/ui/button';
-import { ChevronLeft, ChevronRight, Calendar, IndianRupee, AlertTriangle, CheckCircle, MessageCircle, Clock } from 'lucide-react';
+import { ChevronLeft, ChevronRight, Calendar, AlertTriangle, CheckCircle, MessageCircle, Clock } from 'lucide-react';
 import { toast } from 'sonner';
 
 function fmt(num) {
@@ -271,157 +271,52 @@ export default function EmployeeAttendance({ user, onLogout }) {
           </div>
         )}
 
-        {/* Salary Summary - HIDDEN (uncomment to show)
-        {salaryData && salaryData.salary > 0 && (
-          <div className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden" data-testid="salary-summary">
+        {/* Late Marks & Deduction Summary */}
+        {salaryData && (salaryData.late_coming_count > 0 || salaryData.late_coming_amount > 0) && (
+          <div className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden" data-testid="late-mark-deduction-summary">
             <div className="p-4 border-b border-slate-200">
               <h3 className="text-sm font-semibold text-slate-700 flex items-center gap-2">
-                <IndianRupee size={16} className="text-slate-500" />
-                Salary Summary - {months[month - 1]} {year}
+                <Clock size={16} className="text-orange-500" />
+                Late Marks & Deduction - {months[month - 1]} {year}
               </h3>
             </div>
             <div className="p-4">
               <div className="grid grid-cols-2 md:grid-cols-3 gap-3 mb-4">
-                <div className="bg-slate-50 rounded-lg p-3 border border-slate-100">
-                  <p className="text-[10px] font-medium text-slate-400 uppercase tracking-wider">Base Salary</p>
-                  <p className="text-lg font-bold text-slate-800 mt-0.5">{fmt(salaryData.salary)}</p>
-                </div>
-                <div className="bg-green-50 rounded-lg p-3 border border-green-100">
-                  <p className="text-[10px] font-medium text-green-500 uppercase tracking-wider">Gross Salary</p>
-                  <p className="text-lg font-bold text-green-700 mt-0.5">{fmt(salaryData.gross_salary)}</p>
+                <div className="bg-orange-50 rounded-lg p-3 border border-orange-100">
+                  <p className="text-[10px] font-medium text-orange-400 uppercase tracking-wider">Total Late Marks</p>
+                  <p className="text-2xl font-bold text-orange-600 mt-0.5">{salaryData.late_coming_count}</p>
                 </div>
                 <div className="bg-red-50 rounded-lg p-3 border border-red-100">
-                  <p className="text-[10px] font-medium text-red-400 uppercase tracking-wider">Total Deductions</p>
-                  <p className="text-lg font-bold text-red-600 mt-0.5">{fmt(salaryData.pt + salaryData.esic + salaryData.epf + salaryData.cpf + salaryData.cl_amount + salaryData.sandwich_amount)}</p>
+                  <p className="text-[10px] font-medium text-red-400 uppercase tracking-wider">Deduction Days</p>
+                  <p className="text-2xl font-bold text-red-600 mt-0.5">{salaryData.late_coming_deduction_days || 0}</p>
+                </div>
+                <div className="bg-red-50 rounded-lg p-3 border border-red-100">
+                  <p className="text-[10px] font-medium text-red-400 uppercase tracking-wider">Deducted Amount</p>
+                  <p className="text-2xl font-bold text-red-600 mt-0.5">{fmt(salaryData.late_coming_amount)}</p>
                 </div>
               </div>
 
-              <div className="overflow-x-auto">
-                <table className="w-full" data-testid="salary-breakdown-table">
-                  <thead>
-                    <tr className="border-b border-slate-200 bg-slate-50/50">
-                      <th className="text-left text-[10px] font-semibold text-slate-500 uppercase tracking-wider py-2.5 px-3">Description</th>
-                      <th className="text-center text-[10px] font-semibold text-slate-500 uppercase tracking-wider py-2.5 px-3">Days/Hrs</th>
-                      <th className="text-right text-[10px] font-semibold text-slate-500 uppercase tracking-wider py-2.5 px-3">Amount</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    <tr className="border-b border-slate-100">
-                      <td className="py-2.5 px-3 text-sm text-slate-700">Base Salary</td>
-                      <td className="py-2.5 px-3 text-center text-xs text-slate-400">{salaryData.num_days} days</td>
-                      <td className="py-2.5 px-3 text-right text-sm font-medium text-slate-800">{fmt(salaryData.salary)}</td>
-                    </tr>
-                    {salaryData.pt > 0 && (
-                      <tr className="border-b border-slate-100">
-                        <td className="py-2.5 px-3 text-sm text-slate-600">Professional Tax (PT)</td>
-                        <td className="py-2.5 px-3"></td>
-                        <td className="py-2.5 px-3 text-right text-sm text-red-600">-{fmt(salaryData.pt)}</td>
-                      </tr>
-                    )}
-                    {salaryData.esic > 0 && (
-                      <tr className="border-b border-slate-100">
-                        <td className="py-2.5 px-3 text-sm text-slate-600">ESIC</td>
-                        <td className="py-2.5 px-3"></td>
-                        <td className="py-2.5 px-3 text-right text-sm text-red-600">-{fmt(salaryData.esic)}</td>
-                      </tr>
-                    )}
-                    {salaryData.epf > 0 && (
-                      <tr className="border-b border-slate-100">
-                        <td className="py-2.5 px-3 text-sm text-slate-600">EPF</td>
-                        <td className="py-2.5 px-3"></td>
-                        <td className="py-2.5 px-3 text-right text-sm text-red-600">-{fmt(salaryData.epf)}</td>
-                      </tr>
-                    )}
-                    {salaryData.cpf > 0 && (
-                      <tr className="border-b border-slate-100">
-                        <td className="py-2.5 px-3 text-sm text-slate-600">CPF</td>
-                        <td className="py-2.5 px-3"></td>
-                        <td className="py-2.5 px-3 text-right text-sm text-red-600">-{fmt(salaryData.cpf)}</td>
-                      </tr>
-                    )}
-                    {salaryData.cl_count > 0 && (
-                      <tr className="border-b border-slate-100">
-                        <td className="py-2.5 px-3 text-sm text-slate-600">Casual Leave Deduction</td>
-                        <td className="py-2.5 px-3 text-center text-xs text-slate-400">{salaryData.cl_count} day{salaryData.cl_count !== 1 ? 's' : ''} ({salaryData.cl_dates?.join(', ')})</td>
-                        <td className="py-2.5 px-3 text-right text-sm text-red-600">-{fmt(salaryData.cl_amount)}</td>
-                      </tr>
-                    )}
-                    {salaryData.sandwich_days > 0 && (
-                      <tr className="border-b border-slate-100">
-                        <td className="py-2.5 px-3 text-sm text-orange-600">Sandwich Leave Deduction</td>
-                        <td className="py-2.5 px-3 text-center text-xs text-orange-400">{salaryData.sandwich_days} day{salaryData.sandwich_days !== 1 ? 's' : ''} ({salaryData.sandwich_dates?.join(', ')})</td>
-                        <td className="py-2.5 px-3 text-right text-sm text-orange-600">-{fmt(salaryData.sandwich_amount)}</td>
-                      </tr>
-                    )}
-                    {salaryData.late_coming_count > 0 && (
-                      <tr className="border-b border-slate-100">
-                        <td className="py-2.5 px-3 text-sm text-orange-600">Late Coming Deduction</td>
-                        <td className="py-2.5 px-3 text-center text-xs text-orange-400">
-                          {salaryData.late_coming_count} late{salaryData.late_coming_count !== 1 ? 's' : ''} 
-                          ({salaryData.late_coming_days?.join(', ')})
-                        </td>
-                        <td className="py-2.5 px-3 text-right text-sm text-orange-600">
-                          {salaryData.late_coming_amount > 0 ? `-${fmt(salaryData.late_coming_amount)}` : '0'}
-                        </td>
-                      </tr>
-                    )}
-                    {(salaryData.not_joined_days || 0) > 0 && (
-                      <tr className="border-b border-slate-100">
-                        <td className="py-2.5 px-3 text-sm text-purple-600">Not Joined Days Deduction</td>
-                        <td className="py-2.5 px-3 text-center text-xs text-purple-400">
-                          {salaryData.not_joined_days} day{salaryData.not_joined_days !== 1 ? 's' : ''} (before joining)
-                        </td>
-                        <td className="py-2.5 px-3 text-right text-sm text-purple-600">
-                          -{fmt(salaryData.not_joined_amount)}
-                        </td>
-                      </tr>
-                    )}
-                    {salaryData.ot_count > 0 && (
-                      <tr className="border-b border-slate-100">
-                        <td className="py-2.5 px-3 text-sm text-green-700">Overtime Earnings</td>
-                        <td className="py-2.5 px-3 text-center text-xs text-green-500">{salaryData.ot_count} day{salaryData.ot_count !== 1 ? 's' : ''}</td>
-                        <td className="py-2.5 px-3 text-right text-sm text-green-600">+{fmt(salaryData.ot_amount)}</td>
-                      </tr>
-                    )}
-                    {salaryData.other_income > 0 && (
-                      <tr className="border-b border-slate-100">
-                        <td className="py-2.5 px-3 text-sm text-green-700">Other Income</td>
-                        <td className="py-2.5 px-3"></td>
-                        <td className="py-2.5 px-3 text-right text-sm text-green-600">+{fmt(salaryData.other_income)}</td>
-                      </tr>
-                    )}
-                    {salaryData.extra_hours > 0 && (
-                      <tr className="border-b border-slate-100">
-                        <td className="py-2.5 px-3 text-sm text-green-700">Extra Hours Earnings</td>
-                        <td className="py-2.5 px-3 text-center text-xs text-green-500">{salaryData.extra_hours} hrs</td>
-                        <td className="py-2.5 px-3 text-right text-sm text-green-600">+{fmt(salaryData.extra_hours_amount)}</td>
-                      </tr>
-                    )}
-                  </tbody>
-                  <tfoot>
-                    <tr className="border-t-2 border-slate-200 bg-slate-50">
-                      <td colSpan={2} className="py-3 px-3 text-sm font-bold text-slate-800">Net Gross Salary</td>
-                      <td className="py-3 px-3 text-right text-base font-bold text-blue-600">{fmt(salaryData.gross_salary)}</td>
-                    </tr>
-                    {(salaryData.future_days || 0) > 0 && (
-                      <tr className="border-t border-slate-200 bg-violet-50/50">
-                        <td colSpan={2} className="py-3 px-3 text-sm font-bold text-violet-700">Till Date Salary (TD)</td>
-                        <td className="py-3 px-3 text-right text-base font-bold text-violet-600">{fmt(salaryData.td_salary)}</td>
-                      </tr>
-                    )}
-                    {(salaryData.future_days || 0) > 0 && (
-                      <tr className="bg-violet-50/30">
-                        <td colSpan={2} className="py-1.5 px-3 text-[10px] text-violet-400">Future days not yet earned ({salaryData.future_days} days)</td>
-                        <td className="py-1.5 px-3 text-right text-[10px] text-violet-400">-{fmt(salaryData.future_amount)}</td>
-                      </tr>
-                    )}
-                  </tfoot>
-                </table>
+              {salaryData.late_coming_days?.length > 0 && (
+                <div className="mt-3">
+                  <p className="text-xs font-semibold text-slate-500 uppercase tracking-wider mb-2">Late Mark Dates</p>
+                  <div className="flex flex-wrap gap-2">
+                    {salaryData.late_coming_days.map((day) => (
+                      <span key={day} className="inline-flex items-center gap-1 bg-orange-50 text-orange-700 text-xs font-medium px-2.5 py-1 rounded-full border border-orange-200">
+                        <Clock size={10} /> {day} {months[month - 1].slice(0, 3)}
+                      </span>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              <div className="mt-4 p-3 bg-slate-50 rounded-lg border border-slate-100">
+                <p className="text-xs text-slate-500">
+                  <span className="font-semibold">Rule:</span> First 2 late marks are free. After that, every 3 late marks = 0.5 day salary deduction.
+                </p>
               </div>
             </div>
           </div>
         )}
-        */}
 
         {/* Legend */}
         <div className="bg-white rounded-xl border border-slate-200 p-4 shadow-sm">
