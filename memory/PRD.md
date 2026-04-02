@@ -4,66 +4,52 @@
 HR Management Portal for Zestbrains - migrated from another Emergent account
 
 ## Tech Stack
-- Frontend: React + Tailwind CSS
+- Frontend: React + Tailwind CSS + Shadcn UI
 - Backend: Python FastAPI
 - Database: MongoDB
-
-## Deployment Date
-- **Migrated**: March 25, 2026
-
-## Database Collections Restored
-| Collection | Documents |
-|------------|-----------|
-| employees | 86 |
-| users | 89 |
-| projects | 416 |
-| work_entries | 47,716 |
-| leave_records | 1,336 |
-| departments | 12 |
-| holidays | 8 |
-| leave_applications | 7 |
-| weekend_approvals | 6 |
-| banks | 3 |
-| leave_encashments | 3 |
-| salary_adjustments | 2 |
-| email_config | 1 |
+- PDF Generation: fpdf2
 
 ## What's Implemented
 - Admin Dashboard with project/employee overview
-- Department Management
-- Employee Management (with Team Leader assignment and Password visibility)
-- Project Management
-- Working Hours Tracking
+- Department, Employee, Project Management
+- Working Hours Tracking, Weekend Approvals
 - Leave Management (Apply, Approve, History, Tracker)
-- Holiday Management
-- Weekend Approvals
-- Email Settings
+- Holiday Management, Email Settings
 - Role-based access (Admin, HR, Employee)
-- Late Coming attendance tracking with salary deductions
-- Late Marks for delayed projects
-- Bank-wise salary grouping
-- ICICI & Hexeros Yes Bank Salary Sheet downloads
-- Sandwich Leave detection & salary deduction (corrected rule: leave-weekend-leave)
+- Late Coming tracking with salary deductions
+- Bank-wise salary grouping (ICICI & Hexeros Yes Bank sheets)
+- Sandwich Leave detection & salary deduction (corrected: leave-weekend-leave rule)
+- Sandwich Leave Warning on leave application (only warns about NEW sandwich, ignores existing approved)
 - Email notifications on leave application
 - Secured /api/employees endpoint (admin/hr only)
-- Employee Attendance: Late marks & deduction summary (no full salary details exposed)
-- Sandwich Leave Warning on leave application (pre-submission check)
+- Employee Attendance: Late marks & deduction summary only
+- **Employee Detail Full Page** (replaced modal) with 5 tabs: Personal, Work, Bank, Salary, Documents
+- **HR Letter/Document Generation** - 7 letter types with company letterhead, signature, saved to DB:
+  - Offer Letter, Appointment Letter, Experience Letter, Relieving Letter
+  - Internship Appointment, Internship Completion, Increment Letter
 
-## Recent Changes (April 2026)
-- **Added**: Employee Attendance page now shows "Late Marks & Deduction" section (only visible when late marks exist) - replaces hidden salary summary
-- **Added**: Sandwich Leave Warning on Apply Leave page - checks proposed leave dates against sandwich rules before submission
-- **Backend**: New `POST /api/leaves/check-sandwich` endpoint for sandwich leave pre-check
-- **CRITICAL FIX**: Corrected sandwich leave detection logic across ALL 6 locations in server.py. Old rule required all working days between two weekends to be leave. New correct rule: if leave is taken immediately before AND after a non-working block (weekend/holiday), those non-working days count as sandwich. Example: Fri leave + Sat/Sun weekend + Mon leave = Sat/Sun are sandwich (2 extra deduction days).
+## Key Files
+- `/app/backend/server.py` - Main API (6600+ lines)
+- `/app/backend/document_generator.py` - PDF letter generation with letterhead
+- `/app/backend/static/letterhead/` - Header, footer, signature images
+- `/app/frontend/src/pages/admin/EmployeeDetail.js` - Employee detail full page
+- `/app/frontend/src/pages/admin/Employees.js` - Employee list (View navigates to detail page)
+
+## API Endpoints (Documents)
+- `POST /api/documents/generate` - Generate letter PDF, save to DB
+- `GET /api/documents/{employee_id}` - List documents for employee
+- `GET /api/documents/download/{doc_id}` - Download PDF
+- `DELETE /api/documents/{doc_id}` - Delete document
 
 ## Admin Credentials
 - **Username**: renish
 - **Password**: Zb@0075588
 
 ## Next Action Items
-- P1: Verify weekend working hours slow loading (needs user clarification)
-- P2: Configure dynamic thresholds for Late Coming salary deductions (currently hardcoded)
+- P1: Weekend working hours slow loading (needs user clarification)
+- P2: Dynamic thresholds for Late Coming salary deductions
 - P2: Bulk bank assignment for employees
-- P2: Refactor server.py (6000+ lines) into modular routes/models
+- P2: Refactor server.py into modular routes/models
 
 ## URL
 https://leave-sync-hub.preview.emergentagent.com
