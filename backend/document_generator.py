@@ -1,130 +1,146 @@
 """
 Document/Letter PDF generation for Zestbrains HR Portal
 Generates offer letters, experience letters, etc. with company letterhead
+All letters are designed to fit on a single US Letter page.
 """
 import os
-import uuid
-import base64
-from io import BytesIO
-from datetime import datetime
 from fpdf import FPDF
 from pathlib import Path
 
-STATIC_DIR = Path(__file__).parent / "static" / "letterhead"
-HEADER_IMG = str(STATIC_DIR / "header.png")
-FOOTER_IMG = str(STATIC_DIR / "footer.png")
-SIGNATURE_IMG = str(STATIC_DIR / "signature.png")
+STATIC_DIR = Path(__file__).parent / "static"
+LETTERHEAD_DIR = STATIC_DIR / "letterhead"
+FONTS_DIR = STATIC_DIR / "fonts"
+
+HEADER_IMG = str(LETTERHEAD_DIR / "header.png")
+FOOTER_IMG = str(LETTERHEAD_DIR / "footer.png")
+SIGNATURE_IMG = str(LETTERHEAD_DIR / "signature.png")
+
+# Page dimensions (US Letter)
+PW = 215.9  # page width mm
+PH = 279.4  # page height mm
+HEADER_H = 38  # header image visual height
+FOOTER_Y = 230  # footer image Y start
+CONTENT_TOP = 42  # content starts after header
+CONTENT_BOTTOM = 220  # content must end before footer
+LM = 18  # left margin
+RM = 18  # right margin
+CW = PW - LM - RM  # content width
 
 
 class LetterPDF(FPDF):
-    """Custom PDF class with Zestbrains letterhead"""
 
     def __init__(self):
         super().__init__(orientation='P', unit='mm', format='Letter')
-        self.set_auto_page_break(auto=True, margin=55)
+        self.set_auto_page_break(auto=False)
+        # Register Poppins font
+        poppins = str(FONTS_DIR / "Poppins-Regular.ttf")
+        poppins_b = str(FONTS_DIR / "Poppins-Bold.ttf")
+        poppins_i = str(FONTS_DIR / "Poppins-Italic.ttf")
+        poppins_bi = str(FONTS_DIR / "Poppins-BoldItalic.ttf")
+        if os.path.exists(poppins):
+            self.add_font("Poppins", "", poppins, uni=True)
+            self.add_font("Poppins", "B", poppins_b, uni=True)
+            self.add_font("Poppins", "I", poppins_i, uni=True)
+            self.add_font("Poppins", "BI", poppins_bi, uni=True)
+            self._font_family = "Poppins"
+        else:
+            self._font_family = "Helvetica"
+
+    def _f(self, style="", size=9):
+        self.set_font(self._font_family, style, size)
 
     def header(self):
         if os.path.exists(HEADER_IMG):
-            # Header: full width, positioned at very top
-            self.image(HEADER_IMG, x=0, y=0, w=215.9)
-            self.set_y(44)
-        else:
-            self.set_y(15)
-            self.set_font("Helvetica", "B", 18)
-            self.cell(0, 10, "ZESTBRAINS PVT. LTD", align="C", new_x="LMARGIN", new_y="NEXT")
-            self.set_y(30)
+            self.image(HEADER_IMG, x=0, y=0, w=PW)
+        self.set_y(CONTENT_TOP)
+        self.set_left_margin(LM)
+        self.set_right_margin(RM)
 
     def footer(self):
         if os.path.exists(FOOTER_IMG):
-            # Footer: full width, positioned at bottom of US Letter page (279.4mm)
-            self.image(FOOTER_IMG, x=0, y=225, w=215.9)
+            self.image(FOOTER_IMG, x=0, y=FOOTER_Y, w=PW)
 
     def add_signature(self):
-        """Add authorized signatory at bottom"""
-        y_pos = self.get_y() + 8
-        if y_pos > 195:
-            self.add_page()
-            y_pos = self.get_y() + 8
-        self.set_y(y_pos)
-        self.set_font("Helvetica", "B", 10)
-        self.cell(0, 6, "For ZESTBRAINS PVT. LTD", new_x="LMARGIN", new_y="NEXT")
+        y = self.get_y() + 5
+        self.set_y(y)
+        self._f("B", 9)
+        self.cell(0, 5, "For ZESTBRAINS PVT. LTD", new_x="LMARGIN", new_y="NEXT")
         if os.path.exists(SIGNATURE_IMG):
-            self.image(SIGNATURE_IMG, x=self.get_x(), y=self.get_y() + 2, w=30)
-            self.set_y(self.get_y() + 25)
+            self.image(SIGNATURE_IMG, x=LM, y=self.get_y() + 1, w=25)
+            self.set_y(self.get_y() + 20)
         else:
-            self.set_y(self.get_y() + 15)
-        self.set_font("Helvetica", "B", 10)
-        self.cell(0, 5, "Authorised Signatory", new_x="LMARGIN", new_y="NEXT")
+            self.set_y(self.get_y() + 12)
+        self._f("B", 9)
+        self.cell(0, 4, "Authorised Signatory", new_x="LMARGIN", new_y="NEXT")
 
-    def write_date_ref(self, date_str, ref_no=""):
-        self.set_font("Helvetica", "", 10)
-        self.cell(0, 6, f"Date: {date_str}", new_x="LMARGIN", new_y="NEXT")
+    def write_date(self, date_str, ref_no=""):
+        self._f("", 8.5)
+        self.cell(0, 4.5, f"Date: {date_str}", new_x="LMARGIN", new_y="NEXT")
         if ref_no:
-            self.cell(0, 6, f"Ref: {ref_no}", new_x="LMARGIN", new_y="NEXT")
-        self.ln(4)
-
-    def write_title(self, title):
-        self.set_font("Helvetica", "BU", 13)
-        self.cell(0, 8, title, align="C", new_x="LMARGIN", new_y="NEXT")
-        self.ln(6)
-
-    def write_to(self, name):
-        self.set_font("Helvetica", "", 10)
-        self.cell(0, 6, f"To,", new_x="LMARGIN", new_y="NEXT")
-        self.set_font("Helvetica", "B", 10)
-        self.cell(0, 6, f"Mr./Ms. {name}", new_x="LMARGIN", new_y="NEXT")
-        self.ln(4)
-
-    def write_subject(self, subject):
-        self.set_font("Helvetica", "B", 10)
-        self.cell(18, 6, "Subject: ")
-        self.set_font("Helvetica", "BU", 10)
-        self.cell(0, 6, subject, new_x="LMARGIN", new_y="NEXT")
-        self.ln(4)
-
-    def write_salutation(self, name):
-        self.set_font("Helvetica", "", 10)
-        self.cell(0, 6, f"Dear {name},", new_x="LMARGIN", new_y="NEXT")
-        self.ln(3)
-
-    def write_body(self, text):
-        self.set_font("Helvetica", "", 10)
-        self.multi_cell(0, 6, text)
-        self.ln(3)
-
-    def write_body_bold(self, text):
-        self.set_font("Helvetica", "B", 10)
-        self.multi_cell(0, 6, text)
+            self.cell(0, 4.5, f"Ref: {ref_no}", new_x="LMARGIN", new_y="NEXT")
         self.ln(2)
 
+    def write_title(self, title):
+        self._f("B", 12)
+        self.cell(0, 6, title, align="C", new_x="LMARGIN", new_y="NEXT")
+        # Underline
+        tw = self.get_string_width(title)
+        cx = (PW - tw) / 2
+        self.line(cx, self.get_y(), cx + tw, self.get_y())
+        self.ln(4)
+
+    def write_to(self, name):
+        self._f("", 9)
+        self.cell(0, 4.5, "To,", new_x="LMARGIN", new_y="NEXT")
+        self._f("B", 9)
+        self.cell(0, 4.5, f"Mr./Ms. {name}", new_x="LMARGIN", new_y="NEXT")
+        self.ln(2)
+
+    def write_subject(self, subject):
+        self._f("B", 9)
+        self.cell(16, 4.5, "Subject: ")
+        self._f("BU" if hasattr(self, '_font_family') else "B", 9)
+        # Use underline via set_font
+        self.set_font(self._font_family, "BU", 9)
+        self.cell(0, 4.5, subject, new_x="LMARGIN", new_y="NEXT")
+        self.ln(2)
+
+    def write_salutation(self, name):
+        self._f("", 9)
+        self.cell(0, 4.5, f"Dear {name},", new_x="LMARGIN", new_y="NEXT")
+        self.ln(2)
+
+    def write_body(self, text):
+        self._f("", 8.5)
+        self.multi_cell(CW, 4.2, text)
+        self.ln(1.5)
+
     def write_bullet(self, text):
-        self.set_font("Helvetica", "", 10)
-        x = self.get_x()
-        self.set_x(x + 5)
-        self.multi_cell(0, 6, f"- {text}")
-        self.set_x(x)
+        self._f("", 8.5)
+        self.set_x(LM + 6)
+        self.multi_cell(CW - 6, 4.2, f"\u2022  {text}")
+        self.set_x(LM)
+
+    def write_closing(self, text):
+        self._f("", 8.5)
+        self.multi_cell(CW, 4.2, text)
+        self.ln(1)
 
 
 def _fmt_date(date_str):
-    """Format date string to readable format"""
     if not date_str:
         return ""
     try:
-        dt = datetime.fromisoformat(date_str.replace('Z', '+00:00'))
+        from datetime import datetime
+        dt = datetime.strptime(date_str.split('T')[0], "%Y-%m-%d")
         return dt.strftime("%d %B %Y")
     except:
-        try:
-            dt = datetime.strptime(date_str, "%Y-%m-%d")
-            return dt.strftime("%d %B %Y")
-        except:
-            return date_str
+        return date_str
 
 
 def _fmt_salary(amount):
-    """Format salary in Indian format"""
     try:
-        num = float(amount)
-        return f"{num:,.0f}"
+        return f"{float(amount):,.0f}"
     except:
         return str(amount)
 
@@ -133,7 +149,7 @@ def generate_offer_letter(employee, inputs):
     pdf = LetterPDF()
     pdf.add_page()
     name = employee.get("name", "")
-    pdf.write_date_ref(_fmt_date(inputs.get("letter_date", "")), inputs.get("ref_no", ""))
+    pdf.write_date(_fmt_date(inputs.get("letter_date", "")), inputs.get("ref_no", ""))
     pdf.write_title("OFFER LETTER")
     pdf.write_to(name)
     pdf.write_subject(f"Offer of Employment - {inputs.get('designation', '')}")
@@ -143,14 +159,14 @@ def generate_offer_letter(employee, inputs):
         f"at Zestbrains Pvt. Ltd. We were impressed with your background and skills, "
         f"and we believe you will be a valuable addition to our team."
     )
-    pdf.write_body(f"The details of your offer are as follows:")
+    pdf.write_body("The details of your offer are as follows:")
     pdf.write_bullet(f"Position/Designation: {inputs.get('designation', '')}")
     pdf.write_bullet(f"Department: {inputs.get('department', '')}")
     pdf.write_bullet(f"Monthly CTC: Rs. {_fmt_salary(inputs.get('offered_salary', ''))}")
     pdf.write_bullet(f"Date of Joining: {_fmt_date(inputs.get('joining_date', ''))}")
     pdf.write_bullet(f"Probation Period: {inputs.get('probation_period', '6 Months')}")
     pdf.write_bullet(f"Work Location: {inputs.get('work_location', 'Ahmedabad')}")
-    pdf.ln(3)
+    pdf.ln(1.5)
     pdf.write_body(
         "During the probation period, either party may terminate the employment "
         "by giving one month's written notice or one month's salary in lieu thereof."
@@ -163,7 +179,7 @@ def generate_offer_letter(employee, inputs):
         "Please sign and return a copy of this letter as acceptance of the offer. "
         "We look forward to having you on our team."
     )
-    pdf.write_body("Congratulations and welcome to Zestbrains Pvt. Ltd!")
+    pdf.write_closing("Congratulations and welcome to Zestbrains Pvt. Ltd!")
     pdf.add_signature()
     return pdf
 
@@ -172,7 +188,7 @@ def generate_appointment_letter(employee, inputs):
     pdf = LetterPDF()
     pdf.add_page()
     name = employee.get("name", "")
-    pdf.write_date_ref(_fmt_date(inputs.get("letter_date", "")), inputs.get("ref_no", ""))
+    pdf.write_date(_fmt_date(inputs.get("letter_date", "")), inputs.get("ref_no", ""))
     pdf.write_title("APPOINTMENT LETTER")
     pdf.write_to(name)
     pdf.write_subject(f"Appointment as {inputs.get('designation', '')}")
@@ -189,21 +205,19 @@ def generate_appointment_letter(employee, inputs):
     pdf.write_bullet(f"Probation Period: {inputs.get('probation_period', '6 Months')}")
     pdf.write_bullet(f"Work Location: {inputs.get('work_location', 'Ahmedabad')}")
     pdf.write_bullet(f"Working Hours: {inputs.get('working_hours', '9:30 AM to 6:30 PM, Monday to Friday')}")
-    pdf.ln(3)
+    pdf.ln(1.5)
     pdf.write_body(
         "You shall maintain strict confidentiality of all proprietary information, "
         "trade secrets, and intellectual property of the company during and after your employment."
     )
     pdf.write_body(
-        "During the probation period, either party may terminate the employment by giving "
-        "one month's written notice. After confirmation, a notice period of two months "
-        "shall be applicable."
+        "During probation, either party may terminate with one month's notice. "
+        "After confirmation, a notice period of two months shall be applicable."
     )
     pdf.write_body(
-        "Please sign the duplicate copy of this letter as a token of your acceptance "
-        "of the above terms and conditions."
+        "Please sign the duplicate copy of this letter as acceptance of the above terms. "
+        "We wish you a successful career with Zestbrains Pvt. Ltd."
     )
-    pdf.write_body("We wish you a successful career with Zestbrains Pvt. Ltd.")
     pdf.add_signature()
     return pdf
 
@@ -212,26 +226,26 @@ def generate_experience_letter(employee, inputs):
     pdf = LetterPDF()
     pdf.add_page()
     name = employee.get("name", "")
-    pdf.write_date_ref(_fmt_date(inputs.get("letter_date", "")), inputs.get("ref_no", ""))
+    pdf.write_date(_fmt_date(inputs.get("letter_date", "")), inputs.get("ref_no", ""))
     pdf.write_title("EXPERIENCE LETTER")
-    pdf.write_body("To Whom It May Concern,")
+    pdf._f("", 9)
+    pdf.cell(0, 4.5, "To Whom It May Concern,", new_x="LMARGIN", new_y="NEXT")
     pdf.ln(3)
     pdf.write_body(
         f"This is to certify that Mr./Ms. {name} (Employee ID: {employee.get('employee_id', '')}) "
         f"was employed with Zestbrains Pvt. Ltd. as {inputs.get('designation', '')} "
         f"from {_fmt_date(inputs.get('joining_date', ''))} to {_fmt_date(inputs.get('last_working_date', ''))}."
     )
+    perf = inputs.get('performance_note', 'Their conduct and performance were satisfactory throughout the tenure.')
     pdf.write_body(
         f"During the tenure with us, we found Mr./Ms. {name} to be sincere, dedicated, "
-        f"and hardworking. {inputs.get('performance_note', 'Their conduct and performance were satisfactory throughout the tenure.')} "
+        f"and hardworking. {perf}"
     )
     pdf.write_body(
         f"Mr./Ms. {name} has been relieved from duties on {_fmt_date(inputs.get('last_working_date', ''))} "
         f"and has no dues or liabilities with the company."
     )
-    pdf.write_body(
-        f"We wish Mr./Ms. {name} all the best in future endeavours."
-    )
+    pdf.write_closing(f"We wish Mr./Ms. {name} all the best in future endeavours.")
     pdf.add_signature()
     return pdf
 
@@ -240,7 +254,7 @@ def generate_relieving_letter(employee, inputs):
     pdf = LetterPDF()
     pdf.add_page()
     name = employee.get("name", "")
-    pdf.write_date_ref(_fmt_date(inputs.get("letter_date", "")), inputs.get("ref_no", ""))
+    pdf.write_date(_fmt_date(inputs.get("letter_date", "")), inputs.get("ref_no", ""))
     pdf.write_title("RELIEVING LETTER")
     pdf.write_to(name)
     pdf.write_subject("Relieving from Services")
@@ -258,9 +272,9 @@ def generate_relieving_letter(employee, inputs):
         "We confirm that all company properties, documents, and assets in your possession "
         "have been returned and your full and final settlement has been processed."
     )
-    pdf.write_body(
-        f"We appreciate your contributions during your tenure and wish you all the best "
-        f"in your future endeavours."
+    pdf.write_closing(
+        "We appreciate your contributions during your tenure and wish you all the best "
+        "in your future endeavours."
     )
     pdf.add_signature()
     return pdf
@@ -270,7 +284,7 @@ def generate_internship_appointment_letter(employee, inputs):
     pdf = LetterPDF()
     pdf.add_page()
     name = employee.get("name", "")
-    pdf.write_date_ref(_fmt_date(inputs.get("letter_date", "")), inputs.get("ref_no", ""))
+    pdf.write_date(_fmt_date(inputs.get("letter_date", "")), inputs.get("ref_no", ""))
     pdf.write_title("INTERNSHIP APPOINTMENT LETTER")
     pdf.write_to(name)
     pdf.write_subject("Internship Appointment")
@@ -286,16 +300,13 @@ def generate_internship_appointment_letter(employee, inputs):
     pdf.write_bullet(f"Department: {inputs.get('department', '')}")
     pdf.write_bullet(f"Monthly Stipend: Rs. {_fmt_salary(inputs.get('stipend', '0'))}")
     pdf.write_bullet(f"Work Location: {inputs.get('work_location', 'Ahmedabad')}")
-    pdf.write_bullet(f"Working Hours: {inputs.get('working_hours', '9:30 AM to 6:30 PM, Monday to Friday')}")
-    pdf.ln(3)
+    pdf.ln(1.5)
     pdf.write_body(
         "During the internship, you will be expected to maintain discipline, follow "
-        "company policies, and contribute to the projects assigned to you."
-    )
-    pdf.write_body(
+        "company policies, and contribute to the projects assigned to you. "
         "The internship may be terminated by either party with a written notice of 7 days."
     )
-    pdf.write_body("We look forward to a productive association.")
+    pdf.write_closing("We look forward to a productive association.")
     pdf.add_signature()
     return pdf
 
@@ -304,9 +315,10 @@ def generate_internship_completion_letter(employee, inputs):
     pdf = LetterPDF()
     pdf.add_page()
     name = employee.get("name", "")
-    pdf.write_date_ref(_fmt_date(inputs.get("letter_date", "")), inputs.get("ref_no", ""))
+    pdf.write_date(_fmt_date(inputs.get("letter_date", "")), inputs.get("ref_no", ""))
     pdf.write_title("INTERNSHIP COMPLETION CERTIFICATE")
-    pdf.write_body("To Whom It May Concern,")
+    pdf._f("", 9)
+    pdf.cell(0, 4.5, "To Whom It May Concern,", new_x="LMARGIN", new_y="NEXT")
     pdf.ln(3)
     pdf.write_body(
         f"This is to certify that Mr./Ms. {name} has successfully completed an internship "
@@ -320,9 +332,7 @@ def generate_internship_completion_letter(employee, inputs):
         f"During the internship, Mr./Ms. {name} worked on {inputs.get('project_details', 'various projects')} "
         f"and demonstrated {inputs.get('performance_note', 'good technical skills and a keen ability to learn')}."
     )
-    pdf.write_body(
-        f"We wish Mr./Ms. {name} all the best in future academic and professional endeavours."
-    )
+    pdf.write_closing(f"We wish Mr./Ms. {name} all the best in future academic and professional endeavours.")
     pdf.add_signature()
     return pdf
 
@@ -331,7 +341,7 @@ def generate_increment_letter(employee, inputs):
     pdf = LetterPDF()
     pdf.add_page()
     name = employee.get("name", "")
-    pdf.write_date_ref(_fmt_date(inputs.get("letter_date", "")), inputs.get("ref_no", ""))
+    pdf.write_date(_fmt_date(inputs.get("letter_date", "")), inputs.get("ref_no", ""))
     pdf.write_title("INCREMENT LETTER")
     pdf.write_to(name)
     pdf.write_subject("Revision of Salary")
@@ -343,21 +353,21 @@ def generate_increment_letter(employee, inputs):
     )
     pdf.write_body("The revised details are as follows:")
     pdf.write_bullet(f"Current Designation: {inputs.get('designation', '')}")
-    new_designation = inputs.get('new_designation', '')
-    if new_designation and new_designation != inputs.get('designation', ''):
-        pdf.write_bullet(f"New Designation: {new_designation}")
+    new_des = inputs.get('new_designation', '')
+    if new_des and new_des != inputs.get('designation', ''):
+        pdf.write_bullet(f"New Designation: {new_des}")
     pdf.write_bullet(f"Previous Monthly CTC: Rs. {_fmt_salary(inputs.get('old_salary', ''))}")
     pdf.write_bullet(f"Revised Monthly CTC: Rs. {_fmt_salary(inputs.get('new_salary', ''))}")
-    increment_pct = inputs.get('increment_percentage', '')
-    if increment_pct:
-        pdf.write_bullet(f"Increment: {increment_pct}%")
+    pct = inputs.get('increment_percentage', '')
+    if pct:
+        pdf.write_bullet(f"Increment: {pct}%")
     pdf.write_bullet(f"Effective From: {_fmt_date(inputs.get('effective_date', ''))}")
-    pdf.ln(3)
+    pdf.ln(1.5)
     pdf.write_body(
         "We appreciate your hard work and dedication towards the organization. "
         "We hope you will continue to contribute positively and grow with the company."
     )
-    pdf.write_body("Congratulations on your well-deserved increment!")
+    pdf.write_closing("Congratulations on your well-deserved increment!")
     pdf.add_signature()
     return pdf
 
