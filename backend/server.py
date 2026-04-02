@@ -6507,6 +6507,95 @@ async def check_sandwich_warning(data: dict = Body(...), user: dict = Depends(ge
     }
 
 
+# ==================== DOCUMENT GENERATION ====================
+from document_generator import generate_letter_pdf, LETTER_TITLES
+
+@api_router.post("/documents/generate")
+async def generate_document(data: dict = Body(...), user: dict = Depends(require_role(["admin", "hr"]))):
+    """Generate a letter PDF for an employee and save to DB"""
+    employee_id = data.get("employee_id")
+    letter_type = data.get("letter_type")
+    inputs = data.get("inputs", {})
+
+    if not employee_id or not letter_type:
+        raise HTTPException(status_code=400, detail="employee_id and letter_type are required")
+
+    if letter_type not in LETTER_TITLES:
+        raise HTTPException(status_code=400, detail=f"Invalid letter type: {letter_type}")
+
+    employee = await db.employees.find_one({"employee_id": employee_id}, {"_id": 0})
+    if not employee:
+        raise HTTPException(status_code=404, detail="Employee not found")
+
+    try:
+        pdf_bytes = generate_letter_pdf(letter_type, employee, inputs)
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"PDF generation failed: {str(e)}")
+
+    import base64
+    pdf_b64 = base64.b64encode(pdf_bytes).decode('utf-8')
+
+    doc_record = {
+        "id": str(uuid.uuid4()),
+        "employee_id": employee_id,
+        "employee_name": employee.get("name", ""),
+        "letter_type": letter_type,
+        "letter_title": LETTER_TITLES[letter_type],
+        "inputs": inputs,
+        "pdf_data": pdf_b64,
+        "generated_by": user.get("email", user.get("username", "")),
+        "created_at": datetime.now(IST).isoformat()
+    }
+    await db.documents.insert_one(doc_record)
+
+    return {
+        "id": doc_record["id"],
+        "letter_title": doc_record["letter_title"],
+        "pdf_base64": pdf_b64,
+        "created_at": doc_record["created_at"]
+    }
+
+
+@api_router.get("/documents/{employee_id}")
+async def get_employee_documents(employee_id: str, user: dict = Depends(require_role(["admin", "hr"]))):
+    """Get all generated documents for an employee"""
+    docs = await db.documents.find(
+        {"employee_id": employee_id},
+        {"_id": 0, "pdf_data": 0}
+    ).sort("created_at", -1).to_list(None)
+    return docs
+
+
+@api_router.get("/documents/download/{doc_id}")
+async def download_document(doc_id: str, user: dict = Depends(require_role(["admin", "hr"]))):
+    """Download a specific document as PDF"""
+    doc = await db.documents.find_one({"id": doc_id}, {"_id": 0})
+    if not doc:
+        raise HTTPException(status_code=404, detail="Document not found")
+
+    import base64
+    pdf_bytes = base64.b64decode(doc["pdf_data"])
+
+    filename = f"{doc['employee_name']}_{doc['letter_title']}_{doc['created_at'][:10]}.pdf"
+    filename = filename.replace(" ", "_")
+
+    return StreamingResponse(
+        io.BytesIO(pdf_bytes),
+        media_type="application/pdf",
+        headers={"Content-Disposition": f'attachment; filename="{filename}"'}
+    )
+
+
+@api_router.delete("/documents/{doc_id}")
+async def delete_document(doc_id: str, user: dict = Depends(require_role(["admin"]))):
+    """Delete a generated document"""
+    result = await db.documents.delete_one({"id": doc_id})
+    if result.deleted_count == 0:
+        raise HTTPException(status_code=404, detail="Document not found")
+    return {"status": "deleted"}
+
+
+
 
 
 logger = logging.getLogger(__name__)
