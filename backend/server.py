@@ -6425,78 +6425,79 @@ async def check_sandwich_warning(data: dict = Body(...), user: dict = Depends(ge
                 work_hours_map[d] = 0
             work_hours_map[d] += entry.get("hours", 0)
 
-        # Build day_types with existing + proposed leaves
-        day_types = []
-        for day in range(1, num_days + 1):
-            date_str = f"{yr}-{mn:02d}-{day:02d}"
-            current_date = datetime(yr, mn, day)
-            day_of_week = current_date.weekday()
-            is_holiday = date_str in holiday_dates
-            is_weekend = day_of_week >= 5
+        def build_day_types(include_proposed):
+            """Build day classification list, optionally including proposed leaves"""
+            dt_list = []
+            for day in range(1, num_days + 1):
+                date_str = f"{yr}-{mn:02d}-{day:02d}"
+                current_date = datetime(yr, mn, day)
+                day_of_week = current_date.weekday()
+                is_holiday = date_str in holiday_dates
+                is_weekend = day_of_week >= 5
 
-            # Check proposed leaves first, then existing
-            if date_str in proposed_map:
-                dt = proposed_map[date_str]
-                if dt in ["first_half", "second_half"]:
-                    day_types.append((day, date_str, 'present'))  # Half day = present
+                if include_proposed and date_str in proposed_map:
+                    pdt = proposed_map[date_str]
+                    if pdt in ["first_half", "second_half"]:
+                        dt_list.append((day, date_str, 'present'))
+                    else:
+                        dt_list.append((day, date_str, 'leave'))
+                elif date_str in leave_map:
+                    lt = leave_map[date_str]
+                    if "/2" in lt or "Half" in lt:
+                        dt_list.append((day, date_str, 'present'))
+                    else:
+                        dt_list.append((day, date_str, 'leave'))
+                elif is_weekend or is_holiday:
+                    total_hours = work_hours_map.get(date_str, 0)
+                    if total_hours >= 4.5:
+                        dt_list.append((day, date_str, 'present'))
+                    else:
+                        dt_list.append((day, date_str, 'nonworking'))
                 else:
-                    day_types.append((day, date_str, 'leave'))  # Full day
-            elif date_str in leave_map:
-                lt = leave_map[date_str]
-                if "/2" in lt or "Half" in lt:
-                    day_types.append((day, date_str, 'present'))
+                    dt_list.append((day, date_str, 'present'))
+            return dt_list
+
+        def detect_sandwich(dt_list):
+            """Detect sandwich dates from day_types list"""
+            nw_groups = []
+            idx = 0
+            while idx < len(dt_list):
+                if dt_list[idx][2] == 'nonworking':
+                    s = idx
+                    while idx < len(dt_list) and dt_list[idx][2] == 'nonworking':
+                        idx += 1
+                    nw_groups.append((s, idx - 1))
                 else:
-                    day_types.append((day, date_str, 'leave'))
-            elif is_weekend or is_holiday:
-                total_hours = work_hours_map.get(date_str, 0)
-                if total_hours >= 4.5:
-                    day_types.append((day, date_str, 'present'))
-                else:
-                    day_types.append((day, date_str, 'nonworking'))
-            else:
-                day_types.append((day, date_str, 'present'))
+                    idx += 1
+            sw_set = set()
+            for g_start, g_end in nw_groups:
+                before_idx = g_start - 1
+                after_idx = g_end + 1
+                if (before_idx >= 0 and after_idx < len(dt_list) and
+                    dt_list[before_idx][2] == 'leave' and dt_list[after_idx][2] == 'leave'):
+                    for j in range(g_start, g_end + 1):
+                        sw_set.add(dt_list[j][1])
+            return sw_set
 
-        # Sandwich detection
-        nw_groups = []
-        i = 0
-        while i < len(day_types):
-            if day_types[i][2] == 'nonworking':
-                start_idx = i
-                while i < len(day_types) and day_types[i][2] == 'nonworking':
-                    i += 1
-                nw_groups.append((start_idx, i - 1))
-            else:
-                i += 1
+        # Baseline: sandwich from existing approved leaves only
+        baseline_sandwich = detect_sandwich(build_day_types(include_proposed=False))
+        # With proposed: sandwich including new leave dates
+        new_sandwich = detect_sandwich(build_day_types(include_proposed=True))
 
-        sandwich_indices = set()
-        for g_start, g_end in nw_groups:
-            before_idx = g_start - 1
-            after_idx = g_end + 1
-            if (before_idx >= 0 and after_idx < len(day_types) and
-                day_types[before_idx][2] == 'leave' and day_types[after_idx][2] == 'leave'):
-                for j in range(g_start, g_end + 1):
-                    sandwich_indices.add(j)
+        # Only warn about NEW sandwich dates caused by the proposed leave
+        new_sw_dates = sorted(new_sandwich - baseline_sandwich)
 
-        sw_dates = sorted([day_types[j][1] for j in sandwich_indices])
-        # Only report sandwich dates caused by proposed dates
-        proposed_date_strs = set(proposed_map.keys())
-        for sw_d in sw_dates:
+        for sw_d in new_sw_dates:
             all_sandwich_dates.append(sw_d)
 
-        if sw_dates:
-            # Check which proposed dates are involved in sandwich
-            involved_proposed = [d for d in proposed_date_strs if any(
-                day_types[j][1] in proposed_date_strs for j in sandwich_indices
-                if day_types[j][2] == 'leave'
-            )]
-            if involved_proposed or sw_dates:
-                month_name = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"][mn-1]
-                sw_day_nums = sorted([day_types[j][0] for j in sandwich_indices])
-                all_warnings.append(
-                    f"Your leave in {month_name} {yr} will trigger sandwich leave rule. "
-                    f"Weekend/Holiday dates ({', '.join(str(d) for d in sw_day_nums)}) will be counted as leave days, "
-                    f"resulting in additional {len(sw_day_nums)} day(s) salary deduction."
-                )
+        if new_sw_dates:
+            month_name = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"][mn-1]
+            sw_day_nums = sorted([int(d.split('-')[2]) for d in new_sw_dates])
+            all_warnings.append(
+                f"Your leave in {month_name} {yr} will trigger sandwich leave rule. "
+                f"Weekend/Holiday dates ({', '.join(str(d) for d in sw_day_nums)}) will be counted as leave days, "
+                f"resulting in additional {len(sw_day_nums)} day(s) salary deduction."
+            )
 
     return {
         "has_sandwich": len(all_sandwich_dates) > 0,
