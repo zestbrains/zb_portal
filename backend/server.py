@@ -4710,20 +4710,14 @@ async def calculate_sandwich_dates(employees, attendance, year, month, num_days,
             else:
                 i += 1
         
-        # Find sandwich patterns: leave-nonworking-leave
+        # Find sandwich patterns: leave immediately before AND after a non-working block
         sandwich_indices = set()
-        for g in range(len(nw_groups) - 1):
-            end_first = nw_groups[g][1]
-            start_second = nw_groups[g + 1][0]
-            between_start = end_first + 1
-            between_end = start_second - 1
-            if between_start > between_end:
-                continue
-            all_leave = all(day_types[j][2] == 'leave' for j in range(between_start, between_end + 1))
-            if all_leave:
-                for j in range(nw_groups[g][0], nw_groups[g][1] + 1):
-                    sandwich_indices.add(j)
-                for j in range(nw_groups[g + 1][0], nw_groups[g + 1][1] + 1):
+        for g_start, g_end in nw_groups:
+            before_idx = g_start - 1
+            after_idx = g_end + 1
+            if (before_idx >= 0 and after_idx < len(day_types) and
+                day_types[before_idx][2] == 'leave' and day_types[after_idx][2] == 'leave'):
+                for j in range(g_start, g_end + 1):
                     sandwich_indices.add(j)
         
         # Get the actual day numbers that are sandwich
@@ -5048,8 +5042,8 @@ async def get_salary(year: int, month: int, user: dict = Depends(require_role(["
             else:
                 day_types.append((day, date_str, 'present'))
 
-        # Sandwich leave: find non-working groups and check if all
-        # working days between adjacent groups are on leave
+        # Sandwich leave: if leave immediately before AND after a non-working block,
+        # those non-working days count as leave (sandwich)
         nw_groups = []
         i = 0
         while i < len(day_types):
@@ -5062,18 +5056,12 @@ async def get_salary(year: int, month: int, user: dict = Depends(require_role(["
                 i += 1
 
         sandwich_indices = set()
-        for g in range(len(nw_groups) - 1):
-            end_first = nw_groups[g][1]
-            start_second = nw_groups[g + 1][0]
-            between_start = end_first + 1
-            between_end = start_second - 1
-            if between_start > between_end:
-                continue
-            all_leave = all(day_types[j][2] == 'leave' for j in range(between_start, between_end + 1))
-            if all_leave:
-                for j in range(nw_groups[g][0], nw_groups[g][1] + 1):
-                    sandwich_indices.add(j)
-                for j in range(nw_groups[g + 1][0], nw_groups[g + 1][1] + 1):
+        for g_start, g_end in nw_groups:
+            before_idx = g_start - 1
+            after_idx = g_end + 1
+            if (before_idx >= 0 and after_idx < len(day_types) and
+                day_types[before_idx][2] == 'leave' and day_types[after_idx][2] == 'leave'):
+                for j in range(g_start, g_end + 1):
                     sandwich_indices.add(j)
 
         sandwich_count = len(sandwich_indices)
@@ -5474,17 +5462,12 @@ async def download_salary_sheet(
                 i += 1
         
         sandwich_count = 0
-        for g in range(len(nw_groups) - 1):
-            end_first = nw_groups[g][1]
-            start_second = nw_groups[g + 1][0]
-            between_start = end_first + 1
-            between_end = start_second - 1
-            if between_start > between_end:
-                continue
-            all_leave = all(day_types[j] == 'leave' for j in range(between_start, between_end + 1))
-            if all_leave:
-                sandwich_count += (nw_groups[g][1] - nw_groups[g][0] + 1)
-                sandwich_count += (nw_groups[g + 1][1] - nw_groups[g + 1][0] + 1)
+        for g_start, g_end in nw_groups:
+            before_idx = g_start - 1
+            after_idx = g_end + 1
+            if (before_idx >= 0 and after_idx < len(day_types) and
+                day_types[before_idx] == 'leave' and day_types[after_idx] == 'leave'):
+                sandwich_count += (g_end - g_start + 1)
         
         # Calculate late coming deduction
         late_coming_days = late_coming_map.get(emp_id, [])
@@ -6129,18 +6112,12 @@ async def get_my_attendance(year: int, month: int, user: dict = Depends(require_
             i += 1
     
     sandwich_indices = set()
-    for g in range(len(nw_groups) - 1):
-        end_first = nw_groups[g][1]
-        start_second = nw_groups[g + 1][0]
-        between_start = end_first + 1
-        between_end = start_second - 1
-        if between_start > between_end:
-            continue
-        all_leave = all(day_types[j][2] == 'leave' for j in range(between_start, between_end + 1))
-        if all_leave:
-            for j in range(nw_groups[g][0], nw_groups[g][1] + 1):
-                sandwich_indices.add(j)
-            for j in range(nw_groups[g + 1][0], nw_groups[g + 1][1] + 1):
+    for g_start, g_end in nw_groups:
+        before_idx = g_start - 1
+        after_idx = g_end + 1
+        if (before_idx >= 0 and after_idx < len(day_types) and
+            day_types[before_idx][2] == 'leave' and day_types[after_idx][2] == 'leave'):
+            for j in range(g_start, g_end + 1):
                 sandwich_indices.add(j)
     
     sandwich_dates = sorted([day_types[j][0] for j in sandwich_indices])
@@ -6331,17 +6308,12 @@ async def get_my_salary(year: int, month: int, user: dict = Depends(require_role
             i += 1
 
     sandwich_indices = set()
-    for g in range(len(nw_groups) - 1):
-        end_first = nw_groups[g][1]
-        start_second = nw_groups[g + 1][0]
-        between_start = end_first + 1
-        between_end = start_second - 1
-        if between_start > between_end:
-            continue
-        if all(day_types[j][2] == 'leave' for j in range(between_start, between_end + 1)):
-            for j in range(nw_groups[g][0], nw_groups[g][1] + 1):
-                sandwich_indices.add(j)
-            for j in range(nw_groups[g + 1][0], nw_groups[g + 1][1] + 1):
+    for g_start, g_end in nw_groups:
+        before_idx = g_start - 1
+        after_idx = g_end + 1
+        if (before_idx >= 0 and after_idx < len(day_types) and
+            day_types[before_idx][2] == 'leave' and day_types[after_idx][2] == 'leave'):
+            for j in range(g_start, g_end + 1):
                 sandwich_indices.add(j)
 
     sandwich_count = len(sandwich_indices)
@@ -6497,17 +6469,12 @@ async def check_sandwich_warning(data: dict = Body(...), user: dict = Depends(ge
                 i += 1
 
         sandwich_indices = set()
-        for g in range(len(nw_groups) - 1):
-            end_first = nw_groups[g][1]
-            start_second = nw_groups[g + 1][0]
-            between_start = end_first + 1
-            between_end = start_second - 1
-            if between_start > between_end:
-                continue
-            if all(day_types[j][2] == 'leave' for j in range(between_start, between_end + 1)):
-                for j in range(nw_groups[g][0], nw_groups[g][1] + 1):
-                    sandwich_indices.add(j)
-                for j in range(nw_groups[g + 1][0], nw_groups[g + 1][1] + 1):
+        for g_start, g_end in nw_groups:
+            before_idx = g_start - 1
+            after_idx = g_end + 1
+            if (before_idx >= 0 and after_idx < len(day_types) and
+                day_types[before_idx][2] == 'leave' and day_types[after_idx][2] == 'leave'):
+                for j in range(g_start, g_end + 1):
                     sandwich_indices.add(j)
 
         sw_dates = sorted([day_types[j][1] for j in sandwich_indices])

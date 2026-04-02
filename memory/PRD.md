@@ -43,7 +43,7 @@ HR Management Portal for Zestbrains - migrated from another Emergent account
 - Late Marks for delayed projects
 - Bank-wise salary grouping
 - ICICI & Hexeros Yes Bank Salary Sheet downloads
-- Sandwich Leave detection & salary deduction
+- Sandwich Leave detection & salary deduction (corrected rule: leave-weekend-leave)
 - Email notifications on leave application
 - Secured /api/employees endpoint (admin/hr only)
 - Employee Attendance: Late marks & deduction summary (no full salary details exposed)
@@ -51,8 +51,9 @@ HR Management Portal for Zestbrains - migrated from another Emergent account
 
 ## Recent Changes (April 2026)
 - **Added**: Employee Attendance page now shows "Late Marks & Deduction" section (only visible when late marks exist) - replaces hidden salary summary
-- **Added**: Sandwich Leave Warning on Apply Leave page - checks proposed leave dates against sandwich rules before submission, shows clear warning with affected dates and deduction impact
+- **Added**: Sandwich Leave Warning on Apply Leave page - checks proposed leave dates against sandwich rules before submission
 - **Backend**: New `POST /api/leaves/check-sandwich` endpoint for sandwich leave pre-check
+- **CRITICAL FIX**: Corrected sandwich leave detection logic across ALL 6 locations in server.py. Old rule required all working days between two weekends to be leave. New correct rule: if leave is taken immediately before AND after a non-working block (weekend/holiday), those non-working days count as sandwich. Example: Fri leave + Sat/Sun weekend + Mon leave = Sat/Sun are sandwich (2 extra deduction days).
 
 ## Admin Credentials
 - **Username**: renish
