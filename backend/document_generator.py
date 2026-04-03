@@ -19,7 +19,7 @@ SIGNATURE_IMG = str(LETTERHEAD_DIR / "signature.png")
 PW = 215.9  # page width mm
 PH = 279.4  # page height mm
 CONTENT_TOP = 52  # content starts after header (header is ~47mm)
-FOOTER_Y = 225  # footer image Y start (footer is ~54mm tall)
+FOOTER_Y = 238  # footer image Y start - pushed down to avoid wave overlapping content
 LM = 18  # left margin
 RM = 18  # right margin
 CW = PW - LM - RM  # content width
@@ -63,7 +63,7 @@ class LetterPDF(FPDF):
             self.image(FOOTER_IMG, x=0, y=FOOTER_Y, w=PW)
 
     def add_signature(self):
-        y = self.get_y() + 6
+        y = self.get_y() + 3
         self.set_y(y)
         self._f("B", FONT_BODY)
         self.cell(0, LH, "For ZESTBRAINS PVT. LTD", new_x="LMARGIN", new_y="NEXT")
