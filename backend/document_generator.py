@@ -18,13 +18,15 @@ SIGNATURE_IMG = str(LETTERHEAD_DIR / "signature.png")
 # Page dimensions (US Letter)
 PW = 215.9  # page width mm
 PH = 279.4  # page height mm
-HEADER_H = 38  # header image visual height
-FOOTER_Y = 230  # footer image Y start
-CONTENT_TOP = 42  # content starts after header
-CONTENT_BOTTOM = 220  # content must end before footer
+CONTENT_TOP = 52  # content starts after header (header is ~47mm)
+FOOTER_Y = 225  # footer image Y start (footer is ~54mm tall)
 LM = 18  # left margin
 RM = 18  # right margin
 CW = PW - LM - RM  # content width
+LH = 5.5  # line height for body text
+FONT_BODY = 10  # body font size
+FONT_TITLE = 13  # title font size
+FONT_SMALL = 9  # small text size
 
 
 class LetterPDF(FPDF):
@@ -46,8 +48,8 @@ class LetterPDF(FPDF):
         else:
             self._font_family = "Helvetica"
 
-    def _f(self, style="", size=9):
-        self.set_font(self._font_family, style, size)
+    def _f(self, style="", size=None):
+        self.set_font(self._font_family, style, size or FONT_BODY)
 
     def header(self):
         if os.path.exists(HEADER_IMG):
@@ -61,70 +63,67 @@ class LetterPDF(FPDF):
             self.image(FOOTER_IMG, x=0, y=FOOTER_Y, w=PW)
 
     def add_signature(self):
-        y = self.get_y() + 5
+        y = self.get_y() + 6
         self.set_y(y)
-        self._f("B", 9)
-        self.cell(0, 5, "For ZESTBRAINS PVT. LTD", new_x="LMARGIN", new_y="NEXT")
+        self._f("B", FONT_BODY)
+        self.cell(0, LH, "For ZESTBRAINS PVT. LTD", new_x="LMARGIN", new_y="NEXT")
         if os.path.exists(SIGNATURE_IMG):
             self.image(SIGNATURE_IMG, x=LM, y=self.get_y() + 1, w=25)
             self.set_y(self.get_y() + 20)
         else:
             self.set_y(self.get_y() + 12)
-        self._f("B", 9)
-        self.cell(0, 4, "Authorised Signatory", new_x="LMARGIN", new_y="NEXT")
+        self._f("B", FONT_BODY)
+        self.cell(0, LH, "Authorised Signatory", new_x="LMARGIN", new_y="NEXT")
 
     def write_date(self, date_str, ref_no=""):
-        self._f("", 8.5)
-        self.cell(0, 4.5, f"Date: {date_str}", new_x="LMARGIN", new_y="NEXT")
+        self._f("", FONT_SMALL)
+        self.cell(0, LH, f"Date: {date_str}", new_x="LMARGIN", new_y="NEXT")
         if ref_no:
-            self.cell(0, 4.5, f"Ref: {ref_no}", new_x="LMARGIN", new_y="NEXT")
-        self.ln(2)
+            self.cell(0, LH, f"Ref: {ref_no}", new_x="LMARGIN", new_y="NEXT")
+        self.ln(3)
 
     def write_title(self, title):
-        self._f("B", 12)
-        self.cell(0, 6, title, align="C", new_x="LMARGIN", new_y="NEXT")
-        # Underline
+        self._f("B", FONT_TITLE)
+        self.cell(0, 7, title, align="C", new_x="LMARGIN", new_y="NEXT")
         tw = self.get_string_width(title)
         cx = (PW - tw) / 2
         self.line(cx, self.get_y(), cx + tw, self.get_y())
-        self.ln(4)
+        self.ln(5)
 
     def write_to(self, name):
-        self._f("", 9)
-        self.cell(0, 4.5, "To,", new_x="LMARGIN", new_y="NEXT")
-        self._f("B", 9)
-        self.cell(0, 4.5, f"Mr./Ms. {name}", new_x="LMARGIN", new_y="NEXT")
-        self.ln(2)
+        self._f("", FONT_BODY)
+        self.cell(0, LH, "To,", new_x="LMARGIN", new_y="NEXT")
+        self._f("B", FONT_BODY)
+        self.cell(0, LH, f"Mr./Ms. {name}", new_x="LMARGIN", new_y="NEXT")
+        self.ln(3)
 
     def write_subject(self, subject):
-        self._f("B", 9)
-        self.cell(16, 4.5, "Subject: ")
-        self._f("BU" if hasattr(self, '_font_family') else "B", 9)
-        # Use underline via set_font
-        self.set_font(self._font_family, "BU", 9)
-        self.cell(0, 4.5, subject, new_x="LMARGIN", new_y="NEXT")
-        self.ln(2)
+        self._f("B", FONT_BODY)
+        self.cell(16, LH, "Subject: ")
+        self.set_font(self._font_family, "BU", FONT_BODY)
+        self.cell(0, LH, subject, new_x="LMARGIN", new_y="NEXT")
+        self.ln(3)
 
     def write_salutation(self, name):
-        self._f("", 9)
-        self.cell(0, 4.5, f"Dear {name},", new_x="LMARGIN", new_y="NEXT")
+        self._f("", FONT_BODY)
+        self.cell(0, LH, f"Dear {name},", new_x="LMARGIN", new_y="NEXT")
         self.ln(2)
 
     def write_body(self, text):
-        self._f("", 8.5)
-        self.multi_cell(CW, 4.2, text)
-        self.ln(1.5)
+        self._f("", FONT_BODY)
+        self.multi_cell(CW, LH, text)
+        self.ln(2)
 
     def write_bullet(self, text):
-        self._f("", 8.5)
+        self._f("", FONT_BODY)
         self.set_x(LM + 6)
-        self.multi_cell(CW - 6, 4.2, f"\u2022  {text}")
+        self.multi_cell(CW - 6, LH, f"\u2022  {text}")
         self.set_x(LM)
 
     def write_closing(self, text):
-        self._f("", 8.5)
-        self.multi_cell(CW, 4.2, text)
-        self.ln(1)
+        self._f("", FONT_BODY)
+        self.multi_cell(CW, LH, text)
+        self.ln(1.5)
 
 
 def _fmt_date(date_str):
