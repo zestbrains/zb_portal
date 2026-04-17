@@ -4605,10 +4605,11 @@ async def get_attendance(year: int, month: int, user: dict = Depends(require_rol
     # 3. Get all work entries for this month (for OT calculation)
     work_entries = await db.work_entries.find({
         "date": {"$gte": start_date, "$lte": end_date}
-    }, {"_id": 0, "employee_id": 1, "date": 1, "hours": 1}).to_list(None)
+    }, {"_id": 0, "employee_id": 1, "date": 1, "hours": 1, "from_weekend_approval": 1}).to_list(None)
     
     # Build work hours map: {employee_id: {date: total_hours}}
     work_hours_map = {}
+    approved_weekend_dates = {}
     for entry in work_entries:
         emp_id = entry.get("employee_id")
         date = entry.get("date")
@@ -4620,6 +4621,10 @@ async def get_attendance(year: int, month: int, user: dict = Depends(require_rol
             work_hours_map[emp_id][date] = 0
         
         work_hours_map[emp_id][date] += hours
+        if entry.get("from_weekend_approval"):
+            if emp_id not in approved_weekend_dates:
+                approved_weekend_dates[emp_id] = set()
+            approved_weekend_dates[emp_id].add(date)
     
     # Now build attendance matrix
     attendance = {}
@@ -4665,22 +4670,19 @@ async def get_attendance(year: int, month: int, user: dict = Depends(require_rol
             # Check if employee has leave on this date
             elif emp_id in leave_map and date_str in leave_map[emp_id]:
                 attendance[emp_id][day] = leave_map[emp_id][date_str]
-            elif (is_weekend or is_holiday) and not is_future_date:
-                # Check if employee worked (OT)
+            elif is_weekend or is_holiday:
+                # Check if employee worked (OT) - also check future dates with approved entries
                 total_hours = work_hours_map.get(emp_id, {}).get(date_str, 0)
+                is_admin_approved = date_str in approved_weekend_dates.get(emp_id, set())
                 
                 if total_hours >= 8.5:
                     attendance[emp_id][day] = "OT"
-                elif total_hours >= 4.5:
+                elif total_hours >= 4.5 or (is_admin_approved and total_hours > 0):
                     attendance[emp_id][day] = "OT/2"
                 elif is_holiday:
                     attendance[emp_id][day] = "H"
                 else:
                     attendance[emp_id][day] = "WO"
-            elif is_weekend:
-                attendance[emp_id][day] = "WO"
-            elif is_holiday:
-                attendance[emp_id][day] = "H"
             elif is_future_date:
                 attendance[emp_id][day] = "-"
             else:
@@ -5074,8 +5076,17 @@ async def get_salary(year: int, month: int, user: dict = Depends(require_role(["
                     else:
                         day_types.append((day, date_str, 'nonworking'))
                 else:
-                    # Future weekends/holidays still count as nonworking for sandwich detection
-                    day_types.append((day, date_str, 'nonworking'))
+                    # Future weekends/holidays: still check for admin-approved entries
+                    total_hours = work_hours_map.get(emp_id, {}).get(date_str, 0)
+                    is_admin_approved = date_str in approved_weekend_dates.get(emp_id, set())
+                    if is_admin_approved and total_hours > 0:
+                        if total_hours >= 8.5:
+                            ot_count += 1
+                        else:
+                            ot_count += 0.5
+                        day_types.append((day, date_str, 'present'))
+                    else:
+                        day_types.append((day, date_str, 'nonworking'))
             elif is_future_date:
                 day_types.append((day, date_str, 'future'))
             else:
@@ -5314,10 +5325,11 @@ async def download_salary_sheet(
     emp_ids = [e["employee_id"] for e in employees]
     work_entries = await db.work_entries.find(
         {"employee_id": {"$in": emp_ids}, "date": {"$gte": start_date, "$lte": end_date}},
-        {"_id": 0, "employee_id": 1, "date": 1, "hours": 1, "is_compensation": 1}
+        {"_id": 0, "employee_id": 1, "date": 1, "hours": 1, "is_compensation": 1, "from_weekend_approval": 1}
     ).to_list(None)
     
     work_hours_map = {}
+    approved_weekend_dates_sheet = {}
     for entry in work_entries:
         if entry.get("is_compensation", False):
             continue
@@ -5328,6 +5340,10 @@ async def download_salary_sheet(
         if d not in work_hours_map[emp_id]:
             work_hours_map[emp_id][d] = 0
         work_hours_map[emp_id][d] += entry.get("hours", 0)
+        if entry.get("from_weekend_approval"):
+            if emp_id not in approved_weekend_dates_sheet:
+                approved_weekend_dates_sheet[emp_id] = set()
+            approved_weekend_dates_sheet[emp_id].add(d)
     
     # Get salary adjustments
     adjustments = await db.salary_adjustments.find(
@@ -5476,16 +5492,26 @@ async def download_salary_sheet(
             elif is_weekend or is_holiday:
                 if not is_future_date:
                     total_hours = work_hours_map.get(emp_id, {}).get(date_str, 0)
+                    is_admin_approved = date_str in approved_weekend_dates_sheet.get(emp_id, set())
                     if total_hours >= 8.5:
                         ot_count += 1
                         day_types.append('present')
-                    elif total_hours >= 4.5:
+                    elif total_hours >= 4.5 or (is_admin_approved and total_hours > 0):
                         ot_count += 0.5
                         day_types.append('present')
                     else:
                         day_types.append('nonworking')
                 else:
-                    day_types.append('nonworking')
+                    total_hours = work_hours_map.get(emp_id, {}).get(date_str, 0)
+                    is_admin_approved = date_str in approved_weekend_dates_sheet.get(emp_id, set())
+                    if is_admin_approved and total_hours > 0:
+                        if total_hours >= 8.5:
+                            ot_count += 1
+                        else:
+                            ot_count += 0.5
+                        day_types.append('present')
+                    else:
+                        day_types.append('nonworking')
             elif is_future_date:
                 day_types.append('future')
             else:
@@ -5666,10 +5692,11 @@ async def download_hexeros_salary_sheet(
     emp_ids = [e["employee_id"] for e in employees]
     work_entries = await db.work_entries.find(
         {"employee_id": {"$in": emp_ids}, "date": {"$gte": start_date, "$lte": end_date}},
-        {"_id": 0, "employee_id": 1, "date": 1, "hours": 1, "is_compensation": 1}
+        {"_id": 0, "employee_id": 1, "date": 1, "hours": 1, "is_compensation": 1, "from_weekend_approval": 1}
     ).to_list(None)
     
     work_hours_map = {}
+    approved_weekend_dates_sheet = {}
     for entry in work_entries:
         if entry.get("is_compensation", False):
             continue
@@ -5680,6 +5707,10 @@ async def download_hexeros_salary_sheet(
         if d not in work_hours_map[emp_id]:
             work_hours_map[emp_id][d] = 0
         work_hours_map[emp_id][d] += entry.get("hours", 0)
+        if entry.get("from_weekend_approval"):
+            if emp_id not in approved_weekend_dates_sheet:
+                approved_weekend_dates_sheet[emp_id] = set()
+            approved_weekend_dates_sheet[emp_id].add(d)
     
     # Get salary adjustments
     adjustments = await db.salary_adjustments.find(
@@ -6104,7 +6135,7 @@ async def get_my_attendance(year: int, month: int, user: dict = Depends(require_
                 break
         
         if not leave_found:
-            if (is_weekend or is_holiday) and not is_future_date:
+            if is_weekend or is_holiday:
                 work_entries = await db.work_entries.find({
                     "employee_id": emp_id,
                     "date": date_str
@@ -6112,11 +6143,12 @@ async def get_my_attendance(year: int, month: int, user: dict = Depends(require_
                 
                 total_hours = sum(entry.get("hours", 0) for entry in work_entries)
                 has_compensation = any(entry.get("is_compensation", False) for entry in work_entries)
+                has_admin_approval = any(entry.get("from_weekend_approval", False) for entry in work_entries)
                 
                 if total_hours >= 8.5:
                     attendance[day] = "OT"
                     day_types.append((day, date_str, 'present'))
-                elif total_hours >= 4.5:
+                elif total_hours >= 4.5 or (has_admin_approval and total_hours > 0):
                     attendance[day] = "OT/2"
                     day_types.append((day, date_str, 'present'))
                 elif is_holiday:
@@ -6128,12 +6160,6 @@ async def get_my_attendance(year: int, month: int, user: dict = Depends(require_
                 
                 if has_compensation:
                     compensation_dates.append(day)
-            elif is_weekend:
-                attendance[day] = "WO"
-                day_types.append((day, date_str, 'nonworking'))
-            elif is_holiday:
-                attendance[day] = "H"
-                day_types.append((day, date_str, 'nonworking'))
             elif is_future_date:
                 attendance[day] = "-"
                 day_types.append((day, date_str, 'future'))
@@ -6227,8 +6253,9 @@ async def get_my_salary(year: int, month: int, user: dict = Depends(require_role
             if lt != "Rejected" and date >= start_date and date <= end_date:
                 leave_map[date] = lt
 
-    work_entries = await db.work_entries.find({"employee_id": emp_id, "date": {"$gte": start_date, "$lte": end_date}}, {"_id": 0, "date": 1, "hours": 1, "is_compensation": 1}).to_list(None)
+    work_entries = await db.work_entries.find({"employee_id": emp_id, "date": {"$gte": start_date, "$lte": end_date}}, {"_id": 0, "date": 1, "hours": 1, "is_compensation": 1, "from_weekend_approval": 1}).to_list(None)
     work_hours_map = {}
+    approved_weekend_dates_emp = set()
     for entry in work_entries:
         if entry.get("is_compensation", False):
             continue
@@ -6236,6 +6263,8 @@ async def get_my_salary(year: int, month: int, user: dict = Depends(require_role
         if d not in work_hours_map:
             work_hours_map[d] = 0
         work_hours_map[d] += entry.get("hours", 0)
+        if entry.get("from_weekend_approval"):
+            approved_weekend_dates_emp.add(d)
 
     try:
         salary = float(employee.get("salary") or 0)
@@ -6322,16 +6351,26 @@ async def get_my_salary(year: int, month: int, user: dict = Depends(require_role
         elif is_weekend or is_holiday:
             if not is_future_date:
                 total_hours = work_hours_map.get(date_str, 0)
+                is_admin_approved = date_str in approved_weekend_dates_emp
                 if total_hours >= 8.5:
                     ot_count += 1
                     day_types.append((day, date_str, 'present'))
-                elif total_hours >= 4.5:
+                elif total_hours >= 4.5 or (is_admin_approved and total_hours > 0):
                     ot_count += 0.5
                     day_types.append((day, date_str, 'present'))
                 else:
                     day_types.append((day, date_str, 'nonworking'))
             else:
-                day_types.append((day, date_str, 'nonworking'))
+                total_hours = work_hours_map.get(date_str, 0)
+                is_admin_approved = date_str in approved_weekend_dates_emp
+                if is_admin_approved and total_hours > 0:
+                    if total_hours >= 8.5:
+                        ot_count += 1
+                    else:
+                        ot_count += 0.5
+                    day_types.append((day, date_str, 'present'))
+                else:
+                    day_types.append((day, date_str, 'nonworking'))
         elif is_future_date:
             day_types.append((day, date_str, 'future'))
         else:
@@ -6457,8 +6496,9 @@ async def check_sandwich_warning(data: dict = Body(...), user: dict = Depends(ge
                 proposed_map[d] = dt
 
         # Work entries for OT detection
-        work_entries = await db.work_entries.find({"employee_id": emp_id, "date": {"$gte": start_date, "$lte": end_date}}, {"_id": 0, "date": 1, "hours": 1, "is_compensation": 1}).to_list(None)
+        work_entries = await db.work_entries.find({"employee_id": emp_id, "date": {"$gte": start_date, "$lte": end_date}}, {"_id": 0, "date": 1, "hours": 1, "is_compensation": 1, "from_weekend_approval": 1}).to_list(None)
         work_hours_map = {}
+        approved_weekend_dates_sw = set()
         for entry in work_entries:
             if entry.get("is_compensation", False):
                 continue
@@ -6466,6 +6506,8 @@ async def check_sandwich_warning(data: dict = Body(...), user: dict = Depends(ge
             if d not in work_hours_map:
                 work_hours_map[d] = 0
             work_hours_map[d] += entry.get("hours", 0)
+            if entry.get("from_weekend_approval"):
+                approved_weekend_dates_sw.add(d)
 
         def build_day_types(include_proposed):
             """Build day classification list, optionally including proposed leaves"""
@@ -6491,7 +6533,8 @@ async def check_sandwich_warning(data: dict = Body(...), user: dict = Depends(ge
                         dt_list.append((day, date_str, 'leave'))
                 elif is_weekend or is_holiday:
                     total_hours = work_hours_map.get(date_str, 0)
-                    if total_hours >= 4.5:
+                    is_admin_approved = date_str in approved_weekend_dates_sw
+                    if total_hours >= 4.5 or (is_admin_approved and total_hours > 0):
                         dt_list.append((day, date_str, 'present'))
                     else:
                         dt_list.append((day, date_str, 'nonworking'))
