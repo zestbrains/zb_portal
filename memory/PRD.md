@@ -38,4 +38,4 @@ HR Management Portal for Zestbrains
 - P2: Refactor server.py (6600+ lines) into routes/models
 
 ## URL
-https://leave-sync-hub.preview.emergentagent.com
+https://admin-leave-module.preview.emergentagent.com
