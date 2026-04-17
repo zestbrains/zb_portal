@@ -97,7 +97,9 @@ export default function Salary({ user, onLogout }) {
     if (edits[empId] && edits[empId][field] !== undefined) return edits[empId][field];
     const emp = data.find(e => e.employee_id === empId);
     if (!emp) return '';
-    return field === 'other_income' ? (emp.other_income || '') : (emp.extra_hours || '');
+    if (field === 'other_income') return emp.other_income || '';
+    if (field === 'other_income_notes') return emp.other_income_notes || '';
+    return emp.extra_hours || '';
   };
 
   const handleEditChange = (empId, field, value) => {
@@ -110,8 +112,10 @@ export default function Salary({ user, onLogout }) {
     if (!emp) return false;
     const editOI = edits[empId].other_income;
     const editEH = edits[empId].extra_hours;
+    const editOIN = edits[empId].other_income_notes;
     if (editOI !== undefined && parseFloat(editOI || 0) !== (emp.other_income || 0)) return true;
     if (editEH !== undefined && parseFloat(editEH || 0) !== (emp.extra_hours || 0)) return true;
+    if (editOIN !== undefined && editOIN !== (emp.other_income_notes || '')) return true;
     return false;
   };
 
@@ -122,7 +126,8 @@ export default function Salary({ user, onLogout }) {
       const editData = edits[empId] || {};
       const other_income = parseFloat(editData.other_income !== undefined ? editData.other_income : (emp?.other_income || 0)) || 0;
       const extra_hours = parseFloat(editData.extra_hours !== undefined ? editData.extra_hours : (emp?.extra_hours || 0)) || 0;
-      await api.put('/salary/adjustments', { employee_id: empId, year: parseInt(year), month: parseInt(month), other_income, extra_hours });
+      const other_income_notes = editData.other_income_notes !== undefined ? editData.other_income_notes : (emp?.other_income_notes || '');
+      await api.put('/salary/adjustments', { employee_id: empId, year: parseInt(year), month: parseInt(month), other_income, extra_hours, other_income_notes });
       toast.success(`Saved adjustments for ${emp?.employee_name}`);
       setEdits(prev => { const n = { ...prev }; delete n[empId]; return n; });
       fetchSalary();
@@ -450,6 +455,7 @@ export default function Salary({ user, onLogout }) {
                               </td>
                               <td className="py-2 px-2">
                                 <Input type="number" step="0.01" min="0" value={getEditValue(emp.employee_id, 'other_income')} onChange={(e) => handleEditChange(emp.employee_id, 'other_income', e.target.value)} className="h-7 w-20 text-xs text-right border-slate-200 mx-auto" placeholder="0" data-testid={`other-income-${emp.employee_id}`} />
+                                <input type="text" value={getEditValue(emp.employee_id, 'other_income_notes')} onChange={(e) => handleEditChange(emp.employee_id, 'other_income_notes', e.target.value)} className="mt-1 h-6 w-full text-[10px] border border-slate-200 rounded px-1.5 placeholder:text-slate-300" placeholder="Notes..." data-testid={`other-income-notes-${emp.employee_id}`} />
                               </td>
                               <td className="py-2 px-2">
                                 <Input type="number" step="0.5" min="0" value={getEditValue(emp.employee_id, 'extra_hours')} onChange={(e) => handleEditChange(emp.employee_id, 'extra_hours', e.target.value)} className="h-7 w-16 text-xs text-right border-slate-200 mx-auto" placeholder="0" data-testid={`extra-hours-${emp.employee_id}`} />

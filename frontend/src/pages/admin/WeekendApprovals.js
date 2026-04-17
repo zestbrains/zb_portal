@@ -37,6 +37,13 @@ export default function WeekendApprovals({ user, onLogout }) {
   const [editedHours, setEditedHours] = useState('');
   const [rejectionReason, setRejectionReason] = useState('');
   const [isCompensation, setIsCompensation] = useState(false);
+  const [compensationNotes, setCompensationNotes] = useState('');
+  
+  // History edit states
+  const [editCompDialogOpen, setEditCompDialogOpen] = useState(false);
+  const [editCompApproval, setEditCompApproval] = useState(null);
+  const [editCompFlag, setEditCompFlag] = useState(false);
+  const [editCompNotes, setEditCompNotes] = useState('');
 
   // Generate years (from 2026 to current year)
   const generateYears = () => {
@@ -112,7 +119,8 @@ export default function WeekendApprovals({ user, onLogout }) {
     setEditedDate(approval.original_date);
     setEditedHours(approval.original_hours.toString());
     setRejectionReason('');
-    setIsCompensation(false); // Reset compensation checkbox
+    setIsCompensation(false);
+    setCompensationNotes('');
     setActionDialogOpen(true);
   };
 
@@ -121,7 +129,8 @@ export default function WeekendApprovals({ user, onLogout }) {
       await api.put(`/weekend-approvals/${selectedApproval.id}/approve`, {
         approved_date: editedDate,
         approved_hours: parseFloat(editedHours),
-        is_compensation: isCompensation // Store compensation flag
+        is_compensation: isCompensation,
+        compensation_notes: compensationNotes
       });
       toast.success('Work entry approved successfully');
       setActionDialogOpen(false);
@@ -147,6 +156,28 @@ export default function WeekendApprovals({ user, onLogout }) {
       toast.error(error.response?.data?.detail || 'Failed to reject');
     }
   };
+
+  const openEditCompDialog = (approval) => {
+    setEditCompApproval(approval);
+    setEditCompFlag(approval.is_compensation || false);
+    setEditCompNotes(approval.compensation_notes || '');
+    setEditCompDialogOpen(true);
+  };
+
+  const handleUpdateCompensation = async () => {
+    try {
+      await api.put(`/weekend-approvals/${editCompApproval.id}/update-compensation`, {
+        is_compensation: editCompFlag,
+        compensation_notes: editCompNotes
+      });
+      toast.success('Compensation updated');
+      setEditCompDialogOpen(false);
+      fetchData();
+    } catch (error) {
+      toast.error(error.response?.data?.detail || 'Failed to update');
+    }
+  };
+
 
   const handleApproveAll = async () => {
     if (pendingApprovals.length === 0) {
@@ -436,6 +467,14 @@ export default function WeekendApprovals({ user, onLogout }) {
                                 <span className="font-medium">Rejection Reason:</span> {record.rejection_reason}
                               </div>
                             )}
+                            {record.status === 'approved' && record.is_compensation && (
+                              <div className="mt-2 p-2 bg-amber-50 border border-amber-200 rounded text-sm">
+                                <span className="font-medium text-amber-700">Compensation</span>
+                                {record.compensation_notes && (
+                                  <span className="text-amber-600 ml-1">- {record.compensation_notes}</span>
+                                )}
+                              </div>
+                            )}
                             <div className="mt-2 text-xs text-slate-400">
                               {record.status === 'approved' ? 'Approved' : 'Rejected'} by {record.approved_by} on {formatDate(record.approved_at)}
                             </div>
@@ -444,6 +483,11 @@ export default function WeekendApprovals({ user, onLogout }) {
                             <Button size="sm" variant="outline" onClick={() => openViewDialog(record)}>
                               <Eye size={16} />
                             </Button>
+                            {record.status === 'approved' && (
+                              <Button size="sm" variant="outline" className="text-amber-600 border-amber-200 hover:bg-amber-50" onClick={() => openEditCompDialog(record)} data-testid={`edit-comp-${record.id}`}>
+                                <Edit size={14} className="mr-1" /> Comp
+                              </Button>
+                            )}
                             {(record.status === 'approved' || record.status === 'rejected') && user.role === 'admin' && (
                               <Button size="sm" variant="outline" className="text-red-600 border-red-200 hover:bg-red-50" onClick={() => openDeleteDialog(record)} data-testid={`delete-${record.id}`}>
                                 <Trash2 size={16} />
@@ -581,6 +625,18 @@ export default function WeekendApprovals({ user, onLogout }) {
                         Mark as Compensation
                       </Label>
                     </div>
+                    {isCompensation && (
+                      <div>
+                        <Label className="text-xs font-medium text-slate-600">Compensation Notes</Label>
+                        <textarea
+                          className="flex w-full rounded-md border border-slate-200 bg-white px-3 py-2 text-sm mt-1 min-h-[50px]"
+                          placeholder="Add notes for this compensation entry..."
+                          value={compensationNotes}
+                          onChange={(e) => setCompensationNotes(e.target.value)}
+                          data-testid="compensation-notes"
+                        />
+                      </div>
+                    )}
                     <Button className="w-full bg-green-600 hover:bg-green-700" onClick={handleApprove} data-testid="confirm-approve">
                       <Check size={16} className="mr-2" /> Approve Entry
                     </Button>
@@ -641,6 +697,55 @@ export default function WeekendApprovals({ user, onLogout }) {
                   </Button>
                   <Button variant="outline" className="text-red-600 border-red-200 hover:bg-red-50" onClick={handleDelete} className="flex-1" data-testid="confirm-delete">
                     <Trash2 size={16} className="mr-2" /> Delete
+                  </Button>
+                </div>
+              </div>
+            )}
+          </DialogContent>
+        </Dialog>
+        {/* Edit Compensation Dialog */}
+        <Dialog open={editCompDialogOpen} onOpenChange={setEditCompDialogOpen}>
+          <DialogContent className="sm:max-w-md">
+            <DialogHeader>
+              <DialogTitle className="flex items-center gap-2">
+                <Edit size={18} />
+                Edit Compensation
+              </DialogTitle>
+            </DialogHeader>
+            {editCompApproval && (
+              <div className="space-y-4">
+                <div className="p-3 bg-slate-50 rounded text-sm">
+                  <p><strong>Employee:</strong> {editCompApproval.employee_name}</p>
+                  <p><strong>Date:</strong> {formatDate(editCompApproval.approved_date)}</p>
+                  <p><strong>Hours:</strong> {editCompApproval.approved_hours}h</p>
+                </div>
+                <div className="flex items-center space-x-2 p-3 bg-amber-50 rounded border border-amber-200">
+                  <Checkbox
+                    id="edit-compensation"
+                    checked={editCompFlag}
+                    onCheckedChange={(checked) => setEditCompFlag(checked)}
+                    data-testid="edit-comp-checkbox"
+                  />
+                  <Label htmlFor="edit-compensation" className="text-sm font-medium cursor-pointer">
+                    Mark as Compensation
+                  </Label>
+                </div>
+                {editCompFlag && (
+                  <div>
+                    <Label className="text-xs font-medium text-slate-600">Compensation Notes</Label>
+                    <textarea
+                      className="flex w-full rounded-md border border-slate-200 bg-white px-3 py-2 text-sm mt-1 min-h-[60px]"
+                      placeholder="Add notes for this compensation..."
+                      value={editCompNotes}
+                      onChange={(e) => setEditCompNotes(e.target.value)}
+                      data-testid="edit-comp-notes"
+                    />
+                  </div>
+                )}
+                <div className="flex gap-3">
+                  <Button variant="outline" onClick={() => setEditCompDialogOpen(false)} className="flex-1">Cancel</Button>
+                  <Button className="flex-1 bg-amber-600 hover:bg-amber-700" onClick={handleUpdateCompensation} data-testid="save-comp-button">
+                    Save
                   </Button>
                 </div>
               </div>

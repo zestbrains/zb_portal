@@ -232,7 +232,8 @@ class WeekendApprovalAction(BaseModel):
     approved_date: Optional[str] = None  # Admin can edit date
     approved_hours: Optional[float] = None  # Admin can edit hours
     rejection_reason: Optional[str] = ""
-    is_compensation: Optional[bool] = False  # For future use
+    is_compensation: Optional[bool] = False
+    compensation_notes: Optional[str] = ""
 
 class LeaveDateInput(BaseModel):
     date: str
@@ -2291,7 +2292,8 @@ async def approve_weekend_entry(
             "approved_hours": final_hours,
             "approved_by": user["username"],
             "approved_at": now,
-            "is_compensation": action.is_compensation or False
+            "is_compensation": action.is_compensation or False,
+            "compensation_notes": action.compensation_notes or ""
         }}
     )
     
@@ -2307,7 +2309,8 @@ async def approve_weekend_entry(
         "created_at": now,
         "from_weekend_approval": True,
         "approval_id": approval_id,
-        "is_compensation": action.is_compensation or False
+        "is_compensation": action.is_compensation or False,
+        "compensation_notes": action.compensation_notes or ""
     }
     
     await db.work_entries.insert_one(entry_doc)
@@ -2358,6 +2361,35 @@ async def reject_weekend_entry(
     )
     
     return {"message": "Work entry rejected", "reason": action.rejection_reason}
+
+
+@api_router.put("/weekend-approvals/{approval_id}/update-compensation")
+async def update_compensation_notes(
+    approval_id: str,
+    data: dict = Body(...),
+    user: dict = Depends(require_role(["admin", "hr"]))
+):
+    """Update compensation flag and notes for an already-approved entry"""
+    approval = await db.weekend_approvals.find_one({"id": approval_id})
+    if not approval:
+        raise HTTPException(status_code=404, detail="Approval not found")
+    if approval.get("status") != "approved":
+        raise HTTPException(status_code=400, detail="Only approved entries can be updated")
+
+    is_comp = data.get("is_compensation", False)
+    comp_notes = data.get("compensation_notes", "")
+
+    await db.weekend_approvals.update_one(
+        {"id": approval_id},
+        {"$set": {"is_compensation": is_comp, "compensation_notes": comp_notes}}
+    )
+    # Also update the linked work entry
+    await db.work_entries.update_many(
+        {"approval_id": approval_id},
+        {"$set": {"is_compensation": is_comp, "compensation_notes": comp_notes}}
+    )
+    return {"message": "Compensation updated", "is_compensation": is_comp, "compensation_notes": comp_notes}
+
 
 @api_router.get("/weekend-approvals/employee/my-requests")
 async def get_my_approval_requests(user: dict = Depends(get_current_user)):
@@ -4972,6 +5004,7 @@ async def get_salary(year: int, month: int, user: dict = Depends(require_role(["
         adj = adjustments_map.get(emp_id, {})
         other_income = float(adj.get("other_income", 0) or 0)
         extra_hours = float(adj.get("extra_hours", 0) or 0)
+        other_income_notes = adj.get("other_income_notes", "")
 
         cl_count = 0
         ot_count = 0
@@ -5117,6 +5150,7 @@ async def get_salary(year: int, month: int, user: dict = Depends(require_role(["
             "other_income": other_income,
             "extra_hours": extra_hours,
             "extra_hours_amount": extra_hours_amount,
+            "other_income_notes": other_income_notes,
             "gross_salary": gross_salary,
             "td_salary": td_salary,
             "future_days": future_days,
@@ -5142,6 +5176,7 @@ async def save_salary_adjustment(
     month = data.get("month")
     other_income = data.get("other_income", 0)
     extra_hours = data.get("extra_hours", 0)
+    other_income_notes = data.get("other_income_notes", "")
 
     if not emp_id or not year or not month:
         raise HTTPException(status_code=400, detail="employee_id, year, month required")
@@ -5153,7 +5188,8 @@ async def save_salary_adjustment(
             "year": year,
             "month": month,
             "other_income": other_income,
-            "extra_hours": extra_hours
+            "extra_hours": extra_hours,
+            "other_income_notes": other_income_notes
         }},
         upsert=True
     )
