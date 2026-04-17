@@ -22,11 +22,12 @@ HR Management Portal for Zestbrains
 - Compensation notes on weekend/holiday approvals (new + edit history)
 - Other Income notes in Salary Overview
 - Secured /api/employees endpoint (admin/hr only)
+- **Bug Fix: Admin-approved weekend entries with < 4.5 hours now correctly show in Attendance and Salary** (April 2026)
 
 ## Recent Changes (April 2026)
-- Compensation notes on weekend approvals (approve + history edit)
-- Other income notes in salary overview
-- PDF letterhead formatting fixes (single page, Poppins font, correct positioning)
+- Fixed P0 bug: Admin-approved weekend OT entries with < 4.5 hours now bypass the threshold
+- Fix applied to: Admin Attendance, Admin Salary, Employee Attendance, Employee Salary, ICICI/Hexeros salary sheets, Sandwich Warning API
+- Also fixed: Future-date approved entries now show OT/2 instead of WO
 
 ## Admin Credentials
 - Username: renish / Password: Zb@0075588
