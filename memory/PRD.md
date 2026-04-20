@@ -22,14 +22,16 @@ HR Management Portal for Zestbrains
 - Compensation notes on weekend/holiday approvals (new + edit history)
 - Other Income notes in Salary Overview
 - Secured /api/employees endpoint (admin/hr only)
-- Bug Fix: Admin-approved weekend entries with < 4.5 hours now show in Attendance/Salary
-- Sandwich Rule Update: last present → next present, all non-working days in absence block are sandwich
-- **Leave Balance in Approval Dialog**: Shows Available PL (year), This Month PL, This Month CL before admin approves
+- OT Threshold bypass for admin-approved weekend entries
+- Sandwich Rule: last present → next present, contiguous absence blocks
+- PL/2 & CL/2 (full day) correctly triggers sandwich
+- Leave Balance in Approval Dialog (Available PL, This Month PL, This Month CL)
 
-## Recent Changes (April 2026)
-- Fixed OT threshold bypass for admin-approved weekend entries
-- Updated sandwich leave rule to count all weekends/holidays in continuous absence blocks
-- Added leave balance display in approval dialog (API: /api/leaves/balance/{emp_id})
+## Sandwich Leave Rules (April 2026)
+1. Full day leaves (PL, CL, PL/2 & CL/2) trigger sandwich. Half day (PL/2, CL/2, Half PL, Half CL) do NOT.
+2. If employee worked on weekend (OT), no sandwich for those days.
+3. All non-working days (weekends, holidays) in a contiguous absence block count as sandwich if block contains at least one full-day leave.
+4. Applied across: Admin Attendance, Admin Salary, Employee Attendance/Salary, ICICI/Hexeros sheets, Sandwich Warning API.
 
 ## Admin Credentials
 - Username: renish / Password: Zb@0075588

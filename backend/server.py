@@ -4798,10 +4798,10 @@ async def calculate_sandwich_dates(employees, attendance, year, month, num_days,
             # Classify the day
             if status == "NJ":
                 day_types.append((day, date_str, 'notjoined'))
-            elif status in ["PL", "CL"]:
-                # Only FULL day leaves count for sandwich detection
+            elif status in ["PL", "CL", "PL/2 & CL/2"]:
+                # Full day leaves count for sandwich detection (PL/2 & CL/2 = half PL + half CL = full day)
                 day_types.append((day, date_str, 'leave'))
-            elif status in ["PL/2", "CL/2", "PL/2 & CL/2", "Half PL", "Half CL"]:
+            elif status in ["PL/2", "CL/2", "Half PL", "Half CL"]:
                 # Half day leaves = employee was present, so treat as present (no sandwich)
                 day_types.append((day, date_str, 'present'))
             elif status in ["WO", "H"]:
@@ -5128,7 +5128,7 @@ async def get_salary(year: int, month: int, user: dict = Depends(require_role(["
                     day_types.append((day, date_str, 'present'))  # Half day = present, no sandwich
                 elif lt == "PL/2 & CL/2":
                     cl_count += 0.5
-                    day_types.append((day, date_str, 'present'))  # Half day = present, no sandwich
+                    day_types.append((day, date_str, 'leave'))  # Full day (half PL + half CL) = sandwich eligible
                 elif lt == "PL":
                     day_types.append((day, date_str, 'leave'))  # Full day PL = sandwich eligible
                 elif lt in ["PL/2", "Half PL"]:
@@ -5553,7 +5553,7 @@ async def download_salary_sheet(
                     day_types.append('present')  # Half day = present, no sandwich
                 elif lt == "PL/2 & CL/2":
                     cl_count += 0.5
-                    day_types.append('present')  # Half day = present, no sandwich
+                    day_types.append('leave')  # Full day (half PL + half CL) = sandwich eligible
                 elif lt == "PL":
                     day_types.append('leave')  # Full day PL = sandwich eligible
                 elif lt in ["PL/2", "Half PL"]:
@@ -6199,8 +6199,10 @@ async def get_my_attendance(year: int, month: int, user: dict = Depends(require_
                         leave_type = leave_date_entry.get("leave_type", "PL")
                         if leave_type != "Rejected":
                             attendance[day] = leave_type
-                            # Only full day leaves count for sandwich detection
-                            if "/2" in leave_type or "Half" in leave_type:
+                            # PL/2 & CL/2 is a full day leave (half PL + half CL), triggers sandwich
+                            if leave_type == "PL/2 & CL/2":
+                                day_types.append((day, date_str, 'leave'))
+                            elif "/2" in leave_type or "Half" in leave_type:
                                 day_types.append((day, date_str, 'present'))  # Half day = present
                             else:
                                 day_types.append((day, date_str, 'leave'))  # Full day leave
@@ -6409,7 +6411,7 @@ async def get_my_salary(year: int, month: int, user: dict = Depends(require_role
                 cl_count += 0.5
                 cl_dates.append(day)
                 pl_count += 0.5
-                day_types.append((day, date_str, 'present'))  # Half day = present, no sandwich
+                day_types.append((day, date_str, 'leave'))  # Full day (half PL + half CL) = sandwich eligible
             elif lt == "PL":
                 pl_count += 1
                 day_types.append((day, date_str, 'leave'))  # Full day PL
@@ -6601,7 +6603,10 @@ async def check_sandwich_warning(data: dict = Body(...), user: dict = Depends(ge
                         dt_list.append((day, date_str, 'leave'))
                 elif date_str in leave_map:
                     lt = leave_map[date_str]
-                    if "/2" in lt or "Half" in lt:
+                    # PL/2 & CL/2 is full day leave (half PL + half CL), triggers sandwich
+                    if lt == "PL/2 & CL/2":
+                        dt_list.append((day, date_str, 'leave'))
+                    elif "/2" in lt or "Half" in lt:
                         dt_list.append((day, date_str, 'present'))
                     else:
                         dt_list.append((day, date_str, 'leave'))
