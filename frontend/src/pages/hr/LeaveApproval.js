@@ -10,7 +10,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '.
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '../../components/ui/dialog';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '../../components/ui/tabs';
 import { toast } from 'sonner';
-import { CheckCircle, XCircle, Calendar, History, Clock, AlertCircle, Edit, Trash2 } from 'lucide-react';
+import { CheckCircle, XCircle, Calendar, History, Clock, AlertCircle, Edit, Trash2, Info } from 'lucide-react';
 
 export default function HRLeaveApproval({ user, onLogout }) {
   const [applications, setApplications] = useState([]);
@@ -24,6 +24,8 @@ export default function HRLeaveApproval({ user, onLogout }) {
   const [rejectReason, setRejectReason] = useState('');
   const [leaveDates, setLeaveDates] = useState([]);
   const [activeTab, setActiveTab] = useState('pending');
+  const [leaveBalance, setLeaveBalance] = useState(null);
+  const [balanceLoading, setBalanceLoading] = useState(false);
   const [editFormData, setEditFormData] = useState({
     from_date: '',
     to_date: '',
@@ -64,6 +66,19 @@ export default function HRLeaveApproval({ user, onLogout }) {
       setEmployees(response.data);
     } catch (error) {
       console.error('Error fetching employees');
+    }
+  };
+
+  const fetchLeaveBalance = async (empId) => {
+    setBalanceLoading(true);
+    setLeaveBalance(null);
+    try {
+      const response = await api.get(`/leaves/balance/${empId}`);
+      setLeaveBalance(response.data);
+    } catch (error) {
+      console.error('Error fetching leave balance');
+    } finally {
+      setBalanceLoading(false);
     }
   };
 
@@ -116,6 +131,7 @@ export default function HRLeaveApproval({ user, onLogout }) {
     setSelectedApp(app);
     setLeaveDates(generateDatesForApplication(app));
     setComments('');
+    fetchLeaveBalance(app.employee_id);
   };
 
   const handleOpenReject = (app) => {
@@ -210,6 +226,7 @@ export default function HRLeaveApproval({ user, onLogout }) {
       setSelectedApp(null);
       setComments('');
       setLeaveDates([]);
+      setLeaveBalance(null);
       fetchApplications();
       fetchAllApplications();
     } catch (error) {
@@ -428,7 +445,7 @@ export default function HRLeaveApproval({ user, onLogout }) {
 
         {/* Approval Dialog with Per-Date Selection */}
         {selectedApp && (
-          <Dialog open={!!selectedApp} onOpenChange={() => setSelectedApp(null)}>
+          <Dialog open={!!selectedApp} onOpenChange={() => { setSelectedApp(null); setLeaveBalance(null); }}>
             <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
               <DialogHeader>
                 <DialogTitle className="flex items-center gap-2">
@@ -447,6 +464,37 @@ export default function HRLeaveApproval({ user, onLogout }) {
                     <div><strong>Status:</strong> Pending</div>
                   </div>
                   <p className="mt-2 text-sm"><strong>Reason:</strong> {selectedApp.reason}</p>
+                </div>
+
+                {/* Leave Balance Info */}
+                <div className="p-4 bg-amber-50 border border-amber-200 rounded-lg" data-testid="leave-balance-info">
+                  <div className="flex items-center gap-2 mb-3">
+                    <Info size={16} className="text-amber-600" />
+                    <span className="text-sm font-semibold text-amber-800">Leave Balance</span>
+                  </div>
+                  {balanceLoading ? (
+                    <p className="text-sm text-amber-600">Loading balance...</p>
+                  ) : leaveBalance ? (
+                    <div className="grid grid-cols-3 gap-3">
+                      <div className="bg-white rounded-lg p-3 text-center border border-amber-100">
+                        <p className="text-xs text-slate-500 mb-1">Available PL</p>
+                        <p className="text-xl font-bold text-blue-700" data-testid="available-pl">{leaveBalance.available_pl}</p>
+                        <p className="text-[10px] text-slate-400 mt-0.5">of 16 (Year)</p>
+                      </div>
+                      <div className="bg-white rounded-lg p-3 text-center border border-amber-100">
+                        <p className="text-xs text-slate-500 mb-1">This Month PL</p>
+                        <p className="text-xl font-bold text-purple-700" data-testid="current-month-pl">{leaveBalance.current_month_pl}</p>
+                        <p className="text-[10px] text-slate-400 mt-0.5">Taken</p>
+                      </div>
+                      <div className="bg-white rounded-lg p-3 text-center border border-amber-100">
+                        <p className="text-xs text-slate-500 mb-1">This Month CL</p>
+                        <p className="text-xl font-bold text-orange-700" data-testid="current-month-cl">{leaveBalance.current_month_cl}</p>
+                        <p className="text-[10px] text-slate-400 mt-0.5">Taken</p>
+                      </div>
+                    </div>
+                  ) : (
+                    <p className="text-sm text-amber-600">Unable to load balance</p>
+                  )}
                 </div>
 
                 {/* Per-Date Leave Type Selection */}

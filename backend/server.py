@@ -3804,6 +3804,84 @@ async def get_encashments(user: dict = Depends(require_role(["admin", "hr"]))):
     return encashments
 
 
+@api_router.get("/leaves/balance/{emp_id}")
+async def get_employee_leave_balance(emp_id: str, user: dict = Depends(require_role(["admin", "hr"]))):
+    """Get leave balance for a specific employee - used in approval dialog"""
+    from dateutil.relativedelta import relativedelta
+
+    employee = await db.employees.find_one({"employee_id": emp_id}, {"_id": 0})
+    if not employee:
+        raise HTTPException(status_code=404, detail="Employee not found")
+
+    current_date = get_ist_now()
+    joining_date = datetime.fromisoformat(employee["joining_date"])
+    if joining_date.tzinfo is None:
+        joining_date = joining_date.replace(tzinfo=timezone.utc)
+
+    # Calculate current leave year based on joining date anniversary
+    years_completed = relativedelta(current_date, joining_date).years
+    current_year_start = joining_date + relativedelta(years=years_completed)
+    current_year_end = joining_date + relativedelta(years=years_completed + 1) - relativedelta(days=1)
+
+    # Get leave records for this employee
+    leave_records = await db.leave_records.find({"employee_id": emp_id}, {"_id": 0}).to_list(None)
+
+    # Filter for current leave year
+    pl_taken_year = 0.0
+    cl_taken_year = 0.0
+    for r in leave_records:
+        try:
+            record_date = datetime.fromisoformat(r["date"]).replace(tzinfo=timezone.utc)
+            if current_year_start <= record_date <= current_year_end:
+                days = r.get("leave_days", 1.0)
+                if r.get("leave_type") == "PL":
+                    pl_taken_year += days
+                elif r.get("leave_type") == "CL":
+                    cl_taken_year += days
+        except (ValueError, TypeError):
+            continue
+
+    available_pl = 16 - pl_taken_year
+
+    # Current month PL and CL from approved leave applications
+    month_str = f"{current_date.year}-{current_date.month:02d}"
+    approved_apps = await db.leave_applications.find(
+        {"employee_id": emp_id, "status": "approved"},
+        {"_id": 0, "leave_dates": 1}
+    ).to_list(None)
+
+    current_month_pl = 0.0
+    current_month_cl = 0.0
+    for app in approved_apps:
+        for ld in (app.get("leave_dates") or []):
+            date_val = ld.get("date", "")
+            if date_val.startswith(month_str):
+                lt = ld.get("leave_type", "")
+                if lt == "PL":
+                    current_month_pl += 1.0
+                elif lt == "Half PL":
+                    current_month_pl += 0.5
+                elif lt == "PL/2 & CL/2":
+                    current_month_pl += 0.5
+                    current_month_cl += 0.5
+                elif lt == "CL":
+                    current_month_cl += 1.0
+                elif lt == "Half CL":
+                    current_month_cl += 0.5
+
+    return {
+        "employee_id": emp_id,
+        "employee_name": employee.get("name", ""),
+        "available_pl": available_pl,
+        "pl_taken_year": pl_taken_year,
+        "cl_taken_year": cl_taken_year,
+        "current_month_pl": current_month_pl,
+        "current_month_cl": current_month_cl,
+        "leave_year_start": current_year_start.strftime("%Y-%m-%d"),
+        "leave_year_end": current_year_end.strftime("%Y-%m-%d")
+    }
+
+
 @api_router.get("/leaves/tracker")
 async def get_leave_tracker(
     employee_status: str = Query(default="active", description="Filter by employee status: active, ex-employee, all"),
