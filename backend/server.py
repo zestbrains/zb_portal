@@ -34,6 +34,16 @@ def get_ist_now_iso():
     """Get current datetime in IST as ISO string"""
     return datetime.now(IST).isoformat()
 
+
+# Sandwich leave helper: classify leave types for sandwich detection
+# Full day leaves: PL, CL, PL/2 & CL/2 (half PL + half CL = full day)
+# Half day leaves (NOT sandwich): PL/2, CL/2, Half PL, Half CL
+FULL_DAY_LEAVE_TYPES = {"PL", "CL", "PL/2 & CL/2"}
+
+def is_full_day_leave(leave_type):
+    """Returns True if the leave type is a full-day leave that triggers sandwich rule"""
+    return leave_type in FULL_DAY_LEAVE_TYPES
+
 ROOT_DIR = Path(__file__).parent
 load_dotenv(ROOT_DIR / '.env')
 
@@ -4798,14 +4808,10 @@ async def calculate_sandwich_dates(employees, attendance, year, month, num_days,
             # Classify the day
             if status == "NJ":
                 day_types.append((day, date_str, 'notjoined'))
-            elif status in ["PL", "CL", "PL/2 & CL/2"]:
-                # Full day leaves count for sandwich detection (PL/2 & CL/2 = half PL + half CL = full day)
-                day_types.append((day, date_str, 'leave'))
-            elif status in ["PL/2", "CL/2", "Half PL", "Half CL"]:
-                # Half day leaves = employee was present, so treat as present (no sandwich)
-                day_types.append((day, date_str, 'present'))
             elif status in ["WO", "H"]:
                 day_types.append((day, date_str, 'nonworking'))
+            elif is_full_day_leave(status):
+                day_types.append((day, date_str, 'leave'))
             else:
                 day_types.append((day, date_str, 'present'))
         
@@ -5120,25 +5126,18 @@ async def get_salary(year: int, month: int, user: dict = Depends(require_role(["
             # Check leave FIRST - approved leaves for future dates still count
             if emp_id in leave_map and date_str in leave_map[emp_id]:
                 lt = leave_map[emp_id][date_str]
+                # Count CL/PL for salary
                 if lt == "CL":
                     cl_count += 1
-                    day_types.append((day, date_str, 'leave'))  # Full day CL = sandwich eligible
                 elif lt == "Half CL":
                     cl_count += 0.5
-                    day_types.append((day, date_str, 'present'))  # Half day = present, no sandwich
                 elif lt == "PL/2 & CL/2":
                     cl_count += 0.5
-                    day_types.append((day, date_str, 'leave'))  # Full day (half PL + half CL) = sandwich eligible
-                elif lt == "PL":
-                    day_types.append((day, date_str, 'leave'))  # Full day PL = sandwich eligible
-                elif lt in ["PL/2", "Half PL"]:
-                    day_types.append((day, date_str, 'present'))  # Half day = present, no sandwich
+                # Classify for sandwich: full day leave or present (half day)
+                if is_full_day_leave(lt):
+                    day_types.append((day, date_str, 'leave'))
                 else:
-                    # Other leave types - check if it's a half day variant
-                    if "/2" in lt or "Half" in lt:
-                        day_types.append((day, date_str, 'present'))  # Half day = no sandwich
-                    else:
-                        day_types.append((day, date_str, 'leave'))  # Full day leave
+                    day_types.append((day, date_str, 'present'))
             elif is_weekend or is_holiday:
                 if not is_future_date:
                     total_hours = work_hours_map.get(emp_id, {}).get(date_str, 0)
@@ -5547,23 +5546,14 @@ async def download_salary_sheet(
                 lt = leave_map[emp_id][date_str]
                 if lt == "CL":
                     cl_count += 1
-                    day_types.append('leave')  # Full day CL = sandwich eligible
                 elif lt == "Half CL":
                     cl_count += 0.5
-                    day_types.append('present')  # Half day = present, no sandwich
                 elif lt == "PL/2 & CL/2":
                     cl_count += 0.5
-                    day_types.append('leave')  # Full day (half PL + half CL) = sandwich eligible
-                elif lt == "PL":
-                    day_types.append('leave')  # Full day PL = sandwich eligible
-                elif lt in ["PL/2", "Half PL"]:
-                    day_types.append('present')  # Half day = present, no sandwich
+                if is_full_day_leave(lt):
+                    day_types.append('leave')
                 else:
-                    # Other leave types - check if it's a half day variant
-                    if "/2" in lt or "Half" in lt:
-                        day_types.append('present')  # Half day = no sandwich
-                    else:
-                        day_types.append('leave')  # Full day leave
+                    day_types.append('present')
             elif is_weekend or is_holiday:
                 if not is_future_date:
                     total_hours = work_hours_map.get(emp_id, {}).get(date_str, 0)
@@ -6199,13 +6189,10 @@ async def get_my_attendance(year: int, month: int, user: dict = Depends(require_
                         leave_type = leave_date_entry.get("leave_type", "PL")
                         if leave_type != "Rejected":
                             attendance[day] = leave_type
-                            # PL/2 & CL/2 is a full day leave (half PL + half CL), triggers sandwich
-                            if leave_type == "PL/2 & CL/2":
+                            if is_full_day_leave(leave_type):
                                 day_types.append((day, date_str, 'leave'))
-                            elif "/2" in leave_type or "Half" in leave_type:
-                                day_types.append((day, date_str, 'present'))  # Half day = present
                             else:
-                                day_types.append((day, date_str, 'leave'))  # Full day leave
+                                day_types.append((day, date_str, 'present'))
                             leave_found = True
                             break
             if leave_found:
@@ -6402,28 +6389,22 @@ async def get_my_salary(year: int, month: int, user: dict = Depends(require_role
             if lt == "CL":
                 cl_count += 1
                 cl_dates.append(day)
-                day_types.append((day, date_str, 'leave'))  # Full day CL
             elif lt == "Half CL":
                 cl_count += 0.5
                 cl_dates.append(day)
-                day_types.append((day, date_str, 'present'))  # Half day = present, no sandwich
             elif lt == "PL/2 & CL/2":
                 cl_count += 0.5
                 cl_dates.append(day)
                 pl_count += 0.5
-                day_types.append((day, date_str, 'leave'))  # Full day (half PL + half CL) = sandwich eligible
             elif lt == "PL":
                 pl_count += 1
-                day_types.append((day, date_str, 'leave'))  # Full day PL
             elif lt in ["PL/2", "Half PL"]:
                 pl_count += 0.5
-                day_types.append((day, date_str, 'present'))  # Half day = present, no sandwich
+            # Classify for sandwich
+            if is_full_day_leave(lt):
+                day_types.append((day, date_str, 'leave'))
             else:
-                # Other leave types - check if half day
-                if "/2" in lt or "Half" in lt:
-                    day_types.append((day, date_str, 'present'))  # Half day = no sandwich
-                else:
-                    day_types.append((day, date_str, 'leave'))  # Full day leave
+                day_types.append((day, date_str, 'present'))
         elif is_weekend or is_holiday:
             if not is_future_date:
                 total_hours = work_hours_map.get(date_str, 0)
@@ -6603,13 +6584,10 @@ async def check_sandwich_warning(data: dict = Body(...), user: dict = Depends(ge
                         dt_list.append((day, date_str, 'leave'))
                 elif date_str in leave_map:
                     lt = leave_map[date_str]
-                    # PL/2 & CL/2 is full day leave (half PL + half CL), triggers sandwich
-                    if lt == "PL/2 & CL/2":
+                    if is_full_day_leave(lt):
                         dt_list.append((day, date_str, 'leave'))
-                    elif "/2" in lt or "Half" in lt:
-                        dt_list.append((day, date_str, 'present'))
                     else:
-                        dt_list.append((day, date_str, 'leave'))
+                        dt_list.append((day, date_str, 'present'))
                 elif is_weekend or is_holiday:
                     total_hours = work_hours_map.get(date_str, 0)
                     is_admin_approved = date_str in approved_weekend_dates_sw
