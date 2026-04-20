@@ -22,12 +22,13 @@ HR Management Portal for Zestbrains
 - Compensation notes on weekend/holiday approvals (new + edit history)
 - Other Income notes in Salary Overview
 - Secured /api/employees endpoint (admin/hr only)
-- **Bug Fix: Admin-approved weekend entries with < 4.5 hours now correctly show in Attendance and Salary** (April 2026)
+- Bug Fix: Admin-approved weekend entries with < 4.5 hours now correctly show in Attendance and Salary (April 2026)
+- **Sandwich Rule Update**: Changed from "leave on both sides" to "last present day to next present day" — all non-working days within a contiguous absence block count as sandwich if the block has at least one leave day (April 2026)
 
 ## Recent Changes (April 2026)
-- Fixed P0 bug: Admin-approved weekend OT entries with < 4.5 hours now bypass the threshold
-- Fix applied to: Admin Attendance, Admin Salary, Employee Attendance, Employee Salary, ICICI/Hexeros salary sheets, Sandwich Warning API
-- Also fixed: Future-date approved entries now show OT/2 instead of WO
+- Fixed P0 bug: Admin-approved weekend OT entries with < 4.5 hours bypass threshold
+- Updated sandwich leave rule: contiguous absence blocks (leave + weekends + holidays) now correctly count all non-working days as sandwich
+- Both fixes applied across: Admin Attendance, Admin Salary, Employee Attendance, Employee Salary, ICICI/Hexeros salary sheets, Sandwich Warning API
 
 ## Admin Credentials
 - Username: renish / Password: Zb@0075588
@@ -36,7 +37,7 @@ HR Management Portal for Zestbrains
 - P1: Weekend working hours slow loading (needs user clarification)
 - P2: Dynamic Late Coming salary deduction thresholds
 - P2: Bulk bank assignment
-- P2: Refactor server.py (6600+ lines) into routes/models
+- P2: Refactor server.py (6700+ lines) into routes/models
 
 ## URL
 https://admin-leave-module.preview.emergentagent.com
