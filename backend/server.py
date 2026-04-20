@@ -4815,26 +4815,34 @@ async def calculate_sandwich_dates(employees, attendance, year, month, num_days,
             else:
                 day_types.append((day, date_str, 'present'))
         
-        # Detect sandwich: nonworking days with full-day leave on BOTH sides
-        nw_groups = []
+        # Sandwich: find chains of (leave+nonworking). If chain has 2+ separate
+        # leave groups (leave on both sides of nonworking), ALL nonworking = sandwich
+        chains = []
         i = 0
         while i < len(day_types):
-            if day_types[i][2] == 'nonworking':
+            if day_types[i][2] in ('leave', 'nonworking'):
                 start = i
-                while i < len(day_types) and day_types[i][2] == 'nonworking':
+                while i < len(day_types) and day_types[i][2] in ('leave', 'nonworking'):
                     i += 1
-                nw_groups.append((start, i - 1))
+                chains.append((start, i - 1))
             else:
                 i += 1
         
         sandwich_indices = set()
-        for g_start, g_end in nw_groups:
-            before_idx = g_start - 1
-            after_idx = g_end + 1
-            if (before_idx >= 0 and after_idx < len(day_types) and
-                day_types[before_idx][2] == 'leave' and day_types[after_idx][2] == 'leave'):
-                for j in range(g_start, g_end + 1):
-                    sandwich_indices.add(j)
+        for c_start, c_end in chains:
+            leave_groups = 0
+            in_leave = False
+            for j in range(c_start, c_end + 1):
+                if day_types[j][2] == 'leave':
+                    if not in_leave:
+                        leave_groups += 1
+                        in_leave = True
+                else:
+                    in_leave = False
+            if leave_groups >= 2:
+                for j in range(c_start, c_end + 1):
+                    if day_types[j][2] == 'nonworking':
+                        sandwich_indices.add(j)
         
         # Get the actual day numbers that are sandwich
         sandwich_days = sorted([day_types[j][0] for j in sandwich_indices])
@@ -5167,26 +5175,33 @@ async def get_salary(year: int, month: int, user: dict = Depends(require_role(["
             else:
                 day_types.append((day, date_str, 'present'))
 
-        # Sandwich: nonworking days with full-day leave on BOTH sides
-        nw_groups = []
+        # Sandwich: chains of (leave+nonworking) with 2+ leave groups → all nonworking = sandwich
+        chains = []
         i = 0
         while i < len(day_types):
-            if day_types[i][2] == 'nonworking':
+            if day_types[i][2] in ('leave', 'nonworking'):
                 start = i
-                while i < len(day_types) and day_types[i][2] == 'nonworking':
+                while i < len(day_types) and day_types[i][2] in ('leave', 'nonworking'):
                     i += 1
-                nw_groups.append((start, i - 1))
+                chains.append((start, i - 1))
             else:
                 i += 1
 
         sandwich_indices = set()
-        for g_start, g_end in nw_groups:
-            before_idx = g_start - 1
-            after_idx = g_end + 1
-            if (before_idx >= 0 and after_idx < len(day_types) and
-                day_types[before_idx][2] == 'leave' and day_types[after_idx][2] == 'leave'):
-                for j in range(g_start, g_end + 1):
-                    sandwich_indices.add(j)
+        for c_start, c_end in chains:
+            leave_groups = 0
+            in_leave = False
+            for j in range(c_start, c_end + 1):
+                if day_types[j][2] == 'leave':
+                    if not in_leave:
+                        leave_groups += 1
+                        in_leave = True
+                else:
+                    in_leave = False
+            if leave_groups >= 2:
+                for j in range(c_start, c_end + 1):
+                    if day_types[j][2] == 'nonworking':
+                        sandwich_indices.add(j)
 
         sandwich_count = len(sandwich_indices)
 
@@ -5582,25 +5597,33 @@ async def download_salary_sheet(
             else:
                 day_types.append('present')
         
-        # Sandwich: nonworking days with full-day leave on BOTH sides
-        nw_groups = []
+        # Sandwich: chains of (leave+nonworking) with 2+ leave groups
+        chains = []
         i = 0
         while i < len(day_types):
-            if day_types[i] == 'nonworking':
+            if day_types[i] in ('leave', 'nonworking'):
                 start = i
-                while i < len(day_types) and day_types[i] == 'nonworking':
+                while i < len(day_types) and day_types[i] in ('leave', 'nonworking'):
                     i += 1
-                nw_groups.append((start, i - 1))
+                chains.append((start, i - 1))
             else:
                 i += 1
         
         sandwich_count = 0
-        for g_start, g_end in nw_groups:
-            before_idx = g_start - 1
-            after_idx = g_end + 1
-            if (before_idx >= 0 and after_idx < len(day_types) and
-                day_types[before_idx] == 'leave' and day_types[after_idx] == 'leave'):
-                sandwich_count += (g_end - g_start + 1)
+        for c_start, c_end in chains:
+            leave_groups = 0
+            in_leave = False
+            for j in range(c_start, c_end + 1):
+                if day_types[j] == 'leave':
+                    if not in_leave:
+                        leave_groups += 1
+                        in_leave = True
+                else:
+                    in_leave = False
+            if leave_groups >= 2:
+                for j in range(c_start, c_end + 1):
+                    if day_types[j] == 'nonworking':
+                        sandwich_count += 1
         
         # Calculate late coming deduction
         late_coming_days = late_coming_map.get(emp_id, [])
@@ -6231,26 +6254,33 @@ async def get_my_attendance(year: int, month: int, user: dict = Depends(require_
                 attendance[day] = "P"
                 day_types.append((day, date_str, 'present'))
     
-    # Sandwich: nonworking days with full-day leave on BOTH sides
-    nw_groups = []
+    # Sandwich: chains of (leave+nonworking) with 2+ leave groups
+    chains = []
     i = 0
     while i < len(day_types):
-        if day_types[i][2] == 'nonworking':
+        if day_types[i][2] in ('leave', 'nonworking'):
             start = i
-            while i < len(day_types) and day_types[i][2] == 'nonworking':
+            while i < len(day_types) and day_types[i][2] in ('leave', 'nonworking'):
                 i += 1
-            nw_groups.append((start, i - 1))
+            chains.append((start, i - 1))
         else:
             i += 1
     
     sandwich_indices = set()
-    for g_start, g_end in nw_groups:
-        before_idx = g_start - 1
-        after_idx = g_end + 1
-        if (before_idx >= 0 and after_idx < len(day_types) and
-            day_types[before_idx][2] == 'leave' and day_types[after_idx][2] == 'leave'):
-            for j in range(g_start, g_end + 1):
-                sandwich_indices.add(j)
+    for c_start, c_end in chains:
+        leave_groups = 0
+        in_leave = False
+        for j in range(c_start, c_end + 1):
+            if day_types[j][2] == 'leave':
+                if not in_leave:
+                    leave_groups += 1
+                    in_leave = True
+            else:
+                in_leave = False
+        if leave_groups >= 2:
+            for j in range(c_start, c_end + 1):
+                if day_types[j][2] == 'nonworking':
+                    sandwich_indices.add(j)
     
     sandwich_dates = sorted([day_types[j][0] for j in sandwich_indices])
     
@@ -6435,25 +6465,33 @@ async def get_my_salary(year: int, month: int, user: dict = Depends(require_role
             day_types.append((day, date_str, 'present'))
 
     # Sandwich: nonworking days with full-day leave on BOTH sides
-    nw_groups = []
+    # Sandwich: chains of (leave+nonworking) with 2+ leave groups
+    chains = []
     i = 0
     while i < len(day_types):
-        if day_types[i][2] == 'nonworking':
+        if day_types[i][2] in ('leave', 'nonworking'):
             start = i
-            while i < len(day_types) and day_types[i][2] == 'nonworking':
+            while i < len(day_types) and day_types[i][2] in ('leave', 'nonworking'):
                 i += 1
-            nw_groups.append((start, i - 1))
+            chains.append((start, i - 1))
         else:
             i += 1
 
     sandwich_indices = set()
-    for g_start, g_end in nw_groups:
-        before_idx = g_start - 1
-        after_idx = g_end + 1
-        if (before_idx >= 0 and after_idx < len(day_types) and
-            day_types[before_idx][2] == 'leave' and day_types[after_idx][2] == 'leave'):
-            for j in range(g_start, g_end + 1):
-                sandwich_indices.add(j)
+    for c_start, c_end in chains:
+        leave_groups = 0
+        in_leave = False
+        for j in range(c_start, c_end + 1):
+            if day_types[j][2] == 'leave':
+                if not in_leave:
+                    leave_groups += 1
+                    in_leave = True
+            else:
+                in_leave = False
+        if leave_groups >= 2:
+            for j in range(c_start, c_end + 1):
+                if day_types[j][2] == 'nonworking':
+                    sandwich_indices.add(j)
 
     sandwich_count = len(sandwich_indices)
     sandwich_dates = sorted([day_types[j][0] for j in sandwich_indices])
@@ -6601,25 +6639,32 @@ async def check_sandwich_warning(data: dict = Body(...), user: dict = Depends(ge
             return dt_list
 
         def detect_sandwich(dt_list):
-            """Detect sandwich: nonworking days with full-day leave on BOTH sides"""
-            nw_groups = []
+            """Sandwich: chains with 2+ separate leave groups → all nonworking = sandwich"""
+            chains = []
             idx = 0
             while idx < len(dt_list):
-                if dt_list[idx][2] == 'nonworking':
+                if dt_list[idx][2] in ('leave', 'nonworking'):
                     s = idx
-                    while idx < len(dt_list) and dt_list[idx][2] == 'nonworking':
+                    while idx < len(dt_list) and dt_list[idx][2] in ('leave', 'nonworking'):
                         idx += 1
-                    nw_groups.append((s, idx - 1))
+                    chains.append((s, idx - 1))
                 else:
                     idx += 1
             sw_set = set()
-            for g_start, g_end in nw_groups:
-                before_idx = g_start - 1
-                after_idx = g_end + 1
-                if (before_idx >= 0 and after_idx < len(dt_list) and
-                    dt_list[before_idx][2] == 'leave' and dt_list[after_idx][2] == 'leave'):
-                    for j in range(g_start, g_end + 1):
-                        sw_set.add(dt_list[j][1])
+            for c_start, c_end in chains:
+                leave_groups = 0
+                in_leave = False
+                for j in range(c_start, c_end + 1):
+                    if dt_list[j][2] == 'leave':
+                        if not in_leave:
+                            leave_groups += 1
+                            in_leave = True
+                    else:
+                        in_leave = False
+                if leave_groups >= 2:
+                    for j in range(c_start, c_end + 1):
+                        if dt_list[j][2] == 'nonworking':
+                            sw_set.add(dt_list[j][1])
             return sw_set
 
         # Baseline: sandwich from existing approved leaves only
