@@ -612,11 +612,17 @@ async def login(credentials: UserLogin):
     # Try to find user by username first (for admin/hr)
     user = await db.users.find_one({"username": credentials.username}, {"_id": 0})
     
-    # If not found by username, try email (for employees)
-    if not user:
-        user = await db.users.find_one({"email": credentials.username}, {"_id": 0})
+    if user and verify_password(credentials.password, user["password_hash"]):
+        pass  # Found by username, password matches
+    else:
+        # Try all users matching by email (handles duplicate emails)
+        user = None
+        async for u in db.users.find({"email": credentials.username}, {"_id": 0}):
+            if verify_password(credentials.password, u["password_hash"]):
+                user = u
+                break
     
-    if not user or not verify_password(credentials.password, user["password_hash"]):
+    if not user:
         raise HTTPException(status_code=401, detail="Invalid credentials")
     
     if not user.get("is_active", True):
