@@ -1294,7 +1294,7 @@ async def send_project_notification_email(project: dict):
     from email.mime.text import MIMEText
     from email.mime.multipart import MIMEMultipart
     
-    subject = f"New Project Created: {project.get('name', '')} ({project.get('project_code', '')})"
+    subject = f"New project: {project.get('name', '')} ({project.get('platform', '') or '-'})"
     
     html = f"""
     <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
@@ -1308,9 +1308,9 @@ async def send_project_notification_email(project: dict):
                 <tr><td style="padding: 10px; border-bottom: 1px solid #f1f5f9; color: #64748b;"><strong>Project Code</strong></td><td style="padding: 10px; border-bottom: 1px solid #f1f5f9; font-family: monospace; color: #2563eb;">{project.get('project_code', '-')}</td></tr>
                 <tr><td style="padding: 10px; border-bottom: 1px solid #f1f5f9; color: #64748b;"><strong>POC</strong></td><td style="padding: 10px; border-bottom: 1px solid #f1f5f9;">{', '.join(poc_names) if poc_names else '-'}</td></tr>
                 <tr><td style="padding: 10px; border-bottom: 1px solid #f1f5f9; color: #64748b;"><strong>Client Name</strong></td><td style="padding: 10px; border-bottom: 1px solid #f1f5f9;">{project.get('client_username', '-')}</td></tr>
-                <tr><td style="padding: 10px; color: #64748b;"><strong>Scope</strong></td><td style="padding: 10px;">{project.get('scope', '-') or '-'}</td></tr>
+                <tr><td style="padding: 10px; color: #64748b;"><strong>Scope</strong></td><td style="padding: 10px;">{project.get('scope_of_work', '-') or '-'}</td></tr>
             </table>
-            <p style="color: #94a3b8; font-size: 12px; margin-top: 20px; text-align: center;">This is an automated notification from HR Portal</p>
+            <p style="color: #94a3b8; font-size: 12px; margin-top: 20px; text-align: center;">This is an automated notification from Zestbrains Portal</p>
         </div>
     </div>
     """
