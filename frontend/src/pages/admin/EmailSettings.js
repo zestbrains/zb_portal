@@ -204,7 +204,20 @@ export default function EmailSettings({ user, onLogout }) {
                   placeholder="admin@company.com, hr2@company.com"
                   data-testid="cc-emails"
                 />
-                <p className="text-xs text-slate-500 mt-1">Comma-separated email addresses to CC on all notifications</p>
+                <p className="text-xs text-slate-500 mt-1">Comma-separated email addresses to CC on all leave notifications</p>
+              </div>
+
+              {/* CC Emails for Project */}
+              <div>
+                <Label htmlFor="cc_emails_project">CC Email List for Project</Label>
+                <Input
+                  id="cc_emails_project"
+                  value={config.cc_emails_project || ''}
+                  onChange={(e) => setConfig({ ...config, cc_emails_project: e.target.value })}
+                  placeholder="pm@company.com, manager@company.com"
+                  data-testid="cc-emails-project"
+                />
+                <p className="text-xs text-slate-500 mt-1">Comma-separated email addresses to CC on project creation notifications</p>
               </div>
 
               {/* Action Buttons */}

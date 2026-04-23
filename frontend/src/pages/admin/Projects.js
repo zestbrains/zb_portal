@@ -10,7 +10,7 @@ import { Card, CardContent } from '../../components/ui/card';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '../../components/ui/dialog';
 import { Textarea } from '../../components/ui/textarea';
 import { toast } from 'sonner';
-import { Plus, Edit, Trash2, Eye, Upload, Download, X, AlertTriangle, Clock, FolderKanban } from 'lucide-react';
+import { Plus, Edit, Trash2, Eye, Upload, Download, X, AlertTriangle, Clock, FolderKanban, Send } from 'lucide-react';
 import { Badge } from '../../components/ui/badge';
 
 export default function AdminProjects({ user, onLogout }) {
@@ -37,8 +37,11 @@ export default function AdminProjects({ user, onLogout }) {
   const [formData, setFormData] = useState({
     name: '', type: 'Development', project_code: '', start_date: '',
     end_date: '', completed_hours: '0', status: 'ongoing',
-    client_username: '', scope_of_work: '', timesheet_link: ''
+    client_username: '', scope_of_work: '', timesheet_link: '',
+    poc: [], scope: '', platform: ''
   });
+  const [pocSearch, setPocSearch] = useState('');
+  const [selectedPoc, setSelectedPoc] = useState([]);
 
   useEffect(() => {
     fetchProjects();
@@ -94,7 +97,8 @@ export default function AdminProjects({ user, onLogout }) {
       const submitData = {
         ...formData,
         completed_hours: parseFloat(formData.completed_hours),
-        assigned_employees: selectedEmployees
+        assigned_employees: selectedEmployees,
+        poc: selectedPoc
       };
       
       if (editingProject) {
@@ -117,10 +121,13 @@ export default function AdminProjects({ user, onLogout }) {
     setFormData({
       name: '', type: 'Development', project_code: '', start_date: '',
       end_date: '', completed_hours: '0', status: 'ongoing',
-      client_username: '', scope_of_work: '', timesheet_link: ''
+      client_username: '', scope_of_work: '', timesheet_link: '',
+      poc: [], scope: '', platform: ''
     });
     setSelectedEmployees([]);
     setEmployeeSearch('');
+    setSelectedPoc([]);
+    setPocSearch('');
   };
 
   const handleEdit = (project) => {
@@ -135,9 +142,13 @@ export default function AdminProjects({ user, onLogout }) {
       status: project.status,
       client_username: project.client_username || '',
       scope_of_work: project.scope_of_work || '',
-      timesheet_link: project.timesheet_link || ''
+      timesheet_link: project.timesheet_link || '',
+      poc: project.poc || [],
+      scope: project.scope || '',
+      platform: project.platform || ''
     });
     setSelectedEmployees(project.assigned_employees || []);
+    setSelectedPoc(project.poc || []);
     setDialogOpen(true);
   };
 
@@ -229,6 +240,31 @@ Website Redesign,Development,zb_new_701,2026-01-01,2026-03-31,0,EMP001,ongoing,c
 
   const removeEmployee = (empId) => {
     setSelectedEmployees(selectedEmployees.filter(id => id !== empId));
+  };
+
+  const filteredPocEmployees = employees.filter(emp =>
+    emp.name.toLowerCase().includes(pocSearch.toLowerCase()) ||
+    emp.employee_id.toLowerCase().includes(pocSearch.toLowerCase())
+  );
+
+  const addPoc = (empId) => {
+    if (!selectedPoc.includes(empId)) {
+      setSelectedPoc([...selectedPoc, empId]);
+      setPocSearch('');
+    }
+  };
+
+  const removePoc = (empId) => {
+    setSelectedPoc(selectedPoc.filter(id => id !== empId));
+  };
+
+  const handleSendMail = async (projId) => {
+    try {
+      await api.post(`/projects/${projId}/send-mail`);
+      toast.success('Project notification email sent');
+    } catch (error) {
+      toast.error(error.response?.data?.detail || 'Failed to send email');
+    }
   };
 
   const getFilteredProjects = () => {
@@ -359,9 +395,10 @@ Website Redesign,Development,zb_new_701,2026-01-01,2026-03-31,0,EMP001,ongoing,c
                           </td>
                           <td data-label="Actions" className="py-3 px-4">
                             <div className="flex gap-1">
-                              <Button size="sm" variant="outline" onClick={() => handleView(proj)} className="h-7 w-7 p-0 border-slate-200"><Eye size={12} /></Button>
-                              <Button size="sm" variant="outline" onClick={() => handleEdit(proj)} className="h-7 w-7 p-0 border-slate-200"><Edit size={12} /></Button>
-                              <Button size="sm" variant="outline" onClick={() => handleDelete(proj.id)} className="h-7 w-7 p-0 text-red-500 border-red-200 hover:bg-red-50"><Trash2 size={12} /></Button>
+                              <Button size="sm" variant="outline" onClick={() => handleView(proj)} className="h-7 w-7 p-0 border-slate-200" title="View"><Eye size={12} /></Button>
+                              <Button size="sm" variant="outline" onClick={() => handleEdit(proj)} className="h-7 w-7 p-0 border-slate-200" title="Edit"><Edit size={12} /></Button>
+                              <Button size="sm" variant="outline" onClick={() => handleSendMail(proj.id)} className="h-7 w-7 p-0 border-blue-200 text-blue-500 hover:bg-blue-50" title="Send Mail" data-testid={`send-mail-${proj.id}`}><Send size={12} /></Button>
+                              <Button size="sm" variant="outline" onClick={() => handleDelete(proj.id)} className="h-7 w-7 p-0 text-red-500 border-red-200 hover:bg-red-50" title="Delete"><Trash2 size={12} /></Button>
                             </div>
                           </td>
                         </tr>
@@ -428,6 +465,40 @@ Website Redesign,Development,zb_new_701,2026-01-01,2026-03-31,0,EMP001,ongoing,c
               <div>
                 <Label>Scope of Work</Label>
                 <Textarea value={formData.scope_of_work} onChange={(e) => setFormData({ ...formData, scope_of_work: e.target.value })} rows={3} />
+              </div>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-4">
+                <div>
+                  <Label>Platform</Label>
+                  <Input value={formData.platform} onChange={(e) => setFormData({ ...formData, platform: e.target.value })} placeholder="e.g. Web, iOS, Android" data-testid="project-platform" />
+                </div>
+                <div>
+                  <Label>Scope</Label>
+                  <Input value={formData.scope} onChange={(e) => setFormData({ ...formData, scope: e.target.value })} placeholder="e.g. Full Stack, Frontend" data-testid="project-scope" />
+                </div>
+              </div>
+              <div>
+                <Label>POC (Point of Contact)</Label>
+                <Input placeholder="Search employee for POC..." value={pocSearch} onChange={(e) => setPocSearch(e.target.value)} data-testid="poc-search" />
+                {pocSearch && filteredPocEmployees.length > 0 && (
+                  <div className="border rounded-md max-h-32 overflow-y-auto mt-2">
+                    {filteredPocEmployees.slice(0, 10).map(emp => (
+                      <div key={emp.employee_id} className={`p-2 hover:bg-slate-100 cursor-pointer text-sm ${selectedPoc.includes(emp.employee_id) ? 'bg-blue-50' : ''}`} onClick={() => addPoc(emp.employee_id)}>
+                        {emp.name} ({emp.employee_id})
+                      </div>
+                    ))}
+                  </div>
+                )}
+                <div className="flex flex-wrap gap-2 mt-2">
+                  {selectedPoc.map(empId => {
+                    const emp = employees.find(e => e.employee_id === empId);
+                    return (
+                      <Badge key={empId} variant="secondary" className="flex items-center gap-1 text-xs bg-blue-50 text-blue-700">
+                        {emp ? emp.name : empId}
+                        <X size={12} className="cursor-pointer" onClick={() => removePoc(empId)} />
+                      </Badge>
+                    );
+                  })}
+                </div>
               </div>
               <div>
                 <Label>Timesheet Link</Label>

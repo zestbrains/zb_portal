@@ -103,7 +103,16 @@ export default function EmployeeWorkEntry({ user, onLogout }) {
     } catch (error) { toast.error(error.response?.data?.detail || 'Error updating'); }
   };
   const handleDeleteFromModal = async (id, name) => { if (!window.confirm(`Delete entry for "${name}"?`)) return; try { await api.delete(`/work-entries/employee/${id}`); setEditingDateEntries(prev => prev.filter(e => e.id !== id)); toast.success('Deleted'); fetchEntries(); } catch (error) { toast.error('Error deleting'); } };
-  const isEditable = (dateStr) => dateStr >= getTodayIST();
+  const isEditable = (dateStr, groupEntries) => {
+    // Must be today or future
+    if (dateStr < getTodayIST()) return false;
+    // In project view with employee param = viewing someone else's entries
+    const viewingEmployee = searchParams.get('employee');
+    if (viewingEmployee && viewingEmployee !== user?.employee_id) return false;
+    // Check if all entries belong to current user
+    if (groupEntries && groupEntries.some(e => e.employee_id !== user?.employee_id)) return false;
+    return true;
+  };
 
   const handleEditPendingApproval = async (a) => { const h = prompt(`Edit hours for ${getProjectName(a.project_code)}:`, a.original_hours); if (h === null) return; try { await api.put(`/weekend-approvals/employee/${a.id}`, { hours: parseFloat(h) }); toast.success('Updated'); fetchPendingApprovals(); } catch (error) { toast.error('Error'); } };
   const handleDeletePendingApproval = async (a) => { if (!window.confirm('Delete pending request?')) return; try { await api.delete(`/weekend-approvals/employee/${a.id}`); toast.success('Deleted'); fetchPendingApprovals(); fetchAllApprovalRequests(); } catch (error) { toast.error('Error'); } };
@@ -262,7 +271,7 @@ export default function EmployeeWorkEntry({ user, onLogout }) {
                         <td className="py-3 px-4 max-w-md"><div className="flex flex-wrap gap-1">{group.entries.map((entry) => (<span key={entry.id} className={`inline-flex items-center px-2 py-0.5 rounded text-xs ${entry.is_compensation ? 'bg-emerald-100 text-emerald-800 border border-emerald-200' : 'bg-slate-100 text-slate-700'}`} title={entry.is_compensation && entry.compensation_notes ? `Compensation: ${entry.compensation_notes}` : entry.work_details}>{isProjectView && <span className="mr-1 font-medium">{getEmployeeName(entry.employee_id)}:</span>}{getProjectName(entry.project_code)} - {entry.hours}h{entry.is_compensation && <span className="ml-1 text-[10px] font-bold text-emerald-700" data-testid={`comp-label-${entry.id}`}>COMP</span>}</span>))}</div>{group.entries.some(e => e.is_compensation && e.compensation_notes) && <div className="mt-1 text-xs text-amber-600">{group.entries.filter(e => e.is_compensation && e.compensation_notes).map(e => e.compensation_notes).join('; ')}</div>}</td>
                         <td className="py-3 px-4"><span className="text-sm font-bold text-blue-600">{group.totalHours}h</span></td>
                         <td className="py-3 px-4">
-                          {isEditable(group.date) ? (
+                          {isEditable(group.date, group.entries) ? (
                             <Button size="sm" variant="outline" onClick={() => handleEditDate(group.date, group.entries)} className="h-8 text-xs border-slate-200 text-blue-600" data-testid={`edit-date-${group.date}`}><Edit size={12} className="mr-1" /> Edit</Button>
                           ) : (
                             <Button size="sm" variant="ghost" onClick={() => handleViewEntries(group.entries, group.date)} className="h-8 text-xs text-slate-400" data-testid={`view-entries-${group.date}`}><Eye size={12} className="mr-1" /> View</Button>

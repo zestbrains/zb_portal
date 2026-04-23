@@ -160,14 +160,17 @@ class ProjectCreate(BaseModel):
     type: str
     project_code: str
     start_date: str
-    end_date: Optional[str] = ""  # Made optional - not required for late logic
+    end_date: Optional[str] = ""
     completed_hours: float = 0.0
     assigned_employees: List[str]
     status: str
     client_username: str
     scope_of_work: str
     timesheet_link: str
-    is_late: Optional[bool] = False  # Manual late marking
+    is_late: Optional[bool] = False
+    poc: Optional[List[str]] = []
+    scope: Optional[str] = ""
+    platform: Optional[str] = ""
 
 class ProjectUpdate(BaseModel):
     name: Optional[str] = None
@@ -181,7 +184,10 @@ class ProjectUpdate(BaseModel):
     client_username: Optional[str] = None
     scope_of_work: Optional[str] = None
     timesheet_link: Optional[str] = None
-    is_late: Optional[bool] = None  # Manual late marking
+    is_late: Optional[bool] = None
+    poc: Optional[List[str]] = None
+    scope: Optional[str] = None
+    platform: Optional[str] = None
 
 class Project(BaseModel):
     model_config = ConfigDict(extra="ignore")
@@ -198,6 +204,9 @@ class Project(BaseModel):
     scope_of_work: str
     timesheet_link: str
     is_late: bool = False
+    poc: List[str] = []
+    scope: str = ""
+    platform: str = ""
     created_at: str
     updated_at: str
 
@@ -281,6 +290,7 @@ class EmailConfigUpdate(BaseModel):
     smtp_password: str = ""
     enable_ssl: bool = True
     cc_emails: str = ""  # Comma-separated emails
+    cc_emails_project: str = ""  # Comma-separated emails for project notifications
     is_enabled: bool = False
 
 # Email Sending Utility Function
@@ -1237,6 +1247,102 @@ async def get_project(proj_id: str, user: dict = Depends(get_current_user)):
         raise HTTPException(status_code=404, detail="Project not found")
     return project
 
+
+async def send_project_notification_email(project: dict):
+    """Send project creation email to PM and Management department employees"""
+    email_config = await db.email_config.find_one({}, {"_id": 0})
+    if not email_config or not email_config.get("is_enabled"):
+        return
+    
+    smtp_host = email_config.get("smtp_host", "smtp.gmail.com")
+    smtp_port = email_config.get("smtp_port", 587)
+    smtp_email = email_config.get("smtp_email")
+    smtp_password = email_config.get("smtp_password")
+    enable_ssl = email_config.get("enable_ssl", True)
+    cc_emails_project = email_config.get("cc_emails_project", "")
+    
+    if not smtp_email or not smtp_password:
+        return
+    
+    # Get employees from PM and Management departments
+    departments = await db.departments.find(
+        {"name": {"$regex": "PM|Management|Project Management", "$options": "i"}},
+        {"_id": 0, "name": 1}
+    ).to_list(None)
+    dept_names = [d["name"] for d in departments]
+    
+    recipients = []
+    if dept_names:
+        emps = await db.employees.find(
+            {"department": {"$in": dept_names}, "status": "active"},
+            {"_id": 0, "email": 1, "name": 1}
+        ).to_list(None)
+        recipients = [e["email"] for e in emps if e.get("email")]
+    
+    if not recipients and not cc_emails_project:
+        return
+    
+    # Get POC names
+    poc_names = []
+    for poc_id in (project.get("poc") or []):
+        emp = await db.employees.find_one({"employee_id": poc_id}, {"_id": 0, "name": 1})
+        if emp:
+            poc_names.append(emp["name"])
+    
+    # Build email
+    import smtplib
+    from email.mime.text import MIMEText
+    from email.mime.multipart import MIMEMultipart
+    
+    subject = f"New Project Created: {project.get('name', '')} ({project.get('project_code', '')})"
+    
+    html = f"""
+    <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
+        <div style="background: #1e293b; color: white; padding: 20px; border-radius: 8px 8px 0 0;">
+            <h2 style="margin: 0;">New Project Created</h2>
+        </div>
+        <div style="padding: 24px; border: 1px solid #e2e8f0; border-top: none; border-radius: 0 0 8px 8px;">
+            <table style="width: 100%; border-collapse: collapse;">
+                <tr><td style="padding: 10px; border-bottom: 1px solid #f1f5f9; color: #64748b; width: 140px;"><strong>Project Name</strong></td><td style="padding: 10px; border-bottom: 1px solid #f1f5f9;">{project.get('name', '-')}</td></tr>
+                <tr><td style="padding: 10px; border-bottom: 1px solid #f1f5f9; color: #64748b;"><strong>Platform</strong></td><td style="padding: 10px; border-bottom: 1px solid #f1f5f9;">{project.get('platform', '-') or '-'}</td></tr>
+                <tr><td style="padding: 10px; border-bottom: 1px solid #f1f5f9; color: #64748b;"><strong>Project Code</strong></td><td style="padding: 10px; border-bottom: 1px solid #f1f5f9; font-family: monospace; color: #2563eb;">{project.get('project_code', '-')}</td></tr>
+                <tr><td style="padding: 10px; border-bottom: 1px solid #f1f5f9; color: #64748b;"><strong>POC</strong></td><td style="padding: 10px; border-bottom: 1px solid #f1f5f9;">{', '.join(poc_names) if poc_names else '-'}</td></tr>
+                <tr><td style="padding: 10px; border-bottom: 1px solid #f1f5f9; color: #64748b;"><strong>Client Name</strong></td><td style="padding: 10px; border-bottom: 1px solid #f1f5f9;">{project.get('client_username', '-')}</td></tr>
+                <tr><td style="padding: 10px; color: #64748b;"><strong>Scope</strong></td><td style="padding: 10px;">{project.get('scope', '-') or '-'}</td></tr>
+            </table>
+            <p style="color: #94a3b8; font-size: 12px; margin-top: 20px; text-align: center;">This is an automated notification from HR Portal</p>
+        </div>
+    </div>
+    """
+    
+    msg = MIMEMultipart('alternative')
+    msg['Subject'] = subject
+    msg['From'] = smtp_email
+    msg['To'] = ', '.join(recipients) if recipients else smtp_email
+    
+    cc_list = [e.strip() for e in cc_emails_project.split(',') if e.strip()]
+    if cc_list:
+        msg['Cc'] = ', '.join(cc_list)
+    
+    msg.attach(MIMEText(html, 'html'))
+    
+    all_recipients = recipients + cc_list
+    if not all_recipients:
+        return
+    
+    try:
+        if enable_ssl:
+            server = smtplib.SMTP(smtp_host, smtp_port)
+            server.starttls()
+        else:
+            server = smtplib.SMTP(smtp_host, smtp_port)
+        server.login(smtp_email, smtp_password)
+        server.sendmail(smtp_email, all_recipients, msg.as_string())
+        server.quit()
+    except Exception as e:
+        print(f"Project email send error: {e}")
+
+
 @api_router.post("/projects", response_model=Project)
 async def create_project(proj: ProjectCreate, user: dict = Depends(require_role(["admin"]))):
     now = get_ist_now_iso()
@@ -1271,6 +1377,9 @@ async def create_project(proj: ProjectCreate, user: dict = Depends(require_role(
             "client_username": proj.client_username or existing_project.get("client_username"),
             "scope_of_work": proj.scope_of_work or existing_project.get("scope_of_work"),
             "timesheet_link": proj.timesheet_link or existing_project.get("timesheet_link"),
+            "poc": proj.poc if proj.poc else existing_project.get("poc", []),
+            "scope": proj.scope if proj.scope else existing_project.get("scope", ""),
+            "platform": proj.platform if proj.platform else existing_project.get("platform", ""),
             "updated_at": now
         }
         
@@ -1296,13 +1405,23 @@ async def create_project(proj: ProjectCreate, user: dict = Depends(require_role(
         "client_username": proj.client_username,
         "scope_of_work": proj.scope_of_work,
         "timesheet_link": proj.timesheet_link,
-        "is_late": proj.is_late or False,  # Manual late marking
+        "is_late": proj.is_late or False,
+        "poc": proj.poc or [],
+        "scope": proj.scope or "",
+        "platform": proj.platform or "",
         "created_at": now,
         "updated_at": now
     }
     
     await db.projects.insert_one(proj_doc)
     created_proj = await db.projects.find_one({"id": proj_id}, {"_id": 0})
+    
+    # Send project creation email to PM and Management department employees
+    try:
+        await send_project_notification_email(created_proj)
+    except Exception as e:
+        print(f"Failed to send project email: {e}")
+    
     return created_proj
 
 @api_router.put("/projects/{proj_id}", response_model=Project)
@@ -1331,7 +1450,13 @@ async def update_project(proj_id: str, proj: ProjectUpdate, user: dict = Depends
     if proj.timesheet_link is not None:
         update_data["timesheet_link"] = proj.timesheet_link
     if proj.is_late is not None:
-        update_data["is_late"] = proj.is_late  # Manual late marking
+        update_data["is_late"] = proj.is_late
+    if proj.poc is not None:
+        update_data["poc"] = proj.poc
+    if proj.scope is not None:
+        update_data["scope"] = proj.scope
+    if proj.platform is not None:
+        update_data["platform"] = proj.platform
     
     result = await db.projects.update_one({"id": proj_id}, {"$set": update_data})
     if result.matched_count == 0:
@@ -1339,6 +1464,20 @@ async def update_project(proj_id: str, proj: ProjectUpdate, user: dict = Depends
     
     updated = await db.projects.find_one({"id": proj_id}, {"_id": 0})
     return updated
+
+@api_router.post("/projects/{proj_id}/send-mail")
+async def send_project_mail(proj_id: str, user: dict = Depends(require_role(["admin"]))):
+    """Manually send project notification email for existing projects"""
+    project = await db.projects.find_one({"id": proj_id}, {"_id": 0})
+    if not project:
+        raise HTTPException(status_code=404, detail="Project not found")
+    try:
+        await send_project_notification_email(project)
+        return {"message": "Project notification email sent successfully"}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to send email: {str(e)}")
+
+
 
 @api_router.put("/projects/{proj_id}/late")
 async def mark_project_late(proj_id: str, is_late: bool, user: dict = Depends(require_role(["admin"]))):
@@ -2562,6 +2701,7 @@ async def get_email_config(user: dict = Depends(require_role(["admin"]))):
             "smtp_password": "",
             "enable_ssl": True,
             "cc_emails": "",
+            "cc_emails_project": "",
             "is_enabled": False
         }
     # Hide password in response
@@ -2582,6 +2722,7 @@ async def update_email_config(config: EmailConfigUpdate, user: dict = Depends(re
         "smtp_email": config.smtp_email,
         "enable_ssl": config.enable_ssl,
         "cc_emails": config.cc_emails,
+        "cc_emails_project": config.cc_emails_project,
         "is_enabled": config.is_enabled,
         "updated_at": now,
         "updated_by": user["username"]
