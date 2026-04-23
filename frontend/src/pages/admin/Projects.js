@@ -466,15 +466,9 @@ Website Redesign,Development,zb_new_701,2026-01-01,2026-03-31,0,EMP001,ongoing,c
                 <Label>Scope of Work</Label>
                 <Textarea value={formData.scope_of_work} onChange={(e) => setFormData({ ...formData, scope_of_work: e.target.value })} rows={3} />
               </div>
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-4">
-                <div>
-                  <Label>Platform</Label>
-                  <Input value={formData.platform} onChange={(e) => setFormData({ ...formData, platform: e.target.value })} placeholder="e.g. Web, iOS, Android" data-testid="project-platform" />
-                </div>
-                <div>
-                  <Label>Scope</Label>
-                  <Input value={formData.scope} onChange={(e) => setFormData({ ...formData, scope: e.target.value })} placeholder="e.g. Full Stack, Frontend" data-testid="project-scope" />
-                </div>
+              <div>
+                <Label>Platform</Label>
+                <Input value={formData.platform} onChange={(e) => setFormData({ ...formData, platform: e.target.value })} placeholder="e.g. Web, iOS, Android" data-testid="project-platform" />
               </div>
               <div>
                 <Label>POC (Point of Contact)</Label>
