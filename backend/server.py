@@ -1261,110 +1261,107 @@ async def get_project(proj_id: str, user: dict = Depends(get_current_user)):
     return project
 
 
-async def send_project_notification_email(project: dict):
-    """Send project creation email to PM and Management department employees"""
-    email_config = await db.email_config.find_one({}, {"_id": 0})
-    if not email_config or not email_config.get("project_email_enabled"):
-        return
-    
-    smtp_host = email_config.get("project_smtp_host", "smtp.gmail.com")
-    smtp_port = email_config.get("project_smtp_port", 587)
-    smtp_email = email_config.get("project_smtp_email")
-    smtp_password = email_config.get("project_smtp_password")
-    enable_ssl = email_config.get("project_enable_ssl", True)
-    cc_emails_project = email_config.get("cc_emails_project", "")
-    
-    if not smtp_email or not smtp_password:
-        return
-    
-    # Get employees from PM and Management departments
-    departments = await db.departments.find(
-        {"name": {"$regex": "PM|Management|Project Management", "$options": "i"}},
-        {"_id": 0, "name": 1}
-    ).to_list(None)
-    dept_names = [d["name"] for d in departments]
-    
-    recipients = []
-    if dept_names:
-        emps = await db.employees.find(
-            {"department": {"$in": dept_names}, "status": "active"},
-            {"_id": 0, "email": 1, "name": 1}
-        ).to_list(None)
-        recipients = [e["email"] for e in emps if e.get("email")]
-    
-    if not recipients and not cc_emails_project:
-        return
-    
-    # Get POC names
-    poc_names = []
-    for poc_id in (project.get("poc") or []):
-        emp = await db.employees.find_one({"employee_id": poc_id}, {"_id": 0, "name": 1})
-        if emp:
-            poc_names.append(emp["name"])
-    
-    # Build email
+def send_project_notification_email_sync(project: dict):
+    """Synchronous email sending for background tasks"""
     import smtplib
     from email.mime.text import MIMEText
     from email.mime.multipart import MIMEMultipart
-    
-    subject = f"New project: {project.get('name', '')} ({project.get('platform', '') or '-'})"
-    
-    html = f"""
-    <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
-        <div style="background: #1e293b; color: white; padding: 20px; border-radius: 8px 8px 0 0;">
-            <h2 style="margin: 0;">New Project Created</h2>
-        </div>
-        <div style="padding: 24px; border: 1px solid #e2e8f0; border-top: none; border-radius: 0 0 8px 8px;">
-            <table style="width: 100%; border-collapse: collapse;">
-                <tr><td style="padding: 10px; border-bottom: 1px solid #f1f5f9; color: #64748b; width: 140px;"><strong>Project Name</strong></td><td style="padding: 10px; border-bottom: 1px solid #f1f5f9;">{project.get('name', '-')}</td></tr>
-                <tr><td style="padding: 10px; border-bottom: 1px solid #f1f5f9; color: #64748b;"><strong>Platform</strong></td><td style="padding: 10px; border-bottom: 1px solid #f1f5f9;">{project.get('platform', '-') or '-'}</td></tr>
-                <tr><td style="padding: 10px; border-bottom: 1px solid #f1f5f9; color: #64748b;"><strong>Project Code</strong></td><td style="padding: 10px; border-bottom: 1px solid #f1f5f9; font-family: monospace; color: #2563eb;">{project.get('project_code', '-')}</td></tr>
-                <tr><td style="padding: 10px; border-bottom: 1px solid #f1f5f9; color: #64748b;"><strong>POC</strong></td><td style="padding: 10px; border-bottom: 1px solid #f1f5f9;">{', '.join(poc_names) if poc_names else '-'}</td></tr>
-                <tr><td style="padding: 10px; border-bottom: 1px solid #f1f5f9; color: #64748b;"><strong>Client Name</strong></td><td style="padding: 10px; border-bottom: 1px solid #f1f5f9;">{project.get('client_username', '-')}</td></tr>
-                <tr><td style="padding: 10px; color: #64748b;"><strong>Scope</strong></td><td style="padding: 10px;">{project.get('scope_of_work', '-') or '-'}</td></tr>
-            </table>
-            <p style="color: #94a3b8; font-size: 12px; margin-top: 20px; text-align: center;">This is an automated notification from Zestbrains Portal</p>
-        </div>
-    </div>
-    """
-    
-    msg = MIMEMultipart('alternative')
-    msg['Subject'] = subject
-    msg['From'] = smtp_email
-    msg['To'] = ', '.join(recipients) if recipients else smtp_email
-    
-    cc_list = [e.strip() for e in cc_emails_project.split(',') if e.strip()]
-    if cc_list:
-        msg['Cc'] = ', '.join(cc_list)
-    
-    msg.attach(MIMEText(html, 'html'))
-    
-    all_recipients = recipients + cc_list
-    if not all_recipients:
-        return
+    from pymongo import MongoClient
     
     try:
+        mongo_url = os.environ.get("MONGO_URL", "mongodb://localhost:27017")
+        db_name = os.environ.get("DB_NAME", "test_database")
+        sync_client = MongoClient(mongo_url)
+        sync_db = sync_client[db_name]
+        
+        email_config = sync_db.email_config.find_one({}, {"_id": 0})
+        if not email_config or not email_config.get("project_email_enabled"):
+            return
+        
+        smtp_host = email_config.get("project_smtp_host", "smtp.gmail.com")
+        smtp_port = email_config.get("project_smtp_port", 587)
+        smtp_email = email_config.get("project_smtp_email")
+        smtp_password = email_config.get("project_smtp_password")
+        enable_ssl = email_config.get("project_enable_ssl", True)
+        cc_emails_project = email_config.get("cc_emails_project", "")
+        
+        if not smtp_email or not smtp_password:
+            return
+        
+        # Get PM and Management department employees
+        departments = list(sync_db.departments.find(
+            {"name": {"$regex": "PM|Management|Project Management", "$options": "i"}},
+            {"_id": 0, "name": 1}
+        ))
+        dept_names = [d["name"] for d in departments]
+        
+        recipients = []
+        if dept_names:
+            emps = list(sync_db.employees.find(
+                {"department": {"$in": dept_names}, "status": "active"},
+                {"_id": 0, "email": 1}
+            ))
+            recipients = [e["email"] for e in emps if e.get("email")]
+        
+        # Get POC names
+        poc_names = []
+        for poc_id in (project.get("poc") or []):
+            emp = sync_db.employees.find_one({"employee_id": poc_id}, {"_id": 0, "name": 1})
+            if emp:
+                poc_names.append(emp["name"])
+        
+        subject = f"New project: {project.get('name', '')} ({project.get('platform', '') or '-'})"
+        
+        html = f"""
+        <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
+            <div style="background: #1e293b; color: white; padding: 20px; border-radius: 8px 8px 0 0;">
+                <h2 style="margin: 0;">New Project Created</h2>
+            </div>
+            <div style="padding: 24px; border: 1px solid #e2e8f0; border-top: none; border-radius: 0 0 8px 8px;">
+                <table style="width: 100%; border-collapse: collapse;">
+                    <tr><td style="padding: 10px; border-bottom: 1px solid #f1f5f9; color: #64748b; width: 140px;"><strong>Project Name</strong></td><td style="padding: 10px; border-bottom: 1px solid #f1f5f9;">{project.get('name', '-')}</td></tr>
+                    <tr><td style="padding: 10px; border-bottom: 1px solid #f1f5f9; color: #64748b;"><strong>Platform</strong></td><td style="padding: 10px; border-bottom: 1px solid #f1f5f9;">{project.get('platform', '-') or '-'}</td></tr>
+                    <tr><td style="padding: 10px; border-bottom: 1px solid #f1f5f9; color: #64748b;"><strong>Project Code</strong></td><td style="padding: 10px; border-bottom: 1px solid #f1f5f9; font-family: monospace; color: #2563eb;">{project.get('project_code', '-')}</td></tr>
+                    <tr><td style="padding: 10px; border-bottom: 1px solid #f1f5f9; color: #64748b;"><strong>POC</strong></td><td style="padding: 10px; border-bottom: 1px solid #f1f5f9;">{', '.join(poc_names) if poc_names else '-'}</td></tr>
+                    <tr><td style="padding: 10px; border-bottom: 1px solid #f1f5f9; color: #64748b;"><strong>Client Name</strong></td><td style="padding: 10px; border-bottom: 1px solid #f1f5f9;">{project.get('client_username', '-')}</td></tr>
+                    <tr><td style="padding: 10px; color: #64748b;"><strong>Scope</strong></td><td style="padding: 10px;">{project.get('scope_of_work', '-') or '-'}</td></tr>
+                </table>
+                <p style="color: #94a3b8; font-size: 12px; margin-top: 20px; text-align: center;">This is an automated notification from Zestbrains Portal</p>
+            </div>
+        </div>
+        """
+        
+        msg = MIMEMultipart('alternative')
+        msg['Subject'] = subject
+        msg['From'] = smtp_email
+        msg['To'] = ', '.join(recipients) if recipients else smtp_email
+        
+        cc_list = [e.strip() for e in cc_emails_project.split(',') if e.strip()]
+        if cc_list:
+            msg['Cc'] = ', '.join(cc_list)
+        
+        msg.attach(MIMEText(html, 'html'))
+        
+        all_recipients = list(set(recipients + cc_list))
+        if not all_recipients:
+            return
+        
         if enable_ssl:
-            server = smtplib.SMTP(smtp_host, smtp_port, timeout=10)
+            server = smtplib.SMTP(smtp_host, smtp_port, timeout=15)
             server.starttls()
         else:
-            server = smtplib.SMTP(smtp_host, smtp_port, timeout=10)
+            server = smtplib.SMTP(smtp_host, smtp_port, timeout=15)
         server.login(smtp_email, smtp_password)
         server.sendmail(smtp_email, all_recipients, msg.as_string())
         server.quit()
+        print(f"Project email sent successfully to {len(all_recipients)} recipients")
     except Exception as e:
         print(f"Project email send error: {e}")
-
-def send_project_notification_email_sync(project: dict):
-    """Sync wrapper for background task"""
-    import asyncio
-    loop = asyncio.new_event_loop()
-    try:
-        loop.run_until_complete(send_project_notification_email(project))
-    except Exception as e:
-        print(f"Background email error: {e}")
     finally:
-        loop.close()
+        try:
+            sync_client.close()
+        except:
+            pass
 
 
 @api_router.post("/projects", response_model=Project)
