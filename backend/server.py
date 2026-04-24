@@ -978,14 +978,21 @@ async def update_employee(emp_id: str, emp: EmployeeUpdate, user: dict = Depends
     return updated
 
 @api_router.put("/employees/{emp_id}/status")
-async def update_employee_status(emp_id: str, status: str, user: dict = Depends(require_role(["admin", "hr"]))):
+async def update_employee_status(emp_id: str, status: str, last_working_date: str = None, user: dict = Depends(require_role(["admin", "hr"]))):
     # Allow toggling between active and ex-employee
     if status not in ["active", "inactive", "ex-employee"]:
         raise HTTPException(status_code=400, detail="Invalid status")
     
+    update_data = {"status": status, "updated_at": get_ist_now_iso()}
+    
+    if status == "ex-employee" and last_working_date:
+        update_data["last_working_date"] = last_working_date
+    elif status == "active":
+        update_data["last_working_date"] = ""
+    
     result = await db.employees.update_one(
         {"id": emp_id},
-        {"$set": {"status": status, "updated_at": get_ist_now_iso()}}
+        {"$set": update_data}
     )
     if result.matched_count == 0:
         raise HTTPException(status_code=404, detail="Employee not found")
@@ -5152,6 +5159,13 @@ async def get_salary(year: int, month: int, user: dict = Depends(require_role(["
 
     employees = await db.employees.find({"status": "active"}, {"_id": 0}).sort("name", 1).to_list(None)
 
+    # Also include ex-employees whose last_working_date falls in this salary month
+    ex_employees = await db.employees.find({
+        "status": "ex-employee",
+        "last_working_date": {"$gte": start_date, "$lte": end_date}
+    }, {"_id": 0}).sort("name", 1).to_list(None)
+    employees.extend(ex_employees)
+
     # Load banks for mapping
     banks_list = await db.banks.find({}, {"_id": 0}).to_list(None)
     banks_map = {b["id"]: b["name"] for b in banks_list}
@@ -5244,6 +5258,19 @@ async def get_salary(year: int, month: int, user: dict = Depends(require_role(["
                 elif emp_joining_date.year > year or (emp_joining_date.year == year and emp_joining_date.month > month):
                     # Employee hasn't joined yet in this month
                     not_joined_days = num_days
+            except:
+                pass
+
+        # Ex-employee: calculate days after last working date as deduction
+        left_days = 0
+        last_working_date_str = emp.get("last_working_date", "")
+        if last_working_date_str and emp.get("status") == "ex-employee":
+            try:
+                lwd = datetime.fromisoformat(last_working_date_str.replace('Z', '+00:00'))
+                if lwd.tzinfo is not None:
+                    lwd = lwd.replace(tzinfo=None)
+                if lwd.year == year and lwd.month == month:
+                    left_days = num_days - lwd.day  # Days after last working date
             except:
                 pass
 
@@ -5387,9 +5414,10 @@ async def get_salary(year: int, month: int, user: dict = Depends(require_role(["
         sandwich_amount = round(per_day * sandwich_count, 2)
         late_coming_amount = round(per_day * late_coming_deduction_days, 2)
         not_joined_amount = round(per_day * not_joined_days, 2)  # Deduction for days before joining
+        left_amount = round(per_day * left_days, 2)  # Deduction for days after leaving
         per_hour = (per_day / 8.5) if per_day > 0 else 0
         extra_hours_amount = round(per_hour * extra_hours, 2)
-        gross_salary = round(salary - pt - esic - epf - cpf - cl_amount - sandwich_amount - late_coming_amount - not_joined_amount + ot_amount + other_income + extra_hours_amount, 2)
+        gross_salary = round(salary - pt - esic - epf - cpf - cl_amount - sandwich_amount - late_coming_amount - not_joined_amount - left_amount + ot_amount + other_income + extra_hours_amount, 2)
 
         # Till Date Salary: what to pay if employee leaves today
         if is_current_month:
@@ -5423,6 +5451,10 @@ async def get_salary(year: int, month: int, user: dict = Depends(require_role(["
             "late_coming_amount": late_coming_amount,
             "not_joined_days": not_joined_days,
             "not_joined_amount": not_joined_amount,
+            "left_days": left_days,
+            "left_amount": left_amount,
+            "last_working_date": last_working_date_str,
+            "employee_status": emp.get("status", "active"),
             "other_income": other_income,
             "extra_hours": extra_hours,
             "extra_hours_amount": extra_hours_amount,

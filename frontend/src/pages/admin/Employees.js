@@ -8,7 +8,7 @@ import { Card, CardContent } from '../../components/ui/card';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '../../components/ui/dialog';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '../../components/ui/tabs';
 import { toast } from 'sonner';
-import { Plus, Edit, Trash2, UserCheck, UserX, Eye, X } from 'lucide-react';
+import { Plus, Edit, Trash2, UserCheck, UserX, Eye, X, CalendarDays } from 'lucide-react';
 import { Badge } from '../../components/ui/badge';
 import { useNavigate } from 'react-router-dom';
 
@@ -139,20 +139,39 @@ export default function AdminEmployees({ user, onLogout }) {
     }
   };
 
+  const [exEmployeeDialog, setExEmployeeDialog] = useState(null);
+  const [lastWorkingDate, setLastWorkingDate] = useState('');
+
   const handleToggleStatus = async (emp) => {
-    const newStatus = emp.status === 'active' ? 'ex-employee' : 'active';
-    const confirmMsg = emp.status === 'active' 
-      ? 'Mark this employee as ex-employee?' 
-      : 'Reactivate this employee?';
-    
-    if (window.confirm(confirmMsg)) {
-      try {
-        await api.put(`/employees/${emp.id}/status?status=${newStatus}`);
-        toast.success(newStatus === 'active' ? 'Employee reactivated' : 'Employee marked as ex-employee');
-        fetchEmployees();
-      } catch (error) {
-        toast.error('Error updating status');
+    if (emp.status === 'active') {
+      // Show dialog to pick last working date
+      setExEmployeeDialog(emp);
+      const today = new Date();
+      setLastWorkingDate(today.toISOString().split('T')[0]);
+    } else {
+      // Reactivate - no date needed
+      if (window.confirm('Reactivate this employee?')) {
+        try {
+          await api.put(`/employees/${emp.id}/status?status=active`);
+          toast.success('Employee reactivated');
+          fetchEmployees();
+        } catch (error) {
+          toast.error('Error updating status');
+        }
       }
+    }
+  };
+
+  const confirmExEmployee = async () => {
+    if (!exEmployeeDialog || !lastWorkingDate) return;
+    try {
+      await api.put(`/employees/${exEmployeeDialog.id}/status?status=ex-employee&last_working_date=${lastWorkingDate}`);
+      toast.success(`Employee marked as ex-employee. Last working date: ${lastWorkingDate}`);
+      setExEmployeeDialog(null);
+      setLastWorkingDate('');
+      fetchEmployees();
+    } catch (error) {
+      toast.error('Error updating status');
     }
   };
 
@@ -580,6 +599,40 @@ export default function AdminEmployees({ user, onLogout }) {
         </div>
 
         {/* View moved to full page: /admin/employee/:id */}
+
+        {/* Ex-Employee Date Dialog */}
+        <Dialog open={!!exEmployeeDialog} onOpenChange={() => setExEmployeeDialog(null)}>
+          <DialogContent className="max-w-md">
+            <DialogHeader>
+              <DialogTitle className="flex items-center gap-2">
+                <CalendarDays size={20} className="text-orange-500" />
+                Mark as Ex-Employee
+              </DialogTitle>
+            </DialogHeader>
+            {exEmployeeDialog && (
+              <div className="space-y-4 pt-2">
+                <p className="text-sm text-slate-600">
+                  Mark <strong>{exEmployeeDialog.name}</strong> as ex-employee. Salary will be calculated till the last working date.
+                </p>
+                <div>
+                  <Label htmlFor="last-working-date">Last Working Date</Label>
+                  <Input
+                    id="last-working-date"
+                    type="date"
+                    value={lastWorkingDate}
+                    onChange={(e) => setLastWorkingDate(e.target.value)}
+                    data-testid="last-working-date"
+                  />
+                  <p className="text-xs text-slate-500 mt-1">Salary for this month will be paid up to this date</p>
+                </div>
+                <div className="flex gap-3 pt-2">
+                  <Button variant="outline" onClick={() => setExEmployeeDialog(null)} className="flex-1">Cancel</Button>
+                  <Button onClick={confirmExEmployee} className="flex-1 bg-orange-600 hover:bg-orange-700" data-testid="confirm-ex-employee">Confirm</Button>
+                </div>
+              </div>
+            )}
+          </DialogContent>
+        </Dialog>
       </div>
     </Layout>
   );
