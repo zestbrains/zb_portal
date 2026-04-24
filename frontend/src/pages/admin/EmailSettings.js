@@ -4,7 +4,7 @@ import { Button } from '../../components/ui/button';
 import { Input } from '../../components/ui/input';
 import { Label } from '../../components/ui/label';
 import { Switch } from '../../components/ui/switch';
-import { Mail, Send, Save, Settings, Eye, EyeOff } from 'lucide-react';
+import { Mail, Send, Save, Settings, Eye, EyeOff, FolderKanban } from 'lucide-react';
 import Layout from '../../components/layout/Layout';
 import { api } from '../../utils/api';
 import { toast } from 'sonner';
@@ -14,6 +14,7 @@ export default function EmailSettings({ user, onLogout }) {
   const [saving, setSaving] = useState(false);
   const [testing, setTesting] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
+  const [showProjectPassword, setShowProjectPassword] = useState(false);
   
   const [config, setConfig] = useState({
     smtp_host: 'smtp.gmail.com',
@@ -22,7 +23,14 @@ export default function EmailSettings({ user, onLogout }) {
     smtp_password: '',
     enable_ssl: true,
     cc_emails: '',
-    is_enabled: false
+    is_enabled: false,
+    project_smtp_host: 'smtp.gmail.com',
+    project_smtp_port: 587,
+    project_smtp_email: '',
+    project_smtp_password: '',
+    project_enable_ssl: true,
+    cc_emails_project: '',
+    project_email_enabled: false
   });
 
   useEffect(() => {
@@ -207,19 +215,6 @@ export default function EmailSettings({ user, onLogout }) {
                 <p className="text-xs text-slate-500 mt-1">Comma-separated email addresses to CC on all leave notifications</p>
               </div>
 
-              {/* CC Emails for Project */}
-              <div>
-                <Label htmlFor="cc_emails_project">CC Email List for Project</Label>
-                <Input
-                  id="cc_emails_project"
-                  value={config.cc_emails_project || ''}
-                  onChange={(e) => setConfig({ ...config, cc_emails_project: e.target.value })}
-                  placeholder="pm@company.com, manager@company.com"
-                  data-testid="cc-emails-project"
-                />
-                <p className="text-xs text-slate-500 mt-1">Comma-separated email addresses to CC on project creation notifications</p>
-              </div>
-
               {/* Action Buttons */}
               <div className="flex flex-col sm:flex-row gap-3 pt-4 border-t">
                 <Button onClick={handleSave} disabled={saving} className="flex-1" data-testid="save-config">
@@ -243,6 +238,120 @@ export default function EmailSettings({ user, onLogout }) {
                   <strong>Note:</strong> Email notifications are currently disabled. Enable the toggle above to start sending emails.
                 </div>
               )}
+            </CardContent>
+          </Card>
+
+          {/* Project Email Configuration */}
+          <Card className="mt-6">
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2">
+                <FolderKanban size={20} />
+                Project Email Settings
+              </CardTitle>
+              <CardDescription>
+                Separate SMTP configuration for project creation notifications.
+              </CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-6">
+              {/* Enable/Disable Toggle */}
+              <div className="flex items-center justify-between p-4 bg-slate-50 rounded-lg">
+                <div>
+                  <Label className="text-base font-medium">Enable Project Email</Label>
+                  <p className="text-sm text-slate-500">Send email when a new project is created</p>
+                </div>
+                <Switch
+                  checked={config.project_email_enabled}
+                  onCheckedChange={(checked) => setConfig({ ...config, project_email_enabled: checked })}
+                  data-testid="project-email-toggle"
+                />
+              </div>
+
+              {/* Project SMTP Host & Port */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <div>
+                  <Label htmlFor="project_smtp_host">SMTP Host</Label>
+                  <Input
+                    id="project_smtp_host"
+                    value={config.project_smtp_host}
+                    onChange={(e) => setConfig({ ...config, project_smtp_host: e.target.value })}
+                    placeholder="smtp.gmail.com"
+                    data-testid="project-smtp-host"
+                  />
+                </div>
+                <div>
+                  <Label htmlFor="project_smtp_port">SMTP Port</Label>
+                  <Input
+                    id="project_smtp_port"
+                    type="number"
+                    value={config.project_smtp_port}
+                    onChange={(e) => setConfig({ ...config, project_smtp_port: parseInt(e.target.value) || 587 })}
+                    placeholder="587"
+                    data-testid="project-smtp-port"
+                  />
+                </div>
+              </div>
+
+              {/* Project Sender Email */}
+              <div>
+                <Label htmlFor="project_smtp_email">Sender Email</Label>
+                <Input
+                  id="project_smtp_email"
+                  type="email"
+                  value={config.project_smtp_email}
+                  onChange={(e) => setConfig({ ...config, project_smtp_email: e.target.value })}
+                  placeholder="hello@zestbrains.com"
+                  data-testid="project-smtp-email"
+                />
+              </div>
+
+              {/* Project SMTP Password */}
+              <div>
+                <Label htmlFor="project_smtp_password">SMTP Password / App Password</Label>
+                <div className="relative">
+                  <Input
+                    id="project_smtp_password"
+                    type={showProjectPassword ? "text" : "password"}
+                    value={config.project_smtp_password}
+                    onChange={(e) => setConfig({ ...config, project_smtp_password: e.target.value })}
+                    placeholder="Enter app password"
+                    className="pr-10"
+                    data-testid="project-smtp-password"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => setShowProjectPassword(!showProjectPassword)}
+                    className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600"
+                  >
+                    {showProjectPassword ? <EyeOff size={18} /> : <Eye size={18} />}
+                  </button>
+                </div>
+              </div>
+
+              {/* Project SSL Toggle */}
+              <div className="flex items-center justify-between">
+                <div>
+                  <Label>Enable TLS/SSL</Label>
+                  <p className="text-xs text-slate-500">Required for most email providers</p>
+                </div>
+                <Switch
+                  checked={config.project_enable_ssl}
+                  onCheckedChange={(checked) => setConfig({ ...config, project_enable_ssl: checked })}
+                  data-testid="project-ssl-toggle"
+                />
+              </div>
+
+              {/* CC Emails for Project */}
+              <div>
+                <Label htmlFor="cc_emails_project">CC Email List for Project</Label>
+                <Input
+                  id="cc_emails_project"
+                  value={config.cc_emails_project || ''}
+                  onChange={(e) => setConfig({ ...config, cc_emails_project: e.target.value })}
+                  placeholder="pm@company.com, manager@company.com"
+                  data-testid="cc-emails-project"
+                />
+                <p className="text-xs text-slate-500 mt-1">Comma-separated email addresses to CC on project notifications</p>
+              </div>
             </CardContent>
           </Card>
 

@@ -292,6 +292,12 @@ class EmailConfigUpdate(BaseModel):
     cc_emails: str = ""  # Comma-separated emails
     cc_emails_project: str = ""  # Comma-separated emails for project notifications
     is_enabled: bool = False
+    project_smtp_host: str = "smtp.gmail.com"
+    project_smtp_port: int = 587
+    project_smtp_email: str = ""
+    project_smtp_password: str = ""
+    project_enable_ssl: bool = True
+    project_email_enabled: bool = False
 
 # Email Sending Utility Function
 async def send_leave_notification_email(
@@ -1251,14 +1257,14 @@ async def get_project(proj_id: str, user: dict = Depends(get_current_user)):
 async def send_project_notification_email(project: dict):
     """Send project creation email to PM and Management department employees"""
     email_config = await db.email_config.find_one({}, {"_id": 0})
-    if not email_config or not email_config.get("is_enabled"):
+    if not email_config or not email_config.get("project_email_enabled"):
         return
     
-    smtp_host = email_config.get("smtp_host", "smtp.gmail.com")
-    smtp_port = email_config.get("smtp_port", 587)
-    smtp_email = email_config.get("smtp_email")
-    smtp_password = email_config.get("smtp_password")
-    enable_ssl = email_config.get("enable_ssl", True)
+    smtp_host = email_config.get("project_smtp_host", "smtp.gmail.com")
+    smtp_port = email_config.get("project_smtp_port", 587)
+    smtp_email = email_config.get("project_smtp_email")
+    smtp_password = email_config.get("project_smtp_password")
+    enable_ssl = email_config.get("project_enable_ssl", True)
     cc_emails_project = email_config.get("cc_emails_project", "")
     
     if not smtp_email or not smtp_password:
@@ -2702,10 +2708,17 @@ async def get_email_config(user: dict = Depends(require_role(["admin"]))):
             "enable_ssl": True,
             "cc_emails": "",
             "cc_emails_project": "",
-            "is_enabled": False
+            "is_enabled": False,
+            "project_smtp_host": "smtp.gmail.com",
+            "project_smtp_port": 587,
+            "project_smtp_email": "",
+            "project_smtp_password": "",
+            "project_enable_ssl": True,
+            "project_email_enabled": False
         }
-    # Hide password in response
+    # Hide passwords in response
     config["smtp_password"] = "••••••••" if config.get("smtp_password") else ""
+    config["project_smtp_password"] = "••••••••" if config.get("project_smtp_password") else ""
     return config
 
 @api_router.put("/email-config")
@@ -2724,6 +2737,11 @@ async def update_email_config(config: EmailConfigUpdate, user: dict = Depends(re
         "cc_emails": config.cc_emails,
         "cc_emails_project": config.cc_emails_project,
         "is_enabled": config.is_enabled,
+        "project_smtp_host": config.project_smtp_host,
+        "project_smtp_port": config.project_smtp_port,
+        "project_smtp_email": config.project_smtp_email,
+        "project_enable_ssl": config.project_enable_ssl,
+        "project_email_enabled": config.project_email_enabled,
         "updated_at": now,
         "updated_by": user["username"]
     }
@@ -2733,6 +2751,11 @@ async def update_email_config(config: EmailConfigUpdate, user: dict = Depends(re
         update_data["smtp_password"] = config.smtp_password
     elif existing and existing.get("smtp_password"):
         update_data["smtp_password"] = existing["smtp_password"]
+    
+    if config.project_smtp_password and config.project_smtp_password != "••••••••":
+        update_data["project_smtp_password"] = config.project_smtp_password
+    elif existing and existing.get("project_smtp_password"):
+        update_data["project_smtp_password"] = existing["project_smtp_password"]
     
     await db.email_config.update_one(
         {},
