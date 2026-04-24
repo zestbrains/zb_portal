@@ -266,6 +266,11 @@ export default function EmployeeDetail({ user, onLogout }) {
                 <Badge variant={employee.status === 'active' ? 'default' : 'destructive'} className={employee.status === 'active' ? 'bg-green-100 text-green-800 hover:bg-green-100' : ''}>
                   {employee.status?.toUpperCase()}
                 </Badge>
+                {employee.status === 'ex-employee' && employee.last_working_date && (
+                  <Badge variant="outline" className="text-rose-600 border-rose-200 bg-rose-50">
+                    Last Working: {new Date(employee.last_working_date).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' })}
+                  </Badge>
+                )}
                 <span className="text-xs text-slate-400">|</span>
                 <span className="text-sm text-slate-500">{employee.role || 'Employee'}</span>
               </div>
@@ -302,6 +307,9 @@ export default function EmployeeDetail({ user, onLogout }) {
                 <InfoCard label="Department(s)" value={getDepartmentNames(employee)} />
                 <InfoCard label="Experience" value={employee.experience || 'N/A'} />
                 <InfoCard label="Joining Date" value={employee.joining_date ? new Date(employee.joining_date).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' }) : 'N/A'} />
+                {employee.status === 'ex-employee' && employee.last_working_date && (
+                  <InfoCard label="Last Working Date" value={new Date(employee.last_working_date).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' })} />
+                )}
                 <InfoCard label="Probation End Date" value={employee.probation_end_date ? new Date(employee.probation_end_date).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' }) : 'N/A'} />
                 <div className="sm:col-span-2">
                   <InfoCard label="Team Leaders" value={

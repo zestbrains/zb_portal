@@ -147,7 +147,8 @@ export default function Salary({ user, onLogout }) {
     const ehAmt = Math.round(perHour * eh * 100) / 100;
     const lateDeduction = emp.late_coming_amount || 0;
     const notJoinedDeduction = emp.not_joined_amount || 0;
-    const gross = Math.round((emp.salary - emp.pt - emp.esic - emp.epf - emp.cpf - emp.cl_amount - (emp.sandwich_amount || 0) - lateDeduction - notJoinedDeduction + emp.ot_amount + oi + ehAmt) * 100) / 100;
+    const leftDeduction = emp.left_amount || 0;
+    const gross = Math.round((emp.salary - emp.pt - emp.esic - emp.epf - emp.cpf - emp.cl_amount - (emp.sandwich_amount || 0) - lateDeduction - notJoinedDeduction - leftDeduction + emp.ot_amount + oi + ehAmt) * 100) / 100;
     return { oi, eh, ehAmt, gross };
   };
 
@@ -176,10 +177,10 @@ export default function Salary({ user, onLogout }) {
 
   const handleExport = () => {
     const monthLabel = MONTHS.find(m => m.value === month)?.label || month;
-    const headers = ['Employee ID', 'Employee Name', 'Salary', 'PT', 'ESIC', 'EPF', 'CPF', 'CL Days', 'CL Amount', 'Sandwich Days', 'Sandwich Amount', 'OT Days', 'OT Amount', 'Other Income', 'Extra Hours', 'Extra Hrs Amount', 'Gross Salary'];
+    const headers = ['Employee ID', 'Employee Name', 'Salary', 'PT', 'ESIC', 'EPF', 'CPF', 'CL Days', 'CL Amount', 'Sandwich Days', 'Sandwich Amount', 'OT Days', 'OT Amount', 'Late Amount', 'Not Joined', 'Left Amount', 'Other Income', 'Extra Hours', 'Extra Hrs Amount', 'Gross Salary'];
     const rows = filtered.map(e => {
       const c = computeLocal(e);
-      return [e.employee_id, e.employee_name, e.salary, e.pt, e.esic, e.epf, e.cpf, e.cl_count, e.cl_amount, e.sandwich_days || 0, e.sandwich_amount || 0, e.ot_count, e.ot_amount, c.oi, c.eh, c.ehAmt, c.gross];
+      return [e.employee_id, e.employee_name, e.salary, e.pt, e.esic, e.epf, e.cpf, e.cl_count, e.cl_amount, e.sandwich_days || 0, e.sandwich_amount || 0, e.ot_count, e.ot_amount, e.late_coming_amount || 0, e.not_joined_amount || 0, e.left_amount || 0, c.oi, c.eh, c.ehAmt, c.gross];
     });
     const csv = [headers.join(','), ...rows.map(r => r.join(','))].join('\n');
     const blob = new Blob([csv], { type: 'text/csv' });
@@ -389,6 +390,7 @@ export default function Salary({ user, onLogout }) {
                           <th className="text-right text-[10px] font-semibold text-slate-500 uppercase tracking-wider py-3 px-2">Sandwich</th>
                           <th className="text-right text-[10px] font-semibold text-slate-500 uppercase tracking-wider py-3 px-2">Late</th>
                           <th className="text-right text-[10px] font-semibold text-slate-500 uppercase tracking-wider py-3 px-2">Not Joined</th>
+                          <th className="text-right text-[10px] font-semibold text-slate-500 uppercase tracking-wider py-3 px-2">Left</th>
                           <th className="text-right text-[10px] font-semibold text-slate-500 uppercase tracking-wider py-3 px-2">OT Amt</th>
                           <th className="text-center text-[10px] font-semibold text-slate-500 uppercase tracking-wider py-3 px-2">Other Inc</th>
                           <th className="text-center text-[10px] font-semibold text-slate-500 uppercase tracking-wider py-3 px-2">Extra Hrs</th>
@@ -450,6 +452,10 @@ export default function Salary({ user, onLogout }) {
                                 {(emp.not_joined_days || 0) > 0 && <div className="text-[10px] text-purple-400">{emp.not_joined_days}d</div>}
                               </td>
                               <td className="py-2 px-2 text-right text-xs">
+                                <div className={(emp.left_amount || 0) > 0 ? 'text-rose-600' : 'text-slate-400'}>{(emp.left_amount || 0) > 0 ? `-${fmt(emp.left_amount)}` : '0'}</div>
+                                {(emp.left_days || 0) > 0 && <div className="text-[10px] text-rose-400">{emp.left_days}d</div>}
+                              </td>
+                              <td className="py-2 px-2 text-right text-xs">
                                 <div className={emp.ot_amount > 0 ? 'text-green-600' : 'text-slate-400'}>{emp.ot_amount > 0 ? `+${fmt(emp.ot_amount)}` : '0'}</div>
                                 {emp.ot_count > 0 && <div className="text-[10px] text-slate-400">{emp.ot_count}d</div>}
                               </td>
@@ -493,6 +499,7 @@ export default function Salary({ user, onLogout }) {
                           <td className="py-3 px-2 text-right text-xs font-bold text-orange-600">-{fmt(bankEmployees.reduce((s, e) => s + (e.sandwich_amount || 0), 0))}</td>
                           <td className="py-3 px-2 text-right text-xs font-bold text-orange-600">-{fmt(bankEmployees.reduce((s, e) => s + (e.late_coming_amount || 0), 0))}</td>
                           <td className="py-3 px-2 text-right text-xs font-bold text-purple-600">-{fmt(bankEmployees.reduce((s, e) => s + (e.not_joined_amount || 0), 0))}</td>
+                          <td className="py-3 px-2 text-right text-xs font-bold text-rose-600">-{fmt(bankEmployees.reduce((s, e) => s + (e.left_amount || 0), 0))}</td>
                           <td className="py-3 px-2 text-right text-xs font-bold text-green-600">+{fmt(bankEmployees.reduce((s, e) => s + e.ot_amount, 0))}</td>
                           <td className="py-3 px-2 text-right text-xs font-bold text-green-600">+{fmt(bankEmployees.reduce((s, e) => s + computeLocal(e).oi, 0))}</td>
                           <td className="py-3 px-2"></td>
