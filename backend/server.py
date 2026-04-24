@@ -1,4 +1,4 @@
-from fastapi import FastAPI, APIRouter, HTTPException, Depends, status, UploadFile, File, Query, Body
+from fastapi import FastAPI, APIRouter, HTTPException, Depends, status, UploadFile, File, Query, Body, BackgroundTasks
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from fastapi.responses import StreamingResponse
 from dotenv import load_dotenv
@@ -1345,19 +1345,30 @@ async def send_project_notification_email(project: dict):
     
     try:
         if enable_ssl:
-            server = smtplib.SMTP(smtp_host, smtp_port)
+            server = smtplib.SMTP(smtp_host, smtp_port, timeout=10)
             server.starttls()
         else:
-            server = smtplib.SMTP(smtp_host, smtp_port)
+            server = smtplib.SMTP(smtp_host, smtp_port, timeout=10)
         server.login(smtp_email, smtp_password)
         server.sendmail(smtp_email, all_recipients, msg.as_string())
         server.quit()
     except Exception as e:
         print(f"Project email send error: {e}")
 
+def send_project_notification_email_sync(project: dict):
+    """Sync wrapper for background task"""
+    import asyncio
+    loop = asyncio.new_event_loop()
+    try:
+        loop.run_until_complete(send_project_notification_email(project))
+    except Exception as e:
+        print(f"Background email error: {e}")
+    finally:
+        loop.close()
+
 
 @api_router.post("/projects", response_model=Project)
-async def create_project(proj: ProjectCreate, user: dict = Depends(require_role(["admin"]))):
+async def create_project(proj: ProjectCreate, background_tasks: BackgroundTasks, user: dict = Depends(require_role(["admin"]))):
     now = get_ist_now_iso()
     
     # Check if project with same project_code already exists - merge if yes
@@ -1429,11 +1440,8 @@ async def create_project(proj: ProjectCreate, user: dict = Depends(require_role(
     await db.projects.insert_one(proj_doc)
     created_proj = await db.projects.find_one({"id": proj_id}, {"_id": 0})
     
-    # Send project creation email to PM and Management department employees
-    try:
-        await send_project_notification_email(created_proj)
-    except Exception as e:
-        print(f"Failed to send project email: {e}")
+    # Send project creation email in background (non-blocking)
+    background_tasks.add_task(send_project_notification_email_sync, created_proj)
     
     return created_proj
 
@@ -1479,16 +1487,20 @@ async def update_project(proj_id: str, proj: ProjectUpdate, user: dict = Depends
     return updated
 
 @api_router.post("/projects/{proj_id}/send-mail")
-async def send_project_mail(proj_id: str, user: dict = Depends(require_role(["admin"]))):
+async def send_project_mail(proj_id: str, background_tasks: BackgroundTasks, user: dict = Depends(require_role(["admin"]))):
     """Manually send project notification email for existing projects"""
     project = await db.projects.find_one({"id": proj_id}, {"_id": 0})
     if not project:
         raise HTTPException(status_code=404, detail="Project not found")
-    try:
-        await send_project_notification_email(project)
-        return {"message": "Project notification email sent successfully"}
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Failed to send email: {str(e)}")
+    
+    email_config = await db.email_config.find_one({}, {"_id": 0})
+    if not email_config or not email_config.get("project_email_enabled"):
+        raise HTTPException(status_code=400, detail="Project email is not enabled. Configure it in Email Settings.")
+    if not email_config.get("project_smtp_email") or not email_config.get("project_smtp_password"):
+        raise HTTPException(status_code=400, detail="Project SMTP email/password not configured in Email Settings.")
+    
+    background_tasks.add_task(send_project_notification_email_sync, project)
+    return {"message": "Project notification email is being sent"}
 
 
 
