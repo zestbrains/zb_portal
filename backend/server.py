@@ -3695,13 +3695,16 @@ async def approve_leave(leave_id: str, approval: LeaveApproval, user: dict = Dep
                         "created_at": now,
                         "updated_at": now
                     }
-                    await db.leave_records.insert_one(pl_record)
+                    await db.leave_records.update_one(
+                        {"employee_id": leave_app["employee_id"], "date": leave_date.date, "leave_type": "PL"},
+                        {"$set": pl_record, "$setOnInsert": {"id": pl_record_id}},
+                        upsert=True
+                    )
                     total_pl += 0.5
                     
                     # Create CL record (0.5)
                     cl_record_id = str(uuid.uuid4())
                     cl_record = {
-                        "id": cl_record_id,
                         "employee_id": leave_app["employee_id"],
                         "date": leave_date.date,
                         "leave_type": "CL",
@@ -3713,7 +3716,11 @@ async def approve_leave(leave_id: str, approval: LeaveApproval, user: dict = Dep
                         "created_at": now,
                         "updated_at": now
                     }
-                    await db.leave_records.insert_one(cl_record)
+                    await db.leave_records.update_one(
+                        {"employee_id": leave_app["employee_id"], "date": leave_date.date, "leave_type": "CL"},
+                        {"$set": cl_record, "$setOnInsert": {"id": cl_record_id}},
+                        upsert=True
+                    )
                     total_cl += 0.5
                 else:
                     # Standard leave types: PL, CL, Half PL, Half CL
@@ -3724,7 +3731,6 @@ async def approve_leave(leave_id: str, approval: LeaveApproval, user: dict = Dep
                     leave_type_clean = 'PL' if 'PL' in leave_date.leave_type else 'CL'
                     
                     leave_record = {
-                        "id": record_id,
                         "employee_id": leave_app["employee_id"],
                         "date": leave_date.date,
                         "leave_type": leave_type_clean,
@@ -3736,7 +3742,11 @@ async def approve_leave(leave_id: str, approval: LeaveApproval, user: dict = Dep
                         "created_at": now,
                         "updated_at": now
                     }
-                    await db.leave_records.insert_one(leave_record)
+                    await db.leave_records.update_one(
+                        {"employee_id": leave_app["employee_id"], "date": leave_date.date, "leave_type": leave_type_clean},
+                        {"$set": leave_record, "$setOnInsert": {"id": record_id}},
+                        upsert=True
+                    )
                     
                     if leave_type_clean == "PL":
                         total_pl += leave_days
@@ -3752,7 +3762,6 @@ async def approve_leave(leave_id: str, approval: LeaveApproval, user: dict = Dep
             while current_date <= to_date:
                 record_id = str(uuid.uuid4())
                 leave_record = {
-                    "id": record_id,
                     "employee_id": leave_app["employee_id"],
                     "date": current_date.isoformat(),
                     "leave_type": default_type,
@@ -3764,7 +3773,11 @@ async def approve_leave(leave_id: str, approval: LeaveApproval, user: dict = Dep
                     "created_at": now,
                     "updated_at": now
                 }
-                await db.leave_records.insert_one(leave_record)
+                await db.leave_records.update_one(
+                    {"employee_id": leave_app["employee_id"], "date": current_date.isoformat(), "leave_type": default_type},
+                    {"$set": leave_record, "$setOnInsert": {"id": record_id}},
+                    upsert=True
+                )
                 
                 if default_type == "PL":
                     total_pl += 1.0
