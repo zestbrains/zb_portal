@@ -1,0 +1,15 @@
+{
+  "summary": "Sandwich leave rule updated + OT threshold bypass fix verified. All tests pass.",
+  "test_results": {
+    "test_1_keval_attendance_sandwich": "PASS - sandwich_dates=[1, 4, 7, 8] for emp 107 March 2026",
+    "test_2_keval_salary_sandwich": "PASS - sandwich_days=4, sandwich_amount=3612.9",
+    "test_3_milan_ot_regression": "PASS - Day 18=OT/2, Day 25=WO",
+    "test_4_zero_leave_zero_sandwich": "PASS - 18 employees with 0 CL and 0 sandwich, no negative salaries",
+    "test_5_employee_salary": "PASS - emp 56 sandwich_days=5, sandwich_dates=[4, 14, 15, 21, 22]",
+    "test_6_employee_attendance": "PASS - emp 56 sandwich_dates=[4, 14, 15, 21, 22]",
+    "test_7_sandwich_warning_api": "PASS - Proposed leave on Apr 17+20 correctly detects Apr 18-19 as sandwich",
+    "test_8_feb_attendance_loads": "PASS - HTTP 200"
+  },
+  "success_rate": "100% (8/8 tests passed)",
+  "retest_needed": false
+}

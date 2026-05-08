@@ -1,0 +1,55 @@
+{
+  "summary": "Completed testing of HR Management Portal - Employee Attendance (late marks) and Sandwich Leave Warning features. All backend tests pass (13/13). Frontend UI tests confirm both features work correctly.",
+  "backend_issues": {
+    "critical": [],
+    "minor": []
+  },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": []
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_sandwich_and_attendance.py",
+    "/app/test_reports/pytest/pytest_results.xml"
+  ],
+  "action_items": [],
+  "critical_code_review_comments": [],
+  "updated_files": [
+    "/app/backend/tests/test_sandwich_and_attendance.py"
+  ],
+  "success_rate": {
+    "backend": "100% (13/13 tests passed)",
+    "frontend": "100% (all UI flows verified)"
+  },
+  "test_credentials": {
+    "employee": "hr@zestbrains.com / Reeman@zb@56",
+    "admin": "renish / Zb@0075588"
+  },
+  "seed_data_creation": "None - used existing employee data",
+  "retest_needed": false,
+  "should_main_agent_self_test": false,
+  "context_for_next_testing_agent": "Both features tested and working: 1) Attendance page correctly hides late marks section when employee has 0 late marks (April 2026). 2) Sandwich leave warning appears correctly when full week (Mon-Fri) leave is selected, disappears when dates are removed/changed. Backend API /api/leaves/check-sandwich works correctly.",
+  "features_tested": {
+    "employee_attendance_late_marks": {
+      "status": "PASS",
+      "details": "Late marks & deduction section correctly hidden when employee has 0 late marks. Salary data API returns late_coming_count=0, late_coming_days=[], late_coming_deduction_days=0, late_coming_amount=0.0 for employee hr@zestbrains.com in April 2026."
+    },
+    "sandwich_leave_warning": {
+      "status": "PASS",
+      "details": "Sandwich warning correctly appears when selecting full week leave (Feb 16-20, 2026 Mon-Fri). Warning shows: 'Your leave in Feb 2026 will trigger sandwich leave rule. Weekend/Holiday dates (14, 15, 21, 22) will be counted as leave days, resulting in additional 4 day(s) salary deduction.' Submit button shows '(Sandwich applies)' text. Warning disappears when dates are removed."
+    },
+    "sandwich_no_trigger_single_day": {
+      "status": "PASS",
+      "details": "Single day leave (Feb 18, 2026) does NOT trigger sandwich warning."
+    },
+    "sandwich_no_trigger_half_day": {
+      "status": "PASS",
+      "details": "Half-day leaves do NOT trigger sandwich warning (verified via backend API test)."
+    },
+    "check_sandwich_api": {
+      "status": "PASS",
+      "details": "POST /api/leaves/check-sandwich endpoint returns correct sandwich detection with has_sandwich, sandwich_dates, sandwich_day_count, and warnings fields."
+    }
+  }
+}

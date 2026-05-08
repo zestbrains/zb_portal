@@ -1,0 +1,103 @@
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Manrope:wght@500;600;700;800&family=JetBrains+Mono:wght@400;500&display=swap');
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  font-family: 'Inter', sans-serif;
+  background-color: #F8FAFC;
+  color: #334155;
+}
+
+h1, h2, h3, h4, h5, h6 {
+  font-family: 'Manrope', sans-serif;
+}
+
+.App {
+  min-height: 100vh;
+  background-color: #F8FAFC;
+}
+
+/* Scrollbar */
+::-webkit-scrollbar {
+  width: 5px;
+  height: 5px;
+}
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+::-webkit-scrollbar-thumb {
+  background: #CBD5E1;
+  border-radius: 4px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: #94A3B8;
+}
+
+/* Table responsive mobile card view */
+@media (max-width: 768px) {
+  .table-container table {
+    display: block;
+  }
+  .table-container thead {
+    display: none;
+  }
+  .table-container tbody {
+    display: flex;
+    flex-direction: column;
+    gap: 0.75rem;
+    padding: 0.75rem;
+  }
+  .table-container tbody tr {
+    display: flex;
+    flex-direction: column;
+    background: white;
+    border: 1px solid #E2E8F0;
+    border-radius: 0.75rem;
+    padding: 1rem;
+  }
+  .table-container td {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 0.5rem 0;
+    border-bottom: 1px solid #F1F5F9;
+  }
+  .table-container td:last-child {
+    border-bottom: none;
+    padding-top: 0.75rem;
+    justify-content: flex-start;
+    gap: 0.5rem;
+    flex-wrap: wrap;
+  }
+  .table-container td::before {
+    content: attr(data-label);
+    font-weight: 600;
+    color: #64748B;
+    font-size: 0.75rem;
+    text-transform: uppercase;
+    letter-spacing: 0.025em;
+  }
+  .table-container td:last-child::before {
+    display: none;
+  }
+}
+
+/* Dialog/Sheet Responsive */
+@media (max-width: 640px) {
+  [data-radix-dialog-content] {
+    max-width: 100% !important;
+    width: 100% !important;
+    max-height: 85vh !important;
+    border-radius: 1rem 1rem 0 0 !important;
+    margin: 0 !important;
+    position: fixed !important;
+    bottom: 0 !important;
+    left: 0 !important;
+    right: 0 !important;
+    top: auto !important;
+    transform: none !important;
+    padding-bottom: 2rem !important;
+  }
+}
