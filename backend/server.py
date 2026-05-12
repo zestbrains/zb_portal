@@ -3933,7 +3933,11 @@ async def import_leaves(file: UploadFile = File(...), user: dict = Depends(requi
                 "created_at": now,
                 "updated_at": now
             }
-            await db.leave_records.insert_one(leave_record)
+            await db.leave_records.update_one(
+                {"employee_id": row["employee_id"].strip(), "date": date_str, "leave_type": leave_type},
+                {"$set": leave_record, "$setOnInsert": {"id": record_id}},
+                upsert=True
+            )
             
             # Update employee leave count
             if leave_type == "PL":
@@ -4871,6 +4875,7 @@ async def get_attendance(year: int, month: int, user: dict = Depends(require_rol
         "last_working_date": {"$gte": start_date, "$lte": end_date}
     }, {"_id": 0}).sort("name", 1).to_list(None)
     employees.extend(ex_employees)
+
     holidays_cursor = db.holidays.find({
         "date": {"$gte": start_date, "$lte": end_date}
     }, {"_id": 0})
