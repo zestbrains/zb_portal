@@ -4864,6 +4864,13 @@ async def get_attendance(year: int, month: int, user: dict = Depends(require_rol
     # 1. Get all holidays for this month
     start_date = f"{year}-{month:02d}-01"
     end_date = f"{year}-{month:02d}-{num_days:02d}"
+
+    # Also include ex-employees whose last_working_date falls in this month
+    ex_employees = await db.employees.find({
+        "status": "ex-employee",
+        "last_working_date": {"$gte": start_date, "$lte": end_date}
+    }, {"_id": 0}).sort("name", 1).to_list(None)
+    employees.extend(ex_employees)
     holidays_cursor = db.holidays.find({
         "date": {"$gte": start_date, "$lte": end_date}
     }, {"_id": 0})
@@ -4931,6 +4938,19 @@ async def get_attendance(year: int, month: int, user: dict = Depends(require_rol
             except:
                 emp_joining_date = None
         
+        # Get last working date for ex-employees
+        last_working_date_str = emp.get("last_working_date", "")
+        emp_last_working_day = None
+        if last_working_date_str and emp.get("status") == "ex-employee":
+            try:
+                lwd = datetime.fromisoformat(last_working_date_str.replace('Z', '+00:00'))
+                if lwd.tzinfo is not None:
+                    lwd = lwd.replace(tzinfo=None)
+                if lwd.year == year and lwd.month == month:
+                    emp_last_working_day = lwd.day
+            except:
+                pass
+        
         for day in dates:
             date_str = f"{year}-{month:02d}-{day:02d}"
             current_date = datetime(year, month, day)
@@ -4944,6 +4964,11 @@ async def get_attendance(year: int, month: int, user: dict = Depends(require_rol
             if emp_joining_date and current_date < emp_joining_date:
                 is_before_joining = True
             
+            # Check if employee has left (after last working date)
+            is_after_leaving = False
+            if emp_last_working_day and day > emp_last_working_day:
+                is_after_leaving = True
+            
             # Check for future dates
             is_future_date = False
             if is_current_month:
@@ -4954,6 +4979,9 @@ async def get_attendance(year: int, month: int, user: dict = Depends(require_rol
             # If date is before employee's joining date, mark as "NJ" (Not Joined)
             if is_before_joining:
                 attendance[emp_id][day] = "NJ"
+            # If date is after employee's last working date, mark as "L" (Left)
+            elif is_after_leaving:
+                attendance[emp_id][day] = "L"
             # Check if employee has leave on this date
             elif emp_id in leave_map and date_str in leave_map[emp_id]:
                 attendance[emp_id][day] = leave_map[emp_id][date_str]
