@@ -3933,6 +3933,7 @@ async def import_leaves(file: UploadFile = File(...), user: dict = Depends(requi
                 "created_at": now,
                 "updated_at": now
             }
+            # await db.leave_records.insert_one(leave_record)
             await db.leave_records.update_one(
                 {"employee_id": row["employee_id"].strip(), "date": date_str, "leave_type": leave_type},
                 {"$set": leave_record, "$setOnInsert": {"id": record_id}},
