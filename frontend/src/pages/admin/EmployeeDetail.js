@@ -24,7 +24,7 @@ const LETTER_TYPES = [
 const LETTER_FIELDS = {
   offer_letter: [
     { key: 'letter_date', label: 'Letter Date', type: 'date', required: true },
-    { key: 'ref_no', label: 'Reference No.', type: 'text' },
+    { key: 'salutation', label: 'Salutation', type: 'select', options: ['Mr', 'Miss', 'Mrs'], required: true },
     { key: 'designation', label: 'Designation Offered', type: 'text', required: true },
     { key: 'department', label: 'Department', type: 'text', required: true },
     { key: 'offered_salary', label: 'Monthly CTC Offered (Rs.)', type: 'number', required: true },
@@ -34,7 +34,7 @@ const LETTER_FIELDS = {
   ],
   appointment_letter: [
     { key: 'letter_date', label: 'Letter Date', type: 'date', required: true },
-    { key: 'ref_no', label: 'Reference No.', type: 'text' },
+    { key: 'salutation', label: 'Salutation', type: 'select', options: ['Mr', 'Miss', 'Mrs'], required: true },
     { key: 'designation', label: 'Designation', type: 'text', required: true },
     { key: 'department', label: 'Department', type: 'text', required: true },
     { key: 'salary', label: 'Monthly CTC (Rs.)', type: 'number', required: true },
@@ -45,7 +45,7 @@ const LETTER_FIELDS = {
   ],
   experience_letter: [
     { key: 'letter_date', label: 'Letter Date', type: 'date', required: true },
-    { key: 'ref_no', label: 'Reference No.', type: 'text' },
+    { key: 'salutation', label: 'Salutation', type: 'select', options: ['Mr', 'Miss', 'Mrs'], required: true },
     { key: 'designation', label: 'Designation Held', type: 'text', required: true },
     { key: 'joining_date', label: 'Joining Date', type: 'date', required: true },
     { key: 'last_working_date', label: 'Last Working Date', type: 'date', required: true },
@@ -53,14 +53,14 @@ const LETTER_FIELDS = {
   ],
   relieving_letter: [
     { key: 'letter_date', label: 'Letter Date', type: 'date', required: true },
-    { key: 'ref_no', label: 'Reference No.', type: 'text' },
+    { key: 'salutation', label: 'Salutation', type: 'select', options: ['Mr', 'Miss', 'Mrs'], required: true },
     { key: 'designation', label: 'Designation', type: 'text', required: true },
     { key: 'joining_date', label: 'Joining Date', type: 'date', required: true },
     { key: 'last_working_date', label: 'Last Working Date', type: 'date', required: true },
   ],
   internship_appointment: [
     { key: 'letter_date', label: 'Letter Date', type: 'date', required: true },
-    { key: 'ref_no', label: 'Reference No.', type: 'text' },
+    { key: 'salutation', label: 'Salutation', type: 'select', options: ['Mr', 'Miss', 'Mrs'], required: true },
     { key: 'department', label: 'Department', type: 'text', required: true },
     { key: 'internship_duration', label: 'Duration (e.g. 3 Months)', type: 'text', required: true },
     { key: 'start_date', label: 'Start Date', type: 'date', required: true },
@@ -71,7 +71,7 @@ const LETTER_FIELDS = {
   ],
   internship_completion: [
     { key: 'letter_date', label: 'Letter Date', type: 'date', required: true },
-    { key: 'ref_no', label: 'Reference No.', type: 'text' },
+    { key: 'salutation', label: 'Salutation', type: 'select', options: ['Mr', 'Miss', 'Mrs'], required: true },
     { key: 'department', label: 'Department', type: 'text', required: true },
     { key: 'start_date', label: 'Internship Start Date', type: 'date', required: true },
     { key: 'end_date', label: 'Internship End Date', type: 'date', required: true },
@@ -80,7 +80,7 @@ const LETTER_FIELDS = {
   ],
   increment_letter: [
     { key: 'letter_date', label: 'Letter Date', type: 'date', required: true },
-    { key: 'ref_no', label: 'Reference No.', type: 'text' },
+    { key: 'salutation', label: 'Salutation', type: 'select', options: ['Mr', 'Miss', 'Mrs'], required: true },
     { key: 'designation', label: 'Current Designation', type: 'text', required: true },
     { key: 'new_designation', label: 'New Designation (if changed)', type: 'text' },
     { key: 'old_salary', label: 'Previous Monthly CTC (Rs.)', type: 'number', required: true },
@@ -468,6 +468,18 @@ export default function EmployeeDetail({ user, onLogout }) {
                       onChange={e => setFormInputs({ ...formInputs, [field.key]: e.target.value })}
                       data-testid={`input-${field.key}`}
                     />
+                  ) : field.type === 'select' ? (
+                    <select
+                      className="flex w-full rounded-md border border-slate-200 bg-white px-3 py-2 text-sm mt-1 h-9"
+                      value={formInputs[field.key] || ''}
+                      onChange={e => setFormInputs({ ...formInputs, [field.key]: e.target.value })}
+                      data-testid={`input-${field.key}`}
+                    >
+                      <option value="">Select {field.label}</option>
+                      {(field.options || []).map(opt => (
+                        <option key={opt} value={opt}>{opt}</option>
+                      ))}
+                    </select>
                   ) : (
                     <Input
                       type={field.type}

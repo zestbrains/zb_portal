@@ -75,11 +75,9 @@ class LetterPDF(FPDF):
         self._f("B", FONT_BODY)
         self.cell(0, LH, "Authorised Signatory", new_x="LMARGIN", new_y="NEXT")
 
-    def write_date(self, date_str, ref_no=""):
+    def write_date(self, date_str):
         self._f("", FONT_SMALL)
         self.cell(0, LH, f"Date: {date_str}", new_x="LMARGIN", new_y="NEXT")
-        if ref_no:
-            self.cell(0, LH, f"Ref: {ref_no}", new_x="LMARGIN", new_y="NEXT")
         self.ln(3)
 
     def write_title(self, title):
@@ -90,11 +88,11 @@ class LetterPDF(FPDF):
         self.line(cx, self.get_y(), cx + tw, self.get_y())
         self.ln(5)
 
-    def write_to(self, name):
+    def write_to(self, name, salutation="Mr"):
         self._f("", FONT_BODY)
         self.cell(0, LH, "To,", new_x="LMARGIN", new_y="NEXT")
         self._f("B", FONT_BODY)
-        self.cell(0, LH, f"Mr./Ms. {name}", new_x="LMARGIN", new_y="NEXT")
+        self.cell(0, LH, f"{salutation}. {name}", new_x="LMARGIN", new_y="NEXT")
         self.ln(3)
 
     def write_subject(self, subject):
@@ -148,9 +146,9 @@ def generate_offer_letter(employee, inputs):
     pdf = LetterPDF()
     pdf.add_page()
     name = employee.get("name", "")
-    pdf.write_date(_fmt_date(inputs.get("letter_date", "")), inputs.get("ref_no", ""))
+    pdf.write_date(_fmt_date(inputs.get("letter_date", "")))
     pdf.write_title("OFFER LETTER")
-    pdf.write_to(name)
+    pdf.write_to(name, inputs.get("salutation", "Mr"))
     pdf.write_subject(f"Offer of Employment - {inputs.get('designation', '')}")
     pdf.write_salutation(name)
     pdf.write_body(
@@ -187,9 +185,9 @@ def generate_appointment_letter(employee, inputs):
     pdf = LetterPDF()
     pdf.add_page()
     name = employee.get("name", "")
-    pdf.write_date(_fmt_date(inputs.get("letter_date", "")), inputs.get("ref_no", ""))
+    pdf.write_date(_fmt_date(inputs.get("letter_date", "")))
     pdf.write_title("APPOINTMENT LETTER")
-    pdf.write_to(name)
+    pdf.write_to(name, inputs.get("salutation", "Mr"))
     pdf.write_subject(f"Appointment as {inputs.get('designation', '')}")
     pdf.write_salutation(name)
     pdf.write_body(
@@ -225,26 +223,27 @@ def generate_experience_letter(employee, inputs):
     pdf = LetterPDF()
     pdf.add_page()
     name = employee.get("name", "")
-    pdf.write_date(_fmt_date(inputs.get("letter_date", "")), inputs.get("ref_no", ""))
+    sal = f"{inputs.get('salutation', 'Mr')}."
+    pdf.write_date(_fmt_date(inputs.get("letter_date", "")))
     pdf.write_title("EXPERIENCE LETTER")
     pdf._f("", 9)
     pdf.cell(0, 4.5, "To Whom It May Concern,", new_x="LMARGIN", new_y="NEXT")
     pdf.ln(3)
     pdf.write_body(
-        f"This is to certify that Mr./Ms. {name} (Employee ID: {employee.get('employee_id', '')}) "
+        f"This is to certify that {sal} {name} (Employee ID: {employee.get('employee_id', '')}) "
         f"was employed with Zestbrains Pvt. Ltd. as {inputs.get('designation', '')} "
         f"from {_fmt_date(inputs.get('joining_date', ''))} to {_fmt_date(inputs.get('last_working_date', ''))}."
     )
     perf = inputs.get('performance_note', 'Their conduct and performance were satisfactory throughout the tenure.')
     pdf.write_body(
-        f"During the tenure with us, we found Mr./Ms. {name} to be sincere, dedicated, "
+        f"During the tenure with us, we found {sal} {name} to be sincere, dedicated, "
         f"and hardworking. {perf}"
     )
     pdf.write_body(
-        f"Mr./Ms. {name} has been relieved from duties on {_fmt_date(inputs.get('last_working_date', ''))} "
+        f"{sal} {name} has been relieved from duties on {_fmt_date(inputs.get('last_working_date', ''))} "
         f"and has no dues or liabilities with the company."
     )
-    pdf.write_closing(f"We wish Mr./Ms. {name} all the best in future endeavours.")
+    pdf.write_closing(f"We wish {sal} {name} all the best in future endeavours.")
     pdf.add_signature()
     return pdf
 
@@ -253,9 +252,9 @@ def generate_relieving_letter(employee, inputs):
     pdf = LetterPDF()
     pdf.add_page()
     name = employee.get("name", "")
-    pdf.write_date(_fmt_date(inputs.get("letter_date", "")), inputs.get("ref_no", ""))
+    pdf.write_date(_fmt_date(inputs.get("letter_date", "")))
     pdf.write_title("RELIEVING LETTER")
-    pdf.write_to(name)
+    pdf.write_to(name, inputs.get("salutation", "Mr"))
     pdf.write_subject("Relieving from Services")
     pdf.write_salutation(name)
     pdf.write_body(
@@ -283,9 +282,9 @@ def generate_internship_appointment_letter(employee, inputs):
     pdf = LetterPDF()
     pdf.add_page()
     name = employee.get("name", "")
-    pdf.write_date(_fmt_date(inputs.get("letter_date", "")), inputs.get("ref_no", ""))
+    pdf.write_date(_fmt_date(inputs.get("letter_date", "")))
     pdf.write_title("INTERNSHIP APPOINTMENT LETTER")
-    pdf.write_to(name)
+    pdf.write_to(name, inputs.get("salutation", "Mr"))
     pdf.write_subject("Internship Appointment")
     pdf.write_salutation(name)
     pdf.write_body(
@@ -314,13 +313,14 @@ def generate_internship_completion_letter(employee, inputs):
     pdf = LetterPDF()
     pdf.add_page()
     name = employee.get("name", "")
-    pdf.write_date(_fmt_date(inputs.get("letter_date", "")), inputs.get("ref_no", ""))
+    sal = f"{inputs.get('salutation', 'Mr')}."
+    pdf.write_date(_fmt_date(inputs.get("letter_date", "")))
     pdf.write_title("INTERNSHIP COMPLETION CERTIFICATE")
     pdf._f("", 9)
     pdf.cell(0, 4.5, "To Whom It May Concern,", new_x="LMARGIN", new_y="NEXT")
     pdf.ln(3)
     pdf.write_body(
-        f"This is to certify that Mr./Ms. {name} has successfully completed an internship "
+        f"This is to certify that {sal} {name} has successfully completed an internship "
         f"at Zestbrains Pvt. Ltd. in the {inputs.get('department', '')} department."
     )
     pdf.write_body(
@@ -328,10 +328,10 @@ def generate_internship_completion_letter(employee, inputs):
         f"to {_fmt_date(inputs.get('end_date', ''))}."
     )
     pdf.write_body(
-        f"During the internship, Mr./Ms. {name} worked on {inputs.get('project_details', 'various projects')} "
+        f"During the internship, {sal} {name} worked on {inputs.get('project_details', 'various projects')} "
         f"and demonstrated {inputs.get('performance_note', 'good technical skills and a keen ability to learn')}."
     )
-    pdf.write_closing(f"We wish Mr./Ms. {name} all the best in future academic and professional endeavours.")
+    pdf.write_closing(f"We wish {sal} {name} all the best in future academic and professional endeavours.")
     pdf.add_signature()
     return pdf
 
@@ -340,9 +340,9 @@ def generate_increment_letter(employee, inputs):
     pdf = LetterPDF()
     pdf.add_page()
     name = employee.get("name", "")
-    pdf.write_date(_fmt_date(inputs.get("letter_date", "")), inputs.get("ref_no", ""))
+    pdf.write_date(_fmt_date(inputs.get("letter_date", "")))
     pdf.write_title("INCREMENT LETTER")
-    pdf.write_to(name)
+    pdf.write_to(name, inputs.get("salutation", "Mr"))
     pdf.write_subject("Revision of Salary")
     pdf.write_salutation(name)
     pdf.write_body(
