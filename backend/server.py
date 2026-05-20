@@ -3683,7 +3683,6 @@ async def approve_leave(leave_id: str, approval: LeaveApproval, user: dict = Dep
                     # Create PL record (0.5)
                     pl_record_id = str(uuid.uuid4())
                     pl_record = {
-                        "id": pl_record_id,
                         "employee_id": leave_app["employee_id"],
                         "date": leave_date.date,
                         "leave_type": "PL",
