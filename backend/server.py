@@ -2926,6 +2926,20 @@ async def update_leave_application(leave_id: str, leave_update: LeaveApplication
     to_date = datetime.fromisoformat(leave_update.to_date)
     days_count = (to_date - from_date).days + 1
     
+    # Regenerate leave_dates_input for the new date range
+    new_leave_dates_input = []
+    current = from_date
+    while current <= to_date:
+        new_leave_dates_input.append({
+            "date": current.strftime("%Y-%m-%d"),
+            "day_type": "full"
+        })
+        current += timedelta(days=1)
+    
+    # If employee provided specific half-day info, use that instead
+    if hasattr(leave_update, 'leave_dates_input') and leave_update.leave_dates_input:
+        new_leave_dates_input = [ld.dict() if hasattr(ld, 'dict') else ld for ld in leave_update.leave_dates_input]
+    
     now = get_ist_now_iso()
     
     await db.leave_applications.update_one(
@@ -2935,6 +2949,7 @@ async def update_leave_application(leave_id: str, leave_update: LeaveApplication
             "to_date": leave_update.to_date,
             "reason": leave_update.reason,
             "days_count": days_count,
+            "leave_dates_input": new_leave_dates_input,
             "updated_at": now
         }}
     )
