@@ -4790,12 +4790,26 @@ logging.basicConfig(
 class BankCreate(BaseModel):
     name: str
     account_number: Optional[str] = ""
+    pancard: Optional[str] = ""
+    gst: Optional[str] = ""
+    address: Optional[str] = ""
+    ifsc: Optional[str] = ""
+    swift_code: Optional[str] = ""
+    account_holder: Optional[str] = ""
+    bank_name: Optional[str] = ""
 
 class Bank(BaseModel):
     model_config = ConfigDict(extra="ignore")
     id: str
     name: str
     account_number: Optional[str] = ""
+    pancard: Optional[str] = ""
+    gst: Optional[str] = ""
+    address: Optional[str] = ""
+    ifsc: Optional[str] = ""
+    swift_code: Optional[str] = ""
+    account_holder: Optional[str] = ""
+    bank_name: Optional[str] = ""
     is_active: bool = True
     created_at: str
     updated_at: str
@@ -4820,6 +4834,13 @@ async def create_bank(bank: BankCreate, user: dict = Depends(require_role(["admi
         "id": str(uuid.uuid4()),
         "name": bank.name.strip(),
         "account_number": bank.account_number.strip() if bank.account_number else "",
+        "pancard": bank.pancard.strip() if bank.pancard else "",
+        "gst": bank.gst.strip() if bank.gst else "",
+        "address": bank.address.strip() if bank.address else "",
+        "ifsc": bank.ifsc.strip() if bank.ifsc else "",
+        "swift_code": bank.swift_code.strip() if bank.swift_code else "",
+        "account_holder": bank.account_holder.strip() if bank.account_holder else "",
+        "bank_name": bank.bank_name.strip() if bank.bank_name else "",
         "is_active": True,
         "created_at": get_ist_now_iso(),
         "updated_at": get_ist_now_iso()
@@ -4847,6 +4868,13 @@ async def update_bank(bank_id: str, bank: BankCreate, user: dict = Depends(requi
         {"$set": {
             "name": bank.name.strip(),
             "account_number": bank.account_number.strip() if bank.account_number else "",
+            "pancard": bank.pancard.strip() if bank.pancard else "",
+            "gst": bank.gst.strip() if bank.gst else "",
+            "address": bank.address.strip() if bank.address else "",
+            "ifsc": bank.ifsc.strip() if bank.ifsc else "",
+            "swift_code": bank.swift_code.strip() if bank.swift_code else "",
+            "account_holder": bank.account_holder.strip() if bank.account_holder else "",
+            "bank_name": bank.bank_name.strip() if bank.bank_name else "",
             "updated_at": get_ist_now_iso()
         }}
     )

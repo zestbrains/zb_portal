@@ -34,7 +34,7 @@ export default function Banks({ user, onLogout }) {
   const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
   const [editingBank, setEditingBank] = useState(null);
   const [deletingBank, setDeletingBank] = useState(null);
-  const [formData, setFormData] = useState({ name: '', account_number: '' });
+  const [formData, setFormData] = useState({ name: '', account_number: '', pancard: '', gst: '', address: '', ifsc: '', swift_code: '', account_holder: '', bank_name: '' });
 
   useEffect(() => {
     fetchBanks();
@@ -87,7 +87,7 @@ export default function Banks({ user, onLogout }) {
           'Content-Type': 'application/json',
           Authorization: `Bearer ${token}`
         },
-        body: JSON.stringify({ name: formData.name.trim(), account_number: formData.account_number.trim() })
+        body: JSON.stringify(formData)
       });
 
       if (!response.ok) {
@@ -97,7 +97,7 @@ export default function Banks({ user, onLogout }) {
 
       toast.success(editingBank ? 'Bank updated successfully' : 'Bank created successfully');
       setIsDialogOpen(false);
-      setFormData({ name: '', account_number: '' });
+      setFormData({ name: '', account_number: '', pancard: '', gst: '', address: '', ifsc: '', swift_code: '', account_holder: '', bank_name: '' });
       setEditingBank(null);
       fetchBanks();
     } catch (error) {
@@ -109,7 +109,17 @@ export default function Banks({ user, onLogout }) {
 
   const handleEdit = (bank) => {
     setEditingBank(bank);
-    setFormData({ name: bank.name, account_number: bank.account_number || '' });
+    setFormData({
+      name: bank.name,
+      account_number: bank.account_number || '',
+      pancard: bank.pancard || '',
+      gst: bank.gst || '',
+      address: bank.address || '',
+      ifsc: bank.ifsc || '',
+      swift_code: bank.swift_code || '',
+      account_holder: bank.account_holder || '',
+      bank_name: bank.bank_name || ''
+    });
     setIsDialogOpen(true);
   };
 
@@ -156,7 +166,7 @@ export default function Banks({ user, onLogout }) {
 
   const openAddDialog = () => {
     setEditingBank(null);
-    setFormData({ name: '', account_number: '' });
+    setFormData({ name: '', account_number: '', pancard: '', gst: '', address: '', ifsc: '', swift_code: '', account_holder: '', bank_name: '' });
     setIsDialogOpen(true);
   };
 
@@ -318,26 +328,50 @@ export default function Banks({ user, onLogout }) {
             <DialogTitle>{editingBank ? 'Edit Bank' : 'Add New Bank'}</DialogTitle>
           </DialogHeader>
           <form onSubmit={handleSubmit}>
-            <div className="space-y-4 py-4">
-              <div className="space-y-2">
-                <Label htmlFor="name">Bank Name *</Label>
-                <Input
-                  id="name"
-                  placeholder="Enter bank name"
-                  value={formData.name}
-                  onChange={(e) => setFormData({ ...formData, name: e.target.value })}
-                  required
-                  autoFocus
-                />
+            <div className="space-y-4 py-4 max-h-[60vh] overflow-y-auto">
+              <div className="grid grid-cols-2 gap-4">
+                <div className="space-y-2">
+                  <Label htmlFor="name">Company/Label Name *</Label>
+                  <Input id="name" placeholder="e.g. Zestbrains Pvt Ltd" value={formData.name} onChange={(e) => setFormData({ ...formData, name: e.target.value })} required autoFocus />
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="bank_name">Bank Name</Label>
+                  <Input id="bank_name" placeholder="e.g. ICICI Bank" value={formData.bank_name} onChange={(e) => setFormData({ ...formData, bank_name: e.target.value })} />
+                </div>
+              </div>
+              <div className="grid grid-cols-2 gap-4">
+                <div className="space-y-2">
+                  <Label htmlFor="account_number">Account Number</Label>
+                  <Input id="account_number" placeholder="Enter account number" value={formData.account_number} onChange={(e) => setFormData({ ...formData, account_number: e.target.value })} />
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="account_holder">A/c Holder</Label>
+                  <Input id="account_holder" placeholder="Account holder name" value={formData.account_holder} onChange={(e) => setFormData({ ...formData, account_holder: e.target.value })} />
+                </div>
+              </div>
+              <div className="grid grid-cols-2 gap-4">
+                <div className="space-y-2">
+                  <Label htmlFor="ifsc">IFSC Code</Label>
+                  <Input id="ifsc" placeholder="e.g. ICIC0001234" value={formData.ifsc} onChange={(e) => setFormData({ ...formData, ifsc: e.target.value })} />
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="swift_code">Swift Code</Label>
+                  <Input id="swift_code" placeholder="e.g. ICICINBBXXX" value={formData.swift_code} onChange={(e) => setFormData({ ...formData, swift_code: e.target.value })} />
+                </div>
+              </div>
+              <div className="grid grid-cols-2 gap-4">
+                <div className="space-y-2">
+                  <Label htmlFor="pancard">PAN Card</Label>
+                  <Input id="pancard" placeholder="e.g. ABCDE1234F" value={formData.pancard} onChange={(e) => setFormData({ ...formData, pancard: e.target.value })} />
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="gst">GST Number</Label>
+                  <Input id="gst" placeholder="e.g. 24ABCDE1234F1Z5" value={formData.gst} onChange={(e) => setFormData({ ...formData, gst: e.target.value })} />
+                </div>
               </div>
               <div className="space-y-2">
-                <Label htmlFor="account_number">Account Number</Label>
-                <Input
-                  id="account_number"
-                  placeholder="Enter account number"
-                  value={formData.account_number}
-                  onChange={(e) => setFormData({ ...formData, account_number: e.target.value })}
-                />
+                <Label htmlFor="address">Address</Label>
+                <Input id="address" placeholder="Bank/Company address" value={formData.address} onChange={(e) => setFormData({ ...formData, address: e.target.value })} />
               </div>
             </div>
             <DialogFooter>
@@ -347,7 +381,7 @@ export default function Banks({ user, onLogout }) {
                 onClick={() => {
                   setIsDialogOpen(false);
                   setEditingBank(null);
-                  setFormData({ name: '', account_number: '' });
+                  setFormData({ name: '', account_number: '', pancard: '', gst: '', address: '', ifsc: '', swift_code: '', account_holder: '', bank_name: '' });
                 }}
               >
                 Cancel
