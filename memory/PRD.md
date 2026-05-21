@@ -15,4 +15,4 @@ HR Management Portal for Zestbrains
 - Username: renish / Password: Zb@0075588
 
 ## URL
-https://admin-leave-module.preview.emergentagent.com
+https://zb-invoicing.preview.emergentagent.com
