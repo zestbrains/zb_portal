@@ -1,0 +1,525 @@
+import { useState, useEffect, useCallback } from 'react';
+import Layout from '../../components/layout/Layout';
+import { Button } from '../../components/ui/button';
+import { Input } from '../../components/ui/input';
+import { Label } from '../../components/ui/label';
+import { Plus, Edit2, Trash2, Search, X, FileText, Download } from 'lucide-react';
+import {
+  Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter,
+} from '../../components/ui/dialog';
+import {
+  AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
+  AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
+} from '../../components/ui/alert-dialog';
+import { Tabs, TabsList, TabsTrigger, TabsContent } from '../../components/ui/tabs';
+import {
+  Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
+} from '../../components/ui/select';
+import { toast } from 'sonner';
+
+const API_URL = process.env.REACT_APP_BACKEND_URL || '';
+
+const blankItem = () => ({
+  item: '', description: '', quantity: 1, amount: 0, currency: 'USD', sac: '', tax_percent: 0,
+});
+
+const emptyForm = (type = 'export') => ({
+  type,
+  invoice_date: new Date().toISOString().slice(0, 10),
+  country_of_origin: 'India',
+  bank_id: '',
+  client_id: '',
+  items: [blankItem()],
+  notes: '',
+  discount: 0,
+  tax_mode: 'cgst_sgst',
+  cgst_amount: 0,
+  sgst_amount: 0,
+  igst_amount: 0,
+  status: 'draft',
+});
+
+export default function Invoices({ user, onLogout }) {
+  const [activeTab, setActiveTab] = useState('export');
+  const [invoices, setInvoices] = useState([]);
+  const [banks, setBanks] = useState([]);
+  const [clients, setClients] = useState([]);
+  const [searchTerm, setSearchTerm] = useState('');
+  const [loading, setLoading] = useState(false);
+  const [isDialogOpen, setIsDialogOpen] = useState(false);
+  const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
+  const [editingInvoice, setEditingInvoice] = useState(null);
+  const [deletingInvoice, setDeletingInvoice] = useState(null);
+  const [formData, setFormData] = useState(emptyForm('export'));
+  const [nextNumber, setNextNumber] = useState('');
+
+  const fetchAll = useCallback(async () => {
+    try {
+      setLoading(true);
+      const token = localStorage.getItem('token');
+      const headers = { Authorization: `Bearer ${token}` };
+      const [iRes, bRes, cRes] = await Promise.all([
+        fetch(`${API_URL}/api/invoices`, { headers }),
+        fetch(`${API_URL}/api/banks`, { headers }),
+        fetch(`${API_URL}/api/clients`, { headers }),
+      ]);
+      setInvoices(iRes.ok ? await iRes.json() : []);
+      setBanks(bRes.ok ? await bRes.json() : []);
+      setClients(cRes.ok ? await cRes.json() : []);
+    } catch (e) {
+      toast.error('Failed to load data');
+    } finally { setLoading(false); }
+  }, []);
+
+  useEffect(() => { fetchAll(); }, [fetchAll]);
+
+  const fetchNextNumber = async (type, date) => {
+    const token = localStorage.getItem('token');
+    const res = await fetch(`${API_URL}/api/invoices/next-number?type=${type}&invoice_date=${date}`, {
+      headers: { Authorization: `Bearer ${token}` },
+    });
+    if (res.ok) {
+      const d = await res.json();
+      setNextNumber(d.invoice_number);
+    }
+  };
+
+  const filtered = invoices
+    .filter(i => i.type === activeTab)
+    .filter(i => {
+      if (!searchTerm) return true;
+      const q = searchTerm.toLowerCase();
+      const client = clients.find(c => c.id === i.client_id);
+      return (
+        (i.invoice_number || '').toLowerCase().includes(q) ||
+        (client?.name || '').toLowerCase().includes(q)
+      );
+    });
+
+  const openAdd = async () => {
+    setEditingInvoice(null);
+    const f = emptyForm(activeTab);
+    setFormData(f);
+    await fetchNextNumber(activeTab, f.invoice_date);
+    setIsDialogOpen(true);
+  };
+
+  const openEdit = (inv) => {
+    setEditingInvoice(inv);
+    setFormData({
+      type: inv.type,
+      invoice_date: inv.invoice_date,
+      country_of_origin: inv.country_of_origin || 'India',
+      bank_id: inv.bank_id,
+      client_id: inv.client_id,
+      items: inv.items?.length ? inv.items : [blankItem()],
+      notes: inv.notes || '',
+      discount: inv.discount || 0,
+      tax_mode: inv.tax_mode || 'cgst_sgst',
+      cgst_amount: inv.cgst_amount || 0,
+      sgst_amount: inv.sgst_amount || 0,
+      igst_amount: inv.igst_amount || 0,
+      status: inv.status || 'draft',
+    });
+    setNextNumber(inv.invoice_number);
+    setIsDialogOpen(true);
+  };
+
+  const updateItem = (idx, key, value) => {
+    const next = [...formData.items];
+    next[idx] = { ...next[idx], [key]: value };
+    setFormData({ ...formData, items: next });
+  };
+
+  const addItem = () => setFormData({ ...formData, items: [...formData.items, blankItem()] });
+  const removeItem = (idx) => setFormData({ ...formData, items: formData.items.filter((_, i) => i !== idx) });
+
+  const handleSubmit = async (e) => {
+    e.preventDefault();
+    if (!formData.bank_id) { toast.error('Please select "Billed By" (bank)'); return; }
+    if (!formData.client_id) { toast.error('Please select "Billed To" (client)'); return; }
+    if (!formData.items.length || !formData.items.some(it => it.item.trim())) {
+      toast.error('Please add at least one item'); return;
+    }
+
+    const payload = {
+      ...formData,
+      discount: parseFloat(formData.discount || 0),
+      cgst_amount: parseFloat(formData.cgst_amount || 0),
+      sgst_amount: parseFloat(formData.sgst_amount || 0),
+      igst_amount: parseFloat(formData.igst_amount || 0),
+      items: formData.items.map(it => ({
+        ...it,
+        quantity: parseFloat(it.quantity || 0),
+        amount: parseFloat(it.amount || 0),
+        tax_percent: parseFloat(it.tax_percent || 0),
+      })),
+    };
+
+    try {
+      setLoading(true);
+      const token = localStorage.getItem('token');
+      const url = editingInvoice ? `${API_URL}/api/invoices/${editingInvoice.id}` : `${API_URL}/api/invoices`;
+      const res = await fetch(url, {
+        method: editingInvoice ? 'PUT' : 'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+        body: JSON.stringify(payload),
+      });
+      if (!res.ok) {
+        const err = await res.json();
+        throw new Error(err.detail || 'Failed to save invoice');
+      }
+      toast.success(editingInvoice ? 'Invoice updated' : 'Invoice created');
+      setIsDialogOpen(false);
+      setEditingInvoice(null);
+      fetchAll();
+    } catch (e) { toast.error(e.message); }
+    finally { setLoading(false); }
+  };
+
+  const handleDelete = async () => {
+    if (!deletingInvoice) return;
+    try {
+      setLoading(true);
+      const token = localStorage.getItem('token');
+      const res = await fetch(`${API_URL}/api/invoices/${deletingInvoice.id}`, {
+        method: 'DELETE', headers: { Authorization: `Bearer ${token}` },
+      });
+      if (!res.ok) throw new Error('Failed to delete invoice');
+      toast.success('Invoice deleted');
+      setIsDeleteDialogOpen(false);
+      setDeletingInvoice(null);
+      fetchAll();
+    } catch (e) { toast.error(e.message); }
+    finally { setLoading(false); }
+  };
+
+  const downloadPdf = async (inv) => {
+    try {
+      const token = localStorage.getItem('token');
+      const res = await fetch(`${API_URL}/api/invoices/${inv.id}/pdf`, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      if (!res.ok) throw new Error('Failed to generate PDF');
+      const blob = await res.blob();
+      const url = URL.createObjectURL(blob);
+      window.open(url, '_blank');
+      setTimeout(() => URL.revokeObjectURL(url), 60000);
+    } catch (e) { toast.error(e.message); }
+  };
+
+  // Live totals
+  const isGst = formData.type === 'gst';
+  const subtotal = formData.items.reduce((s, it) => s + (parseFloat(it.quantity || 0) * parseFloat(it.amount || 0)), 0);
+  const totalTax = isGst ? formData.items.reduce((s, it) => s + (parseFloat(it.quantity || 0) * parseFloat(it.amount || 0)) * (parseFloat(it.tax_percent || 0) / 100), 0) : 0;
+  let cgst = parseFloat(formData.cgst_amount || 0);
+  let sgst = parseFloat(formData.sgst_amount || 0);
+  let igst = parseFloat(formData.igst_amount || 0);
+  if (isGst && (cgst + sgst + igst === 0) && totalTax > 0) {
+    if (formData.tax_mode === 'igst') { igst = totalTax; }
+    else { cgst = totalTax / 2; sgst = totalTax / 2; }
+  }
+  const discount = parseFloat(formData.discount || 0);
+  const grandTotal = subtotal + cgst + sgst + igst - discount;
+  const currency = formData.items.find(it => it.currency)?.currency || '';
+
+  return (
+    <Layout user={user} onLogout={onLogout}>
+      <div className="p-4 md:p-8 lg:p-10 max-w-7xl mx-auto space-y-6" data-testid="invoices-page">
+        <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
+          <div>
+            <h1 className="text-2xl md:text-3xl font-bold text-slate-900 tracking-tight">Invoices</h1>
+            <p className="text-slate-500 mt-1">Manage Export and GST invoices</p>
+          </div>
+          <Button onClick={openAdd} className="gap-2" data-testid="add-invoice-btn">
+            <Plus className="w-4 h-4" /> New Invoice
+          </Button>
+        </div>
+
+        <Tabs value={activeTab} onValueChange={(v) => setActiveTab(v)}>
+          <TabsList>
+            <TabsTrigger value="export" data-testid="tab-export">Export Invoices</TabsTrigger>
+            <TabsTrigger value="gst" data-testid="tab-gst">GST Invoices</TabsTrigger>
+          </TabsList>
+
+          <TabsContent value={activeTab} className="mt-6 space-y-4">
+            <div className="flex items-center gap-2 max-w-md">
+              <div className="relative flex-1">
+                <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-slate-400 w-4 h-4" />
+                <Input
+                  placeholder="Search by invoice no. or client..."
+                  value={searchTerm}
+                  onChange={(e) => setSearchTerm(e.target.value)}
+                  className="pl-10"
+                  data-testid="invoices-search-input"
+                />
+              </div>
+            </div>
+
+            <div className="bg-white rounded-lg border shadow-sm overflow-hidden">
+              <div className="overflow-x-auto">
+                <table className="w-full" data-testid="invoices-table">
+                  <thead className="bg-slate-50 border-b">
+                    <tr>
+                      <th className="px-6 py-3 text-left text-xs font-medium text-slate-500 uppercase tracking-wider">Invoice No</th>
+                      <th className="px-6 py-3 text-left text-xs font-medium text-slate-500 uppercase tracking-wider">Date</th>
+                      <th className="px-6 py-3 text-left text-xs font-medium text-slate-500 uppercase tracking-wider">Billed To</th>
+                      <th className="px-6 py-3 text-right text-xs font-medium text-slate-500 uppercase tracking-wider">Amount</th>
+                      <th className="px-6 py-3 text-left text-xs font-medium text-slate-500 uppercase tracking-wider">Status</th>
+                      <th className="px-6 py-3 text-right text-xs font-medium text-slate-500 uppercase tracking-wider">Actions</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-gray-200">
+                    {loading && invoices.length === 0 ? (
+                      <tr><td colSpan="6" className="px-6 py-8 text-center text-slate-500">Loading...</td></tr>
+                    ) : filtered.length === 0 ? (
+                      <tr><td colSpan="6" className="px-6 py-8 text-center text-slate-500">
+                        {searchTerm ? 'No invoices found' : 'No invoices yet'}
+                      </td></tr>
+                    ) : (
+                      filtered.map(inv => {
+                        const client = clients.find(c => c.id === inv.client_id);
+                        const itemSub = (inv.items || []).reduce((s, it) => s + (it.quantity || 0) * (it.amount || 0), 0);
+                        const tax = (inv.cgst_amount || 0) + (inv.sgst_amount || 0) + (inv.igst_amount || 0);
+                        const totalShown = itemSub + tax - (inv.discount || 0);
+                        const curr = (inv.items || []).find(it => it.currency)?.currency || '';
+                        return (
+                          <tr key={inv.id} className="hover:bg-slate-50" data-testid={`invoice-row-${inv.id}`}>
+                            <td className="px-6 py-4 font-mono text-sm font-semibold text-slate-900">{inv.invoice_number}</td>
+                            <td className="px-6 py-4 text-sm text-slate-600">
+                              {new Date(inv.invoice_date).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' })}
+                            </td>
+                            <td className="px-6 py-4 text-sm text-slate-700">{client?.name || '-'}</td>
+                            <td className="px-6 py-4 text-right text-sm font-semibold text-slate-900">
+                              {curr} {totalShown.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                            </td>
+                            <td className="px-6 py-4">
+                              <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${
+                                inv.status === 'paid' ? 'bg-green-100 text-green-800' :
+                                inv.status === 'sent' ? 'bg-blue-100 text-blue-800' :
+                                'bg-slate-100 text-slate-700'
+                              }`}>{inv.status || 'draft'}</span>
+                            </td>
+                            <td className="px-6 py-4 text-right">
+                              <div className="flex justify-end gap-2">
+                                <Button variant="ghost" size="sm" onClick={() => downloadPdf(inv)} className="text-emerald-600 hover:text-emerald-700" data-testid={`pdf-invoice-${inv.id}`}>
+                                  <FileText className="w-4 h-4" />
+                                </Button>
+                                <Button variant="ghost" size="sm" onClick={() => openEdit(inv)} className="text-blue-600 hover:text-blue-700" data-testid={`edit-invoice-${inv.id}`}>
+                                  <Edit2 className="w-4 h-4" />
+                                </Button>
+                                <Button variant="ghost" size="sm" onClick={() => { setDeletingInvoice(inv); setIsDeleteDialogOpen(true); }} className="text-red-600 hover:text-red-700" data-testid={`delete-invoice-${inv.id}`}>
+                                  <Trash2 className="w-4 h-4" />
+                                </Button>
+                              </div>
+                            </td>
+                          </tr>
+                        );
+                      })
+                    )}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          </TabsContent>
+        </Tabs>
+
+        {/* Add/Edit Dialog */}
+        <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
+          <DialogContent className="max-w-5xl">
+            <DialogHeader>
+              <DialogTitle>
+                {editingInvoice ? 'Edit Invoice' : 'New Invoice'} — <span className="font-mono text-blue-700">{nextNumber}</span>
+              </DialogTitle>
+            </DialogHeader>
+            <form onSubmit={handleSubmit}>
+              <div className="space-y-5 py-4 max-h-[70vh] overflow-y-auto pr-2">
+                <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                  <div className="space-y-2">
+                    <Label>Invoice Type</Label>
+                    <Select value={formData.type} onValueChange={(v) => { setFormData({ ...formData, type: v }); if (!editingInvoice) fetchNextNumber(v, formData.invoice_date); }} disabled={!!editingInvoice}>
+                      <SelectTrigger data-testid="invoice-type-select"><SelectValue /></SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="export">Export</SelectItem>
+                        <SelectItem value="gst">GST</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <div className="space-y-2">
+                    <Label>Invoice Date</Label>
+                    <Input type="date" value={formData.invoice_date} onChange={(e) => { setFormData({ ...formData, invoice_date: e.target.value }); if (!editingInvoice) fetchNextNumber(formData.type, e.target.value); }} data-testid="invoice-date-input" />
+                  </div>
+                  <div className="space-y-2">
+                    <Label>Country of Origin</Label>
+                    <Input value={formData.country_of_origin} onChange={(e) => setFormData({ ...formData, country_of_origin: e.target.value })} data-testid="country-of-origin-input" />
+                  </div>
+                  <div className="space-y-2">
+                    <Label>Status</Label>
+                    <Select value={formData.status} onValueChange={(v) => setFormData({ ...formData, status: v })}>
+                      <SelectTrigger data-testid="invoice-status-select"><SelectValue /></SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="draft">Draft</SelectItem>
+                        <SelectItem value="sent">Sent</SelectItem>
+                        <SelectItem value="paid">Paid</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div className="space-y-2">
+                    <Label>Billed By (Bank)</Label>
+                    <Select value={formData.bank_id} onValueChange={(v) => setFormData({ ...formData, bank_id: v })}>
+                      <SelectTrigger data-testid="bank-select"><SelectValue placeholder="Select bank..." /></SelectTrigger>
+                      <SelectContent>
+                        {banks.map(b => <SelectItem key={b.id} value={b.id}>{b.name}</SelectItem>)}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <div className="space-y-2">
+                    <Label>Billed To (Client)</Label>
+                    <Select value={formData.client_id} onValueChange={(v) => setFormData({ ...formData, client_id: v })}>
+                      <SelectTrigger data-testid="client-select"><SelectValue placeholder="Select client..." /></SelectTrigger>
+                      <SelectContent>
+                        {clients.map(c => <SelectItem key={c.id} value={c.id}>{c.name}</SelectItem>)}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                </div>
+
+                {/* Items */}
+                <div className="space-y-3 pt-2 border-t">
+                  <div className="flex justify-between items-center">
+                    <Label className="text-sm font-semibold">Items</Label>
+                    <Button type="button" variant="outline" size="sm" onClick={addItem} data-testid="add-item-btn">
+                      <Plus className="w-3 h-3 mr-1" /> Add Item
+                    </Button>
+                  </div>
+                  <div className="space-y-3">
+                    {formData.items.map((it, idx) => (
+                      <div key={idx} className="border rounded-md p-3 bg-slate-50 space-y-2" data-testid={`item-row-${idx}`}>
+                        <div className="grid grid-cols-12 gap-2">
+                          <div className="col-span-12 md:col-span-5">
+                            <Label className="text-xs">Item</Label>
+                            <Input placeholder="Item name" value={it.item} onChange={(e) => updateItem(idx, 'item', e.target.value)} />
+                          </div>
+                          <div className="col-span-6 md:col-span-2">
+                            <Label className="text-xs">SAC</Label>
+                            <Input placeholder="SAC code" value={it.sac} onChange={(e) => updateItem(idx, 'sac', e.target.value)} />
+                          </div>
+                          <div className="col-span-3 md:col-span-1">
+                            <Label className="text-xs">Qty</Label>
+                            <Input type="number" step="0.01" value={it.quantity} onChange={(e) => updateItem(idx, 'quantity', e.target.value)} />
+                          </div>
+                          <div className="col-span-3 md:col-span-2">
+                            <Label className="text-xs">Rate</Label>
+                            <Input type="number" step="0.01" value={it.amount} onChange={(e) => updateItem(idx, 'amount', e.target.value)} />
+                          </div>
+                          <div className="col-span-6 md:col-span-2">
+                            <Label className="text-xs">Currency</Label>
+                            <Input placeholder="USD" value={it.currency} onChange={(e) => updateItem(idx, 'currency', e.target.value)} />
+                          </div>
+                        </div>
+                        <div className="grid grid-cols-12 gap-2 items-end">
+                          <div className={isGst ? 'col-span-9 md:col-span-9' : 'col-span-11 md:col-span-11'}>
+                            <Label className="text-xs">Description</Label>
+                            <Input placeholder="Description" value={it.description} onChange={(e) => updateItem(idx, 'description', e.target.value)} />
+                          </div>
+                          {isGst && (
+                            <div className="col-span-2">
+                              <Label className="text-xs">Tax %</Label>
+                              <Input type="number" step="0.01" value={it.tax_percent} onChange={(e) => updateItem(idx, 'tax_percent', e.target.value)} />
+                            </div>
+                          )}
+                          <div className="col-span-1 flex justify-end">
+                            <Button type="button" variant="ghost" size="sm" onClick={() => removeItem(idx)} className="text-red-600">
+                              <X className="w-4 h-4" />
+                            </Button>
+                          </div>
+                        </div>
+                        <div className="text-right text-xs text-slate-600">
+                          Line Total: <span className="font-semibold text-slate-900">{it.currency} {((parseFloat(it.quantity || 0)) * (parseFloat(it.amount || 0))).toFixed(2)}</span>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+
+                {isGst && (
+                  <div className="grid grid-cols-1 md:grid-cols-4 gap-4 border-t pt-3">
+                    <div className="space-y-2">
+                      <Label>Tax Mode</Label>
+                      <Select value={formData.tax_mode} onValueChange={(v) => setFormData({ ...formData, tax_mode: v })}>
+                        <SelectTrigger><SelectValue /></SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="cgst_sgst">CGST + SGST (Intra-state)</SelectItem>
+                          <SelectItem value="igst">IGST (Inter-state)</SelectItem>
+                        </SelectContent>
+                      </Select>
+                    </div>
+                    <div className="space-y-2">
+                      <Label>CGST Amount (override)</Label>
+                      <Input type="number" step="0.01" value={formData.cgst_amount} onChange={(e) => setFormData({ ...formData, cgst_amount: e.target.value })} />
+                    </div>
+                    <div className="space-y-2">
+                      <Label>SGST Amount (override)</Label>
+                      <Input type="number" step="0.01" value={formData.sgst_amount} onChange={(e) => setFormData({ ...formData, sgst_amount: e.target.value })} />
+                    </div>
+                    <div className="space-y-2">
+                      <Label>IGST Amount (override)</Label>
+                      <Input type="number" step="0.01" value={formData.igst_amount} onChange={(e) => setFormData({ ...formData, igst_amount: e.target.value })} />
+                    </div>
+                  </div>
+                )}
+
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4 border-t pt-3">
+                  <div className="space-y-2">
+                    <Label>Notes</Label>
+                    <Input placeholder="Optional notes / payment terms" value={formData.notes} onChange={(e) => setFormData({ ...formData, notes: e.target.value })} />
+                  </div>
+                  <div className="space-y-2">
+                    <Label>Discount</Label>
+                    <Input type="number" step="0.01" value={formData.discount} onChange={(e) => setFormData({ ...formData, discount: e.target.value })} />
+                  </div>
+                </div>
+
+                {/* Summary */}
+                <div className="bg-slate-50 border rounded-lg p-4 ml-auto md:w-1/2 text-sm space-y-1">
+                  <div className="flex justify-between"><span>Subtotal</span><span className="font-semibold">{currency} {subtotal.toFixed(2)}</span></div>
+                  {isGst && cgst > 0 && <div className="flex justify-between"><span>CGST</span><span>{currency} {cgst.toFixed(2)}</span></div>}
+                  {isGst && sgst > 0 && <div className="flex justify-between"><span>SGST</span><span>{currency} {sgst.toFixed(2)}</span></div>}
+                  {isGst && igst > 0 && <div className="flex justify-between"><span>IGST</span><span>{currency} {igst.toFixed(2)}</span></div>}
+                  {discount > 0 && <div className="flex justify-between text-red-600"><span>Discount</span><span>- {currency} {discount.toFixed(2)}</span></div>}
+                  <div className="flex justify-between border-t pt-2 mt-2 text-base font-bold text-slate-900"><span>Grand Total</span><span>{currency} {grandTotal.toFixed(2)}</span></div>
+                </div>
+              </div>
+              <DialogFooter>
+                <Button type="button" variant="outline" onClick={() => { setIsDialogOpen(false); setEditingInvoice(null); }}>Cancel</Button>
+                <Button type="submit" disabled={loading} data-testid="save-invoice-btn">
+                  {loading ? 'Saving...' : editingInvoice ? 'Update Invoice' : 'Create Invoice'}
+                </Button>
+              </DialogFooter>
+            </form>
+          </DialogContent>
+        </Dialog>
+
+        <AlertDialog open={isDeleteDialogOpen} onOpenChange={setIsDeleteDialogOpen}>
+          <AlertDialogContent>
+            <AlertDialogHeader>
+              <AlertDialogTitle>Delete Invoice?</AlertDialogTitle>
+              <AlertDialogDescription>
+                This will permanently delete <strong>{deletingInvoice?.invoice_number}</strong>. This cannot be undone.
+              </AlertDialogDescription>
+            </AlertDialogHeader>
+            <AlertDialogFooter>
+              <AlertDialogCancel onClick={() => setDeletingInvoice(null)}>Cancel</AlertDialogCancel>
+              <AlertDialogAction onClick={handleDelete} className="bg-red-600 hover:bg-red-700" disabled={loading}>
+                {loading ? 'Deleting...' : 'Delete'}
+              </AlertDialogAction>
+            </AlertDialogFooter>
+          </AlertDialogContent>
+        </AlertDialog>
+      </div>
+    </Layout>
+  );
+}

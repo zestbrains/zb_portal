@@ -1,0 +1,58 @@
+{
+  "summary": "Tested Clients & Invoices modules end-to-end. All 20 backend pytest cases passed (100%). Frontend smoke tests for /admin/clients and /admin/invoices passed including dialog, dropdowns populated, invoice creation (Exp/001/2026-27), and PDF download (200, application/pdf, %PDF header).",
+  "backend_issues": {
+    "critical": [],
+    "minor": []
+  },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": []
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_clients_invoices.py",
+    "/app/test_reports/pytest/pytest_clients_invoices.xml"
+  ],
+  "action_items": [],
+  "critical_code_review_comments": [
+    "server.py is 7394 lines - significantly exceeds the 700-line guideline. Splitting into focused modules (clients_router.py, invoices_router.py, etc.) is highly recommended for maintainability.",
+    "Auth login response key 'token' is used by frontend but field name should be confirmed; minor inconsistency observed when scripting cleanup (was returned as 'Invalid token' on second login attempt - possibly token TTL or single-session). Not blocking."
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_clients_invoices.py (new file)"
+  ],
+  "success_rate": {
+    "backend": "100% (20/20 tests passed)",
+    "frontend": "100% (all UI smoke flows passed)"
+  },
+  "test_credentials": {
+    "admin": "renish / Zb@0075588"
+  },
+  "seed_data_creation": "Created TEST_Acme_Corp(_Updated), TEST_Invoice_Client clients + 3 invoices via pytest - all cleaned up in test_16. One UI_TEST_Client_<ts> + 1 Exp invoice still in DB from frontend smoke run (low priority; can be cleaned up by main agent if desired).",
+  "retest_needed": false,
+  "should_main_agent_self_test": false,
+  "context_for_next_testing_agent": "Backend route ordering is correct: /api/invoices/next-number is registered before /api/invoices/{id}. FY logic verified: Feb 2026 -> 2025-26, Apr 2026 -> 2026-27. Auto-increment per (type, FY) verified via count_documents pattern match. PDF generation works for both export & GST invoices. Frontend login page is at '/' (not '/login') - using '/login' results in blank screen since no route matches. Use REACT_APP_BACKEND_URL from /app/frontend/.env which is https://zb-invoicing.preview.emergentagent.com.",
+  "features_tested": {
+    "clients_list_create_update_delete": "PASS",
+    "clients_duplicate_name_400": "PASS",
+    "clients_extra_params_persistence": "PASS",
+    "clients_delete_blocked_when_in_use": "PASS (returns 400)",
+    "invoice_next_number_pre_april_fy": "PASS (Exp/001/2025-26)",
+    "invoice_next_number_post_april_fy": "PASS (Exp/001/2026-27)",
+    "invoice_next_number_gst": "PASS (GST/001/2026-27)",
+    "invoice_create_export_multi_item": "PASS",
+    "invoice_auto_increment_same_fy": "PASS (seq+1)",
+    "invoice_create_gst_with_tax_percent_cgst_sgst": "PASS",
+    "invoice_filter_by_type": "PASS",
+    "invoice_get_by_id": "PASS",
+    "invoice_pdf_download_export": "PASS (200, application/pdf, %PDF header)",
+    "invoice_pdf_download_gst": "PASS (200, %PDF header)",
+    "invoice_update_items_and_status": "PASS",
+    "invoice_validation_invalid_bank": "PASS (400)",
+    "invoice_validation_invalid_client": "PASS (400)",
+    "invoice_validation_empty_items": "PASS (400)",
+    "invoice_delete": "PASS",
+    "frontend_clients_page": "PASS - dialog opens, extra params added, client saved & visible in list",
+    "frontend_invoices_page": "PASS - Export/GST tabs visible, dialog opens, bank/client dropdowns populated (5 banks, 1 client), invoice created with Exp/001/2026-27 number, draft status, USD 200.00 total, PDF download returns valid PDF"
+  }
+}

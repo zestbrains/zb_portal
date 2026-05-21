@@ -15,6 +15,8 @@ import AdminManagement from './pages/admin/AdminManagement';
 import AdminHolidays from './pages/admin/Holidays';
 import AdminEmailSettings from './pages/admin/EmailSettings';
 import AdminBanks from './pages/admin/Banks';
+import AdminClients from './pages/admin/Clients';
+import AdminInvoices from './pages/admin/Invoices';
 import AdminAttendance from './pages/admin/Attendance';
 import AdminSalary from './pages/admin/Salary';
 import AdminLateMarks from './pages/admin/LateMarks';
@@ -107,6 +109,8 @@ function App() {
           <Route path="/admin/holidays" element={user?.role === 'admin' ? <AdminHolidays user={user} onLogout={handleLogout} /> : <Navigate to="/" />} />
           <Route path="/admin/email-settings" element={user?.role === 'admin' ? <AdminEmailSettings user={user} onLogout={handleLogout} /> : <Navigate to="/" />} />
           <Route path="/admin/banks" element={user?.role === 'admin' ? <AdminBanks user={user} onLogout={handleLogout} /> : <Navigate to="/" />} />
+          <Route path="/admin/clients" element={user?.role === 'admin' ? <AdminClients user={user} onLogout={handleLogout} /> : <Navigate to="/" />} />
+          <Route path="/admin/invoices" element={user?.role === 'admin' ? <AdminInvoices user={user} onLogout={handleLogout} /> : <Navigate to="/" />} />
           <Route path="/admin/attendance" element={user?.role === 'admin' ? <AdminAttendance user={user} onLogout={handleLogout} /> : <Navigate to="/" />} />
           <Route path="/admin/salary" element={user?.role === 'admin' ? <AdminSalary user={user} onLogout={handleLogout} /> : <Navigate to="/" />} />
           <Route path="/admin/late-marks" element={user?.role === 'admin' ? <AdminLateMarks user={user} onLogout={handleLogout} /> : <Navigate to="/" />} />

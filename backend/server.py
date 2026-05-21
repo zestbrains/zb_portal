@@ -7083,6 +7083,286 @@ async def delete_document(doc_id: str, user: dict = Depends(require_role(["admin
     return {"status": "deleted"}
 
 
+# ==================== CLIENTS MODULE ====================
+class ClientExtraParam(BaseModel):
+    key: str = ""
+    value: str = ""
+
+class ClientPayload(BaseModel):
+    name: str
+    address: Optional[str] = ""
+    country: Optional[str] = ""
+    city: Optional[str] = ""
+    pancard: Optional[str] = ""
+    gst: Optional[str] = ""
+    email: Optional[str] = ""
+    phone: Optional[str] = ""
+    extra_params: Optional[List[ClientExtraParam]] = []
+
+
+@api_router.get("/clients")
+async def list_clients(user: dict = Depends(require_role(["admin"]))):
+    items = await db.clients.find({}, {"_id": 0}).to_list(None)
+    items.sort(key=lambda x: (x.get("name") or "").lower())
+    return items
+
+
+@api_router.post("/clients")
+async def create_client(payload: ClientPayload, user: dict = Depends(require_role(["admin"]))):
+    if not payload.name.strip():
+        raise HTTPException(status_code=400, detail="Client name is required")
+    existing = await db.clients.find_one({"name": {"$regex": f"^{payload.name.strip()}$", "$options": "i"}})
+    if existing:
+        raise HTTPException(status_code=400, detail="Client with this name already exists")
+    doc = {
+        "id": str(uuid.uuid4()),
+        "name": payload.name.strip(),
+        "address": (payload.address or "").strip(),
+        "country": (payload.country or "").strip(),
+        "city": (payload.city or "").strip(),
+        "pancard": (payload.pancard or "").strip(),
+        "gst": (payload.gst or "").strip(),
+        "email": (payload.email or "").strip(),
+        "phone": (payload.phone or "").strip(),
+        "extra_params": [p.model_dump() for p in (payload.extra_params or [])],
+        "is_active": True,
+        "created_at": get_ist_now_iso(),
+        "updated_at": get_ist_now_iso(),
+    }
+    await db.clients.insert_one(doc)
+    doc.pop("_id", None)
+    return doc
+
+
+@api_router.put("/clients/{client_id}")
+async def update_client(client_id: str, payload: ClientPayload, user: dict = Depends(require_role(["admin"]))):
+    existing = await db.clients.find_one({"id": client_id})
+    if not existing:
+        raise HTTPException(status_code=404, detail="Client not found")
+    conflict = await db.clients.find_one({
+        "name": {"$regex": f"^{payload.name.strip()}$", "$options": "i"},
+        "id": {"$ne": client_id},
+    })
+    if conflict:
+        raise HTTPException(status_code=400, detail="Client with this name already exists")
+    await db.clients.update_one(
+        {"id": client_id},
+        {"$set": {
+            "name": payload.name.strip(),
+            "address": (payload.address or "").strip(),
+            "country": (payload.country or "").strip(),
+            "city": (payload.city or "").strip(),
+            "pancard": (payload.pancard or "").strip(),
+            "gst": (payload.gst or "").strip(),
+            "email": (payload.email or "").strip(),
+            "phone": (payload.phone or "").strip(),
+            "extra_params": [p.model_dump() for p in (payload.extra_params or [])],
+            "updated_at": get_ist_now_iso(),
+        }},
+    )
+    updated = await db.clients.find_one({"id": client_id}, {"_id": 0})
+    return updated
+
+
+@api_router.delete("/clients/{client_id}")
+async def delete_client(client_id: str, user: dict = Depends(require_role(["admin"]))):
+    # Prevent deletion if invoices reference this client
+    used = await db.invoices.find_one({"client_id": client_id})
+    if used:
+        raise HTTPException(status_code=400, detail="Cannot delete: client is used in invoices")
+    result = await db.clients.delete_one({"id": client_id})
+    if result.deleted_count == 0:
+        raise HTTPException(status_code=404, detail="Client not found")
+    return {"status": "deleted"}
+
+
+# ==================== INVOICES MODULE ====================
+class InvoiceItem(BaseModel):
+    item: str = ""
+    description: Optional[str] = ""
+    quantity: float = 0
+    amount: float = 0
+    currency: Optional[str] = ""
+    sac: Optional[str] = ""
+    tax_percent: Optional[float] = 0  # used only for GST
+
+class InvoicePayload(BaseModel):
+    type: str  # "export" or "gst"
+    invoice_date: str  # YYYY-MM-DD
+    country_of_origin: Optional[str] = "India"
+    bank_id: str
+    client_id: str
+    items: List[InvoiceItem] = []
+    notes: Optional[str] = ""
+    discount: Optional[float] = 0
+    # GST-specific
+    tax_mode: Optional[str] = "cgst_sgst"  # cgst_sgst | igst
+    cgst_amount: Optional[float] = 0
+    sgst_amount: Optional[float] = 0
+    igst_amount: Optional[float] = 0
+    status: Optional[str] = "draft"  # draft | sent | paid
+
+
+def _current_fy_label(date_str: Optional[str] = None) -> str:
+    """Indian FY label like '2026-27'. FY starts Apr 1."""
+    if date_str:
+        try:
+            dt = datetime.strptime(date_str.split("T")[0], "%Y-%m-%d")
+        except Exception:
+            dt = datetime.now(IST)
+    else:
+        dt = datetime.now(IST)
+    year = dt.year
+    if dt.month < 4:
+        start = year - 1
+    else:
+        start = year
+    end = (start + 1) % 100
+    return f"{start}-{end:02d}"
+
+
+async def _next_invoice_number(invoice_type: str, invoice_date: str) -> str:
+    prefix = "Exp" if invoice_type == "export" else "GST"
+    fy = _current_fy_label(invoice_date)
+    # Count existing invoices in same type & FY
+    pattern = f"^{prefix}/\\d+/{fy}$"
+    count = await db.invoices.count_documents({
+        "type": invoice_type,
+        "invoice_number": {"$regex": pattern},
+    })
+    seq = count + 1
+    return f"{prefix}/{seq:03d}/{fy}"
+
+
+@api_router.get("/invoices")
+async def list_invoices(
+    type: Optional[str] = None,
+    user: dict = Depends(require_role(["admin"])),
+):
+    query = {}
+    if type:
+        query["type"] = type
+    items = await db.invoices.find(query, {"_id": 0}).sort("created_at", -1).to_list(None)
+    return items
+
+
+@api_router.get("/invoices/next-number")
+async def get_next_invoice_number(
+    type: str,
+    invoice_date: Optional[str] = None,
+    user: dict = Depends(require_role(["admin"])),
+):
+    if type not in ("export", "gst"):
+        raise HTTPException(status_code=400, detail="Invalid invoice type")
+    return {"invoice_number": await _next_invoice_number(type, invoice_date or "")}
+
+
+@api_router.get("/invoices/{invoice_id}")
+async def get_invoice(invoice_id: str, user: dict = Depends(require_role(["admin"]))):
+    inv = await db.invoices.find_one({"id": invoice_id}, {"_id": 0})
+    if not inv:
+        raise HTTPException(status_code=404, detail="Invoice not found")
+    return inv
+
+
+@api_router.post("/invoices")
+async def create_invoice(payload: InvoicePayload, user: dict = Depends(require_role(["admin"]))):
+    if payload.type not in ("export", "gst"):
+        raise HTTPException(status_code=400, detail="Invoice type must be 'export' or 'gst'")
+    bank = await db.banks.find_one({"id": payload.bank_id}, {"_id": 0})
+    if not bank:
+        raise HTTPException(status_code=400, detail="Selected bank (Billed By) not found")
+    client = await db.clients.find_one({"id": payload.client_id}, {"_id": 0})
+    if not client:
+        raise HTTPException(status_code=400, detail="Selected client (Billed To) not found")
+    if not payload.items:
+        raise HTTPException(status_code=400, detail="At least one invoice item is required")
+
+    invoice_number = await _next_invoice_number(payload.type, payload.invoice_date)
+
+    doc = {
+        "id": str(uuid.uuid4()),
+        "invoice_number": invoice_number,
+        "type": payload.type,
+        "invoice_date": payload.invoice_date,
+        "country_of_origin": payload.country_of_origin or "India",
+        "bank_id": payload.bank_id,
+        "client_id": payload.client_id,
+        "items": [it.model_dump() for it in payload.items],
+        "notes": payload.notes or "",
+        "discount": float(payload.discount or 0),
+        "tax_mode": payload.tax_mode or "cgst_sgst",
+        "cgst_amount": float(payload.cgst_amount or 0),
+        "sgst_amount": float(payload.sgst_amount or 0),
+        "igst_amount": float(payload.igst_amount or 0),
+        "status": payload.status or "draft",
+        "created_at": get_ist_now_iso(),
+        "updated_at": get_ist_now_iso(),
+        "created_by": user.get("username", ""),
+    }
+    await db.invoices.insert_one(doc)
+    doc.pop("_id", None)
+    return doc
+
+
+@api_router.put("/invoices/{invoice_id}")
+async def update_invoice(invoice_id: str, payload: InvoicePayload, user: dict = Depends(require_role(["admin"]))):
+    existing = await db.invoices.find_one({"id": invoice_id})
+    if not existing:
+        raise HTTPException(status_code=404, detail="Invoice not found")
+    bank = await db.banks.find_one({"id": payload.bank_id}, {"_id": 0})
+    if not bank:
+        raise HTTPException(status_code=400, detail="Selected bank (Billed By) not found")
+    client = await db.clients.find_one({"id": payload.client_id}, {"_id": 0})
+    if not client:
+        raise HTTPException(status_code=400, detail="Selected client (Billed To) not found")
+
+    await db.invoices.update_one(
+        {"id": invoice_id},
+        {"$set": {
+            "invoice_date": payload.invoice_date,
+            "country_of_origin": payload.country_of_origin or "India",
+            "bank_id": payload.bank_id,
+            "client_id": payload.client_id,
+            "items": [it.model_dump() for it in payload.items],
+            "notes": payload.notes or "",
+            "discount": float(payload.discount or 0),
+            "tax_mode": payload.tax_mode or "cgst_sgst",
+            "cgst_amount": float(payload.cgst_amount or 0),
+            "sgst_amount": float(payload.sgst_amount or 0),
+            "igst_amount": float(payload.igst_amount or 0),
+            "status": payload.status or existing.get("status", "draft"),
+            "updated_at": get_ist_now_iso(),
+        }},
+    )
+    updated = await db.invoices.find_one({"id": invoice_id}, {"_id": 0})
+    return updated
+
+
+@api_router.delete("/invoices/{invoice_id}")
+async def delete_invoice(invoice_id: str, user: dict = Depends(require_role(["admin"]))):
+    result = await db.invoices.delete_one({"id": invoice_id})
+    if result.deleted_count == 0:
+        raise HTTPException(status_code=404, detail="Invoice not found")
+    return {"status": "deleted"}
+
+
+@api_router.get("/invoices/{invoice_id}/pdf")
+async def download_invoice_pdf(invoice_id: str, user: dict = Depends(require_role(["admin"]))):
+    inv = await db.invoices.find_one({"id": invoice_id}, {"_id": 0})
+    if not inv:
+        raise HTTPException(status_code=404, detail="Invoice not found")
+    bank = await db.banks.find_one({"id": inv.get("bank_id")}, {"_id": 0}) or {}
+    client = await db.clients.find_one({"id": inv.get("client_id")}, {"_id": 0}) or {}
+
+    from invoice_generator import generate_invoice_pdf
+    pdf_bytes = generate_invoice_pdf(inv, bank, client)
+    filename = f"{inv.get('invoice_number', 'invoice').replace('/', '_')}.pdf"
+    return StreamingResponse(
+        io.BytesIO(pdf_bytes),
+        media_type="application/pdf",
+        headers={"Content-Disposition": f'inline; filename="{filename}"'},
+    )
 
 
 

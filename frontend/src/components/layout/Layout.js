@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { Link, useLocation } from 'react-router-dom';
-import { LogOut, LayoutDashboard, Users, FolderKanban, Clock, Calendar, ChevronDown, ChevronRight, Menu, Settings, CalendarCheck, PartyPopper, IndianRupee, AlertTriangle } from 'lucide-react';
+import { LogOut, LayoutDashboard, Users, FolderKanban, Clock, Calendar, ChevronDown, ChevronRight, Menu, Settings, CalendarCheck, PartyPopper, IndianRupee, AlertTriangle, FileText } from 'lucide-react';
 import { Button } from '../ui/button';
 import { Sheet, SheetContent, SheetTrigger } from '../ui/sheet';
 
@@ -8,7 +8,7 @@ export default function Layout({ children, user, onLogout }) {
   const location = useLocation();
   const [leaveMenuOpen, setLeaveMenuOpen] = useState(location.pathname.includes('leave'));
   const [workingHoursMenuOpen, setWorkingHoursMenuOpen] = useState(location.pathname.includes('working-hours') || location.pathname.includes('weekend-approvals'));
-  const [settingsMenuOpen, setSettingsMenuOpen] = useState(location.pathname.includes('admin-management') || location.pathname.includes('email-settings') || location.pathname.includes('departments') || location.pathname.includes('holidays') || location.pathname.includes('banks'));
+  const [settingsMenuOpen, setSettingsMenuOpen] = useState(location.pathname.includes('admin-management') || location.pathname.includes('email-settings') || location.pathname.includes('departments') || location.pathname.includes('holidays') || location.pathname.includes('banks') || location.pathname.includes('clients'));
   const [salaryMenuOpen, setSalaryMenuOpen] = useState(location.pathname.includes('salary') || location.pathname.includes('late-marks'));
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
 
@@ -34,6 +34,7 @@ export default function Layout({ children, user, onLogout }) {
           ]
         },
         { path: '/admin/attendance', label: 'Attendance', icon: CalendarCheck },
+        { path: '/admin/invoices', label: 'Invoices', icon: FileText },
         {
           type: 'submenu', id: 'salary', label: 'Salary', icon: IndianRupee,
           children: [
@@ -49,6 +50,7 @@ export default function Layout({ children, user, onLogout }) {
             { path: '/admin/holidays', label: 'Holidays' },
             { path: '/admin/email-settings', label: 'Email Settings' },
             { path: '/admin/banks', label: 'Banks' },
+            { path: '/admin/clients', label: 'Clients' },
           ]
         },
       ];
