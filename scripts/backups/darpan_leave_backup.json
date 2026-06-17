@@ -1,0 +1,342 @@
+[
+  {
+    "action": "delete",
+    "pattern": "A",
+    "row": {
+      "id": "9873842c-6a93-448d-ab33-0fc1ae74924b",
+      "employee_id": "23",
+      "date": "2025-01-07",
+      "leave_type": "PL",
+      "leave_days": 0.5,
+      "status": "Taken",
+      "approved_by": "renish",
+      "applied_date": "2026-02-26T18:48:03.395402+05:30",
+      "approved_date": "2026-02-26T18:48:03.395402+05:30",
+      "created_at": "2026-02-26T18:48:03.395402+05:30",
+      "updated_at": "2026-02-26T18:48:03.395402+05:30"
+    }
+  },
+  {
+    "action": "delete",
+    "pattern": "A",
+    "row": {
+      "id": "cc792a25-e2a5-47c9-b80f-c6d3a8825d26",
+      "employee_id": "23",
+      "date": "2025-01-07",
+      "leave_type": "CL",
+      "leave_days": 0.5,
+      "status": "Taken",
+      "approved_by": "renish",
+      "applied_date": "2026-02-26T18:48:03.395402+05:30",
+      "approved_date": "2026-02-26T18:48:03.395402+05:30",
+      "created_at": "2026-02-26T18:48:03.395402+05:30",
+      "updated_at": "2026-02-26T18:48:03.395402+05:30"
+    }
+  },
+  {
+    "action": "delete",
+    "pattern": "A",
+    "row": {
+      "id": "58452cdc-0713-4582-a2fa-80d9559dfcf7",
+      "employee_id": "23",
+      "date": "2025-06-30",
+      "leave_type": "PL",
+      "leave_days": 0.5,
+      "status": "Taken",
+      "approved_by": "renish",
+      "applied_date": "2026-02-26T18:48:03.395402+05:30",
+      "approved_date": "2026-02-26T18:48:03.395402+05:30",
+      "created_at": "2026-02-26T18:48:03.395402+05:30",
+      "updated_at": "2026-02-26T18:48:03.395402+05:30"
+    }
+  },
+  {
+    "action": "delete",
+    "pattern": "A",
+    "row": {
+      "id": "53ad937d-97e5-4693-a498-6614428aed25",
+      "employee_id": "23",
+      "date": "2025-06-30",
+      "leave_type": "CL",
+      "leave_days": 0.5,
+      "status": "Taken",
+      "approved_by": "renish",
+      "applied_date": "2026-02-26T18:48:03.395402+05:30",
+      "approved_date": "2026-02-26T18:48:03.395402+05:30",
+      "created_at": "2026-02-26T18:48:03.395402+05:30",
+      "updated_at": "2026-02-26T18:48:03.395402+05:30"
+    }
+  },
+  {
+    "action": "delete",
+    "pattern": "A",
+    "row": {
+      "id": "181c0f57-56ae-4822-a27d-2dc30c8c90da",
+      "employee_id": "23",
+      "date": "2024-02-23",
+      "leave_type": "PL",
+      "leave_days": 0.5,
+      "status": "Taken",
+      "approved_by": "renish",
+      "applied_date": "2026-02-26T18:48:03.395402+05:30",
+      "approved_date": "2026-02-26T18:48:03.395402+05:30",
+      "created_at": "2026-02-26T18:48:03.395402+05:30",
+      "updated_at": "2026-02-26T18:48:03.395402+05:30"
+    }
+  },
+  {
+    "action": "delete",
+    "pattern": "A",
+    "row": {
+      "id": "f91cdd14-0048-4412-bad2-51361d7106cb",
+      "employee_id": "23",
+      "date": "2024-02-23",
+      "leave_type": "CL",
+      "leave_days": 0.5,
+      "status": "Taken",
+      "approved_by": "renish",
+      "applied_date": "2026-02-26T18:48:03.395402+05:30",
+      "approved_date": "2026-02-26T18:48:03.395402+05:30",
+      "created_at": "2026-02-26T18:48:03.395402+05:30",
+      "updated_at": "2026-02-26T18:48:03.395402+05:30"
+    }
+  },
+  {
+    "action": "delete",
+    "pattern": "B",
+    "row": {
+      "id": "f6243658-6f85-49f2-b604-245d7f5348a1",
+      "employee_id": "23",
+      "date": "2024-12-25",
+      "leave_type": "PL",
+      "leave_days": 0.5,
+      "status": "Taken",
+      "approved_by": "renish",
+      "applied_date": "2026-02-26T18:48:03.395402+05:30",
+      "approved_date": "2026-02-26T18:48:03.395402+05:30",
+      "created_at": "2026-02-26T18:48:03.395402+05:30",
+      "updated_at": "2026-02-26T18:48:03.395402+05:30"
+    }
+  },
+  {
+    "action": "delete",
+    "pattern": "A",
+    "row": {
+      "id": "dc9b51d9-5ba6-4b0f-9dd5-2dfc2f97b8ce",
+      "employee_id": "23",
+      "date": "2025-11-13",
+      "leave_type": "PL",
+      "leave_days": 0.5,
+      "status": "Taken",
+      "approved_by": "renish",
+      "applied_date": "2026-02-26T18:48:03.395402+05:30",
+      "approved_date": "2026-02-26T18:48:03.395402+05:30",
+      "created_at": "2026-02-26T18:48:03.395402+05:30",
+      "updated_at": "2026-02-26T18:48:03.395402+05:30"
+    }
+  },
+  {
+    "action": "delete",
+    "pattern": "A",
+    "row": {
+      "id": "bb88ea8c-c39d-4b23-8192-a80a757f8c5e",
+      "employee_id": "23",
+      "date": "2025-11-13",
+      "leave_type": "CL",
+      "leave_days": 0.5,
+      "status": "Taken",
+      "approved_by": "renish",
+      "applied_date": "2026-02-26T18:48:03.395402+05:30",
+      "approved_date": "2026-02-26T18:48:03.395402+05:30",
+      "created_at": "2026-02-26T18:48:03.395402+05:30",
+      "updated_at": "2026-02-26T18:48:03.395402+05:30"
+    }
+  },
+  {
+    "action": "delete",
+    "pattern": "A",
+    "row": {
+      "id": "869b2c87-f480-4e85-9b4e-3d4ed033281d",
+      "employee_id": "23",
+      "date": "2023-12-07",
+      "leave_type": "PL",
+      "leave_days": 0.5,
+      "status": "Taken",
+      "approved_by": "renish",
+      "applied_date": "2026-02-26T18:48:03.395402+05:30",
+      "approved_date": "2026-02-26T18:48:03.395402+05:30",
+      "created_at": "2026-02-26T18:48:03.395402+05:30",
+      "updated_at": "2026-02-26T18:48:03.395402+05:30"
+    }
+  },
+  {
+    "action": "delete",
+    "pattern": "A",
+    "row": {
+      "id": "026a1efb-4a78-4b04-b689-112b1f8e7f38",
+      "employee_id": "23",
+      "date": "2023-12-07",
+      "leave_type": "CL",
+      "leave_days": 0.5,
+      "status": "Taken",
+      "approved_by": "renish",
+      "applied_date": "2026-02-26T18:48:03.395402+05:30",
+      "approved_date": "2026-02-26T18:48:03.395402+05:30",
+      "created_at": "2026-02-26T18:48:03.395402+05:30",
+      "updated_at": "2026-02-26T18:48:03.395402+05:30"
+    }
+  },
+  {
+    "action": "delete",
+    "pattern": "A",
+    "row": {
+      "id": "37d2b595-1714-437e-acb8-9dec6fb21759",
+      "employee_id": "23",
+      "date": "2024-08-09",
+      "leave_type": "PL",
+      "leave_days": 0.5,
+      "status": "Taken",
+      "approved_by": "renish",
+      "applied_date": "2026-02-26T18:48:03.395402+05:30",
+      "approved_date": "2026-02-26T18:48:03.395402+05:30",
+      "created_at": "2026-02-26T18:48:03.395402+05:30",
+      "updated_at": "2026-02-26T18:48:03.395402+05:30"
+    }
+  },
+  {
+    "action": "delete",
+    "pattern": "A",
+    "row": {
+      "id": "cbf2fc5a-16ba-4233-8d4b-ecf8481a35aa",
+      "employee_id": "23",
+      "date": "2024-08-09",
+      "leave_type": "CL",
+      "leave_days": 0.5,
+      "status": "Taken",
+      "approved_by": "renish",
+      "applied_date": "2026-02-26T18:48:03.395402+05:30",
+      "approved_date": "2026-02-26T18:48:03.395402+05:30",
+      "created_at": "2026-02-26T18:48:03.395402+05:30",
+      "updated_at": "2026-02-26T18:48:03.395402+05:30"
+    }
+  },
+  {
+    "action": "delete",
+    "pattern": "A",
+    "row": {
+      "id": "2df2d03d-9327-4410-a273-36282ff19a8e",
+      "employee_id": "23",
+      "date": "2025-05-08",
+      "leave_type": "PL",
+      "leave_days": 0.5,
+      "status": "Taken",
+      "approved_by": "renish",
+      "applied_date": "2026-02-26T18:48:03.395402+05:30",
+      "approved_date": "2026-02-26T18:48:03.395402+05:30",
+      "created_at": "2026-02-26T18:48:03.395402+05:30",
+      "updated_at": "2026-02-26T18:48:03.395402+05:30"
+    }
+  },
+  {
+    "action": "delete",
+    "pattern": "A",
+    "row": {
+      "id": "ae5c431a-a46a-4557-b004-952801506905",
+      "employee_id": "23",
+      "date": "2025-05-08",
+      "leave_type": "CL",
+      "leave_days": 0.5,
+      "status": "Taken",
+      "approved_by": "renish",
+      "applied_date": "2026-02-26T18:48:03.395402+05:30",
+      "approved_date": "2026-02-26T18:48:03.395402+05:30",
+      "created_at": "2026-02-26T18:48:03.395402+05:30",
+      "updated_at": "2026-02-26T18:48:03.395402+05:30"
+    }
+  },
+  {
+    "action": "delete",
+    "pattern": "A",
+    "row": {
+      "id": "a156a968-a394-4d8b-8f6d-5e58dfea49ca",
+      "employee_id": "23",
+      "date": "2025-12-29",
+      "leave_type": "PL",
+      "leave_days": 0.5,
+      "status": "Taken",
+      "approved_by": "renish",
+      "applied_date": "2026-02-26T18:48:03.395402+05:30",
+      "approved_date": "2026-02-26T18:48:03.395402+05:30",
+      "created_at": "2026-02-26T18:48:03.395402+05:30",
+      "updated_at": "2026-02-26T18:48:03.395402+05:30"
+    }
+  },
+  {
+    "action": "delete",
+    "pattern": "A",
+    "row": {
+      "id": "c9e4cf20-dcfb-4784-b51b-cba60cb197cd",
+      "employee_id": "23",
+      "date": "2025-12-29",
+      "leave_type": "CL",
+      "leave_days": 0.5,
+      "status": "Taken",
+      "approved_by": "renish",
+      "applied_date": "2026-02-26T18:48:03.395402+05:30",
+      "approved_date": "2026-02-26T18:48:03.395402+05:30",
+      "created_at": "2026-02-26T18:48:03.395402+05:30",
+      "updated_at": "2026-02-26T18:48:03.395402+05:30"
+    }
+  },
+  {
+    "action": "delete",
+    "pattern": "A",
+    "row": {
+      "id": "f2a28763-8159-4b1e-aa19-9789d04099de",
+      "employee_id": "23",
+      "date": "2026-02-05",
+      "leave_type": "PL",
+      "leave_days": 0.5,
+      "status": "Taken",
+      "approved_by": "Reeman",
+      "applied_date": "2026-03-17T16:43:28.415946+05:30",
+      "approved_date": "2026-03-17T16:43:28.415946+05:30",
+      "created_at": "2026-03-17T16:43:28.415946+05:30",
+      "updated_at": "2026-03-17T16:43:28.415946+05:30"
+    }
+  },
+  {
+    "action": "delete",
+    "pattern": "A",
+    "row": {
+      "id": "e11e57a0-0424-4492-b128-1396aac2a4f0",
+      "employee_id": "23",
+      "date": "2026-02-05",
+      "leave_type": "CL",
+      "leave_days": 0.5,
+      "status": "Taken",
+      "approved_by": "Reeman",
+      "applied_date": "2026-03-17T16:43:28.415946+05:30",
+      "approved_date": "2026-03-17T16:43:28.415946+05:30",
+      "created_at": "2026-03-17T16:43:28.415946+05:30",
+      "updated_at": "2026-03-17T16:43:28.415946+05:30"
+    }
+  },
+  {
+    "action": "delete",
+    "pattern": "C",
+    "row": {
+      "id": "d9bb9858-c121-4a1b-ba92-af5c88071ee5",
+      "employee_id": "23",
+      "date": "2026-04-01",
+      "leave_type": "PL",
+      "leave_days": 1.0,
+      "status": "taken",
+      "approved_by": "Reeman",
+      "applied_date": "2026-03-30T20:04:15.745311+05:30",
+      "approved_date": "2026-04-01T17:42:09.261670+05:30",
+      "created_at": "2026-04-01T17:42:09.261670+05:30",
+      "updated_at": "2026-04-01T17:42:09.261670+05:30"
+    }
+  }
+]
