@@ -7235,6 +7235,44 @@ async def _next_invoice_number(invoice_type: str, invoice_date: str) -> str:
     return f"{prefix}/{seq:03d}/{fy}"
 
 
+def _seq_from_number(invoice_number: str) -> int:
+    """Extract the numeric sequence from 'Exp/007/2026-27' -> 7. Returns 999999 if malformed."""
+    try:
+        return int(invoice_number.split("/")[1])
+    except (IndexError, ValueError):
+        return 999999
+
+
+def _fy_from_number(invoice_number: str) -> str:
+    """Extract the FY portion from 'Exp/007/2026-27' -> '2026-27'."""
+    try:
+        return invoice_number.split("/")[2]
+    except IndexError:
+        return ""
+
+
+async def _renumber_invoices(invoice_type: str, fy: str) -> int:
+    """Renumber all invoices of given (type, fy) to be contiguous starting from 001.
+    Order is preserved by the current invoice_number sequence."""
+    prefix = "Exp" if invoice_type == "export" else "GST"
+    pattern = f"^{prefix}/\\d+/{fy}$"
+    invs = await db.invoices.find(
+        {"type": invoice_type, "invoice_number": {"$regex": pattern}},
+        {"_id": 0, "id": 1, "invoice_number": 1},
+    ).to_list(None)
+    invs.sort(key=lambda x: _seq_from_number(x["invoice_number"]))
+    renumbered = 0
+    for i, inv in enumerate(invs, start=1):
+        new_num = f"{prefix}/{i:03d}/{fy}"
+        if inv["invoice_number"] != new_num:
+            await db.invoices.update_one(
+                {"id": inv["id"]},
+                {"$set": {"invoice_number": new_num, "updated_at": get_ist_now_iso()}},
+            )
+            renumbered += 1
+    return renumbered
+
+
 @api_router.get("/invoices")
 async def list_invoices(
     type: Optional[str] = None,
@@ -7344,9 +7382,14 @@ async def update_invoice(invoice_id: str, payload: InvoicePayload, user: dict = 
 
 @api_router.delete("/invoices/{invoice_id}")
 async def delete_invoice(invoice_id: str, user: dict = Depends(require_role(["admin"]))):
-    result = await db.invoices.delete_one({"id": invoice_id})
-    if result.deleted_count == 0:
+    target = await db.invoices.find_one({"id": invoice_id}, {"_id": 0})
+    if not target:
         raise HTTPException(status_code=404, detail="Invoice not found")
+    await db.invoices.delete_one({"id": invoice_id})
+    # Auto-arrange remaining numbers in the same (type, FY)
+    fy = _fy_from_number(target.get("invoice_number", ""))
+    if fy:
+        await _renumber_invoices(target.get("type", "export"), fy)
     return {"status": "deleted"}
 
 
@@ -7361,8 +7404,27 @@ async def bulk_delete_invoices(
 ):
     if not payload.ids:
         raise HTTPException(status_code=400, detail="No invoice ids provided")
+    # Get (type, fy) pairs of targets before deletion so we know what to renumber
+    targets = await db.invoices.find(
+        {"id": {"$in": payload.ids}},
+        {"_id": 0, "type": 1, "invoice_number": 1},
+    ).to_list(None)
+    affected: set[tuple[str, str]] = set()
+    for t in targets:
+        fy = _fy_from_number(t.get("invoice_number", ""))
+        if fy:
+            affected.add((t.get("type", "export"), fy))
+
     result = await db.invoices.delete_many({"id": {"$in": payload.ids}})
-    return {"deleted": result.deleted_count, "requested": len(payload.ids)}
+    # Renumber each affected bucket
+    renumbered_total = 0
+    for inv_type, fy in affected:
+        renumbered_total += await _renumber_invoices(inv_type, fy)
+    return {
+        "deleted": result.deleted_count,
+        "requested": len(payload.ids),
+        "renumbered": renumbered_total,
+    }
 
 
 # ==================== STATEMENTS (Folders + GridFS files) ====================
