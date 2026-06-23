@@ -3,7 +3,7 @@ import Layout from '../../components/layout/Layout';
 import { Button } from '../../components/ui/button';
 import { Input } from '../../components/ui/input';
 import { Label } from '../../components/ui/label';
-import { Plus, Edit2, Trash2, Search, X, FileText, Download } from 'lucide-react';
+import { Plus, Edit2, Trash2, Search, X, FileText, Download, Upload } from 'lucide-react';
 import {
   Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter,
 } from '../../components/ui/dialog';
@@ -52,6 +52,57 @@ export default function Invoices({ user, onLogout }) {
   const [deletingInvoice, setDeletingInvoice] = useState(null);
   const [formData, setFormData] = useState(emptyForm('export'));
   const [nextNumber, setNextNumber] = useState('');
+
+  // Bank Statement upload + preview popup
+  const [stmtDialogOpen, setStmtDialogOpen] = useState(false);
+  const [stmtUploading, setStmtUploading] = useState(false);
+  const [stmtFileName, setStmtFileName] = useState('');
+  const [stmtRows, setStmtRows] = useState([]);
+
+  const handleUploadStatement = async (e) => {
+    const file = e.target.files?.[0];
+    e.target.value = ''; // allow re-uploading the same file
+    if (!file) return;
+    if (!file.name.toLowerCase().endsWith('.pdf')) {
+      toast.error('Please select a PDF file');
+      return;
+    }
+    setStmtUploading(true);
+    setStmtFileName(file.name);
+    setStmtRows([]);
+    try {
+      const token = localStorage.getItem('token');
+      const fd = new FormData();
+      fd.append('file', file);
+      const res = await fetch(`${API_URL}/api/invoices/parse-bank-statement`, {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${token}` },
+        body: fd,
+      });
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}));
+        throw new Error(err.detail || 'Failed to parse bank statement');
+      }
+      const data = await res.json();
+      if (!data.rows || data.rows.length === 0) {
+        toast.warning('No credit (deposit) rows found in this statement');
+      }
+      setStmtRows(data.rows || []);
+      setStmtDialogOpen(true);
+      if (data.warnings?.length) toast.warning(data.warnings.join('; '));
+    } catch (e) { toast.error(e.message); }
+    finally { setStmtUploading(false); }
+  };
+
+  const removeStmtRow = (idx) => {
+    setStmtRows(prev => prev.filter((_, i) => i !== idx));
+  };
+
+  const closeStmtDialog = () => {
+    setStmtDialogOpen(false);
+    setStmtRows([]);
+    setStmtFileName('');
+  };
 
   const fetchAll = useCallback(async () => {
     try {
@@ -234,6 +285,36 @@ export default function Invoices({ user, onLogout }) {
           <Button onClick={openAdd} className="gap-2" data-testid="add-invoice-btn">
             <Plus className="w-4 h-4" /> New Invoice
           </Button>
+        </div>
+
+        {/* Bank Statement upload action bar */}
+        <div className="flex items-center gap-3 bg-slate-50 border border-slate-200 rounded-lg px-4 py-3" data-testid="stmt-upload-bar">
+          <Upload className="w-4 h-4 text-slate-500" />
+          <div className="flex-1 text-sm text-slate-700">
+            <span className="font-medium">Upload Bank Statement</span>
+            <span className="text-slate-500"> &nbsp;— ICICI Detailed Statement PDF, view deposit (credit) rows only</span>
+          </div>
+          <label className="cursor-pointer">
+            <input
+              type="file"
+              accept="application/pdf"
+              className="hidden"
+              onChange={handleUploadStatement}
+              data-testid="stmt-upload-input"
+              disabled={stmtUploading}
+            />
+            <span
+              className={`inline-flex items-center gap-2 px-3 py-1.5 rounded-md text-sm font-medium border transition ${
+                stmtUploading
+                  ? 'bg-slate-200 text-slate-500 cursor-not-allowed'
+                  : 'bg-white text-slate-900 hover:bg-slate-100 border-slate-300'
+              }`}
+              data-testid="stmt-upload-btn"
+            >
+              <Upload className="w-3.5 h-3.5" />
+              {stmtUploading ? 'Parsing...' : 'Upload PDF'}
+            </span>
+          </label>
         </div>
 
         <Tabs value={activeTab} onValueChange={(v) => setActiveTab(v)}>
@@ -519,6 +600,80 @@ export default function Invoices({ user, onLogout }) {
             </AlertDialogFooter>
           </AlertDialogContent>
         </AlertDialog>
+
+        {/* Bank Statement Preview Dialog */}
+        <Dialog open={stmtDialogOpen} onOpenChange={(o) => { if (!o) closeStmtDialog(); }}>
+          <DialogContent className="max-w-2xl" data-testid="stmt-preview-dialog">
+            <DialogHeader>
+              <DialogTitle>
+                Bank Statement — Deposits (Cr)
+                {stmtFileName && <span className="block text-xs text-slate-500 font-normal mt-1 truncate">{stmtFileName}</span>}
+              </DialogTitle>
+            </DialogHeader>
+            <div className="py-2 max-h-[60vh] overflow-y-auto">
+              {stmtRows.length === 0 ? (
+                <div className="text-center py-8 text-slate-500 text-sm">
+                  No remaining rows.
+                </div>
+              ) : (
+                <table className="w-full text-sm border border-slate-200 rounded">
+                  <thead className="bg-slate-50 border-b border-slate-200">
+                    <tr>
+                      <th className="px-4 py-2 text-left text-xs font-semibold text-slate-600 uppercase">#</th>
+                      <th className="px-4 py-2 text-left text-xs font-semibold text-slate-600 uppercase">Transaction Date</th>
+                      <th className="px-4 py-2 text-right text-xs font-semibold text-slate-600 uppercase">Deposit (Cr)</th>
+                      <th className="px-4 py-2 w-12"></th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-slate-100">
+                    {stmtRows.map((r, idx) => (
+                      <tr key={idx} className="hover:bg-slate-50" data-testid={`stmt-row-${idx}`}>
+                        <td className="px-4 py-2 text-slate-500">{idx + 1}</td>
+                        <td className="px-4 py-2 font-medium text-slate-900">
+                          {r.transaction_date
+                            ? new Date(r.transaction_date).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' })
+                            : '-'}
+                        </td>
+                        <td className="px-4 py-2 text-right font-mono font-semibold text-emerald-700">
+                          {Number(r.deposit_amount).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                        </td>
+                        <td className="px-2 py-2 text-right">
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            onClick={() => removeStmtRow(idx)}
+                            className="h-7 w-7 p-0 text-slate-400 hover:text-red-600"
+                            title="Remove this row"
+                            data-testid={`stmt-remove-row-${idx}`}
+                          >
+                            <X className="w-4 h-4" />
+                          </Button>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                  {stmtRows.length > 0 && (
+                    <tfoot>
+                      <tr className="bg-slate-50 border-t border-slate-200">
+                        <td colSpan="2" className="px-4 py-2 text-right text-xs font-semibold text-slate-600 uppercase">
+                          Total ({stmtRows.length} row{stmtRows.length !== 1 ? 's' : ''})
+                        </td>
+                        <td className="px-4 py-2 text-right font-mono font-bold text-slate-900">
+                          {stmtRows.reduce((s, r) => s + Number(r.deposit_amount || 0), 0)
+                            .toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                        </td>
+                        <td></td>
+                      </tr>
+                    </tfoot>
+                  )}
+                </table>
+              )}
+            </div>
+            <DialogFooter>
+              <Button variant="outline" onClick={closeStmtDialog} data-testid="stmt-close-btn">Cancel</Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
       </div>
     </Layout>
   );

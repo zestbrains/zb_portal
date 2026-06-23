@@ -7365,6 +7365,34 @@ async def download_invoice_pdf(invoice_id: str, user: dict = Depends(require_rol
     )
 
 
+@api_router.post("/invoices/parse-bank-statement")
+async def parse_bank_statement(
+    file: UploadFile = File(...),
+    user: dict = Depends(require_role(["admin"])),
+):
+    """
+    Accept an ICICI bank statement PDF and return only credit (deposit) rows
+    with two fields: transaction_date (YYYY-MM-DD) and deposit_amount.
+    View-only — nothing is persisted.
+    """
+    if not file.filename or not file.filename.lower().endswith(".pdf"):
+        raise HTTPException(status_code=400, detail="Please upload a PDF file")
+    contents = await file.read()
+    if not contents:
+        raise HTTPException(status_code=400, detail="Empty file")
+
+    from bank_statement_parser import parse_icici_statement
+    try:
+        result = parse_icici_statement(contents)
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=f"Failed to parse PDF: {e}")
+
+    if not result["rows"] and result["warnings"]:
+        # No data and parser flagged warnings — surface them as a 400
+        raise HTTPException(status_code=400, detail="; ".join(result["warnings"]))
+    return result
+
+
 
 logger = logging.getLogger(__name__)
 
