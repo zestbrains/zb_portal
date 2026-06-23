@@ -7194,6 +7194,7 @@ class InvoicePayload(BaseModel):
     client_id: str
     items: List[InvoiceItem] = []
     notes: Optional[str] = ""
+    remarks: Optional[str] = ""  # YYYY-MM, e.g. "2026-05" — links statements/invoices for bulk email
     discount: Optional[float] = 0
     # GST-specific
     tax_mode: Optional[str] = "cgst_sgst"  # cgst_sgst | igst
@@ -7290,6 +7291,7 @@ async def create_invoice(payload: InvoicePayload, user: dict = Depends(require_r
         "client_id": payload.client_id,
         "items": [it.model_dump() for it in payload.items],
         "notes": payload.notes or "",
+        "remarks": (payload.remarks or "").strip(),
         "discount": float(payload.discount or 0),
         "tax_mode": payload.tax_mode or "cgst_sgst",
         "cgst_amount": float(payload.cgst_amount or 0),
@@ -7326,6 +7328,7 @@ async def update_invoice(invoice_id: str, payload: InvoicePayload, user: dict = 
             "client_id": payload.client_id,
             "items": [it.model_dump() for it in payload.items],
             "notes": payload.notes or "",
+            "remarks": (payload.remarks or "").strip(),
             "discount": float(payload.discount or 0),
             "tax_mode": payload.tax_mode or "cgst_sgst",
             "cgst_amount": float(payload.cgst_amount or 0),
@@ -7375,6 +7378,7 @@ def _get_statement_bucket() -> AsyncIOMotorGridFSBucket:
 
 class StatementFolderPayload(BaseModel):
     name: str
+    remarks: Optional[str] = ""  # YYYY-MM
 
 
 @api_router.get("/statement-folders")
@@ -7399,6 +7403,7 @@ async def create_statement_folder(
     doc = {
         "id": str(uuid.uuid4()),
         "name": name,
+        "remarks": (payload.remarks or "").strip(),
         "created_at": get_ist_now_iso(),
         "created_by": user.get("username", ""),
     }
@@ -7503,6 +7508,159 @@ async def delete_statement_file(file_id: str, user: dict = Depends(require_role(
         pass  # already gone — proceed
     await db.statement_files.delete_one({"id": file_id})
     return {"status": "deleted"}
+
+
+@api_router.get("/statements/remarks-options")
+async def get_remarks_options(user: dict = Depends(require_role(["admin"]))):
+    """Return the union of distinct, non-empty `remarks` values across invoices and folders,
+    sorted descending (newest YYYY-MM first)."""
+    inv_remarks = await db.invoices.distinct("remarks", {"remarks": {"$nin": [None, ""]}})
+    fld_remarks = await db.statement_folders.distinct("remarks", {"remarks": {"$nin": [None, ""]}})
+    options = sorted({*inv_remarks, *fld_remarks}, reverse=True)
+    return {"options": options}
+
+
+class StatementSendMailPayload(BaseModel):
+    to_email: str
+    remarks: str
+
+
+@api_router.post("/statements/send-mail")
+async def send_statements_mail(
+    payload: StatementSendMailPayload, user: dict = Depends(require_role(["admin"]))
+):
+    to_email = (payload.to_email or "").strip()
+    remarks = (payload.remarks or "").strip()
+    if not to_email or "@" not in to_email:
+        raise HTTPException(status_code=400, detail="Valid recipient email is required")
+    if not remarks:
+        raise HTTPException(status_code=400, detail="Please select a remarks (Month-Year)")
+
+    # 1. Gather invoices with this remarks
+    invoices = await db.invoices.find({"remarks": remarks}, {"_id": 0}).to_list(None)
+
+    # 2. Gather statement files in folders with this remarks
+    folders = await db.statement_folders.find({"remarks": remarks}, {"_id": 0}).to_list(None)
+    folder_ids = [f["id"] for f in folders]
+    files = (await db.statement_files.find({"folder_id": {"$in": folder_ids}}).to_list(None)) if folder_ids else []
+
+    if not invoices and not files:
+        raise HTTPException(
+            status_code=400,
+            detail=f"No invoices or statement files found with remarks '{remarks}'."
+        )
+
+    # 3. Load project SMTP config (per user choice — reuse Project SMTP)
+    email_config = await db.email_config.find_one({}, {"_id": 0})
+    if not email_config:
+        raise HTTPException(status_code=400, detail="Email configuration not found. Set it up under Settings > Email Settings.")
+    smtp_host = email_config.get("project_smtp_host") or email_config.get("smtp_host", "smtp.gmail.com")
+    smtp_port = email_config.get("project_smtp_port") or email_config.get("smtp_port", 587)
+    smtp_email = email_config.get("project_smtp_email") or email_config.get("smtp_email", "")
+    smtp_password = email_config.get("project_smtp_password") or email_config.get("smtp_password", "")
+    enable_ssl = email_config.get("project_enable_ssl", True)
+    cc_emails_raw = email_config.get("cc_emails_project", "") or ""
+    if not smtp_email or not smtp_password:
+        raise HTTPException(status_code=400, detail="Project SMTP credentials are not configured.")
+
+    # 4. Pretty Month Year label
+    try:
+        month_label = datetime.strptime(remarks, "%Y-%m").strftime("%B %Y")
+    except Exception:
+        month_label = remarks
+
+    subject = f"Statements & Invoices for {month_label}"
+
+    body_html = f"""
+    <div style="font-family: Arial, sans-serif; max-width: 640px; margin: 0 auto;">
+      <div style="background: #6C33C7; color: white; padding: 20px; border-radius: 8px 8px 0 0;">
+        <h2 style="margin: 0;">Statements & Invoices — {month_label}</h2>
+      </div>
+      <div style="padding: 24px; border: 1px solid #e2e8f0; border-top: none; border-radius: 0 0 8px 8px;">
+        <p>Please find attached:</p>
+        <ul>
+          <li><b>{len(invoices)}</b> invoice PDF(s)</li>
+          <li><b>{len(files)}</b> bank statement file(s)</li>
+        </ul>
+        <p>This email is automatically generated by the Zestbrains Invoice Module.</p>
+        <p style="color: #94a3b8; font-size: 12px; margin-top: 20px;">If you have any questions, write to hello@zestbrains.com</p>
+      </div>
+    </div>
+    """
+    body_text = (
+        f"Statements & Invoices for {month_label}\n\n"
+        f"{len(invoices)} invoice PDF(s) and {len(files)} bank statement file(s) attached.\n"
+    )
+
+    # 5. Build email with attachments
+    from email.mime.application import MIMEApplication
+    from invoice_generator import generate_invoice_pdf
+
+    msg = MIMEMultipart()
+    msg['Subject'] = subject
+    msg['From'] = smtp_email
+    msg['To'] = to_email
+    cc_list = [e.strip() for e in cc_emails_raw.split(',') if e.strip()]
+    if cc_list:
+        msg['Cc'] = ', '.join(cc_list)
+
+    alt = MIMEMultipart('alternative')
+    alt.attach(MIMEText(body_text, 'plain'))
+    alt.attach(MIMEText(body_html, 'html'))
+    msg.attach(alt)
+
+    # 5a. Attach invoice PDFs
+    failures = []
+    for inv in invoices:
+        try:
+            bank = await db.banks.find_one({"id": inv.get("bank_id")}, {"_id": 0}) or {}
+            client = await db.clients.find_one({"id": inv.get("client_id")}, {"_id": 0}) or {}
+            pdf_bytes = generate_invoice_pdf(inv, bank, client)
+            filename = f"{inv.get('invoice_number','invoice').replace('/', '_')}.pdf"
+            part = MIMEApplication(pdf_bytes, _subtype="pdf")
+            part.add_header("Content-Disposition", "attachment", filename=filename)
+            msg.attach(part)
+        except Exception as e:
+            failures.append(f"invoice {inv.get('invoice_number','?')}: {e}")
+
+    # 5b. Attach statement files from GridFS
+    bucket = _get_statement_bucket()
+    from bson import ObjectId
+    for f in files:
+        try:
+            grid_out = await bucket.open_download_stream(ObjectId(f["gridfs_id"]))
+            data = await grid_out.read()
+            ctype = (f.get("content_type") or "").split("/")
+            subtype = ctype[1] if len(ctype) == 2 else "octet-stream"
+            part = MIMEApplication(data, _subtype=subtype)
+            part.add_header("Content-Disposition", "attachment", filename=f.get("filename", "statement"))
+            msg.attach(part)
+        except Exception as e:
+            failures.append(f"file {f.get('filename','?')}: {e}")
+
+    # 6. Send (sync — admin waits for confirmation)
+    all_recipients = list({to_email, *cc_list})
+    try:
+        if enable_ssl:
+            server = smtplib.SMTP(smtp_host, int(smtp_port), timeout=25)
+            server.starttls()
+        else:
+            server = smtplib.SMTP(smtp_host, int(smtp_port), timeout=25)
+        server.login(smtp_email, smtp_password)
+        server.sendmail(smtp_email, all_recipients, msg.as_string())
+        server.quit()
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to send email: {e}")
+
+    return {
+        "sent": True,
+        "to": to_email,
+        "cc": cc_list,
+        "invoices_attached": len(invoices) - len([x for x in failures if x.startswith("invoice")]),
+        "files_attached": len(files) - len([x for x in failures if x.startswith("file")]),
+        "month_label": month_label,
+        "failures": failures,
+    }
 
 
 @api_router.get("/invoices/{invoice_id}/pdf")

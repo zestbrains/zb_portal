@@ -64,6 +64,8 @@ export default function Invoices({ user, onLogout }) {
   const [stmtBulkBankId, setStmtBulkBankId] = useState('');
   const [stmtCreating, setStmtCreating] = useState(false);
   const [stmtCreatedNumbers, setStmtCreatedNumbers] = useState([]);
+  const [stmtRemarksMonth, setStmtRemarksMonth] = useState(String(new Date().getMonth() + 1).padStart(2, '0'));
+  const [stmtRemarksYear, setStmtRemarksYear] = useState(String(new Date().getFullYear()));
 
   const STATIC_ITEMS = [
     'Mobile apps development',
@@ -71,6 +73,22 @@ export default function Invoices({ user, onLogout }) {
     'Graphics designing',
     'Web designing',
   ];
+
+  // Month-Year remarks helpers
+  const MONTHS = [
+    { v: '01', l: 'January' }, { v: '02', l: 'February' }, { v: '03', l: 'March' },
+    { v: '04', l: 'April' }, { v: '05', l: 'May' }, { v: '06', l: 'June' },
+    { v: '07', l: 'July' }, { v: '08', l: 'August' }, { v: '09', l: 'September' },
+    { v: '10', l: 'October' }, { v: '11', l: 'November' }, { v: '12', l: 'December' },
+  ];
+  const CURRENT_YEAR = new Date().getFullYear();
+  const YEARS = Array.from({ length: 6 }, (_, i) => String(CURRENT_YEAR - 2 + i));
+  const formatRemarks = (ym) => {
+    if (!ym || !ym.includes('-')) return ym || '';
+    const [y, m] = ym.split('-');
+    const month = MONTHS.find(x => x.v === m);
+    return month ? `${month.l} ${y}` : ym;
+  };
 
   const minusOneDay = (iso) => {
     if (!iso) return '';
@@ -155,6 +173,8 @@ export default function Invoices({ user, onLogout }) {
   const [stLoading, setStLoading] = useState(false);
   const [stNewFolderOpen, setStNewFolderOpen] = useState(false);
   const [stNewFolderName, setStNewFolderName] = useState('');
+  const [stNewFolderMonth, setStNewFolderMonth] = useState(String(new Date().getMonth() + 1).padStart(2, '0'));
+  const [stNewFolderYear, setStNewFolderYear] = useState(String(new Date().getFullYear()));
   const [stDeletingFolder, setStDeletingFolder] = useState(null);
   const [stDeletingFile, setStDeletingFile] = useState(null);
   const [stUploading, setStUploading] = useState(false);
@@ -192,12 +212,13 @@ export default function Invoices({ user, onLogout }) {
   const createStFolder = async () => {
     const name = stNewFolderName.trim();
     if (!name) { toast.error('Folder name is required'); return; }
+    const remarks = stNewFolderYear && stNewFolderMonth ? `${stNewFolderYear}-${stNewFolderMonth}` : '';
     try {
       const token = localStorage.getItem('token');
       const res = await fetch(`${API_URL}/api/statement-folders`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
-        body: JSON.stringify({ name }),
+        body: JSON.stringify({ name, remarks }),
       });
       if (!res.ok) {
         const err = await res.json().catch(() => ({}));
@@ -289,6 +310,53 @@ export default function Invoices({ user, onLogout }) {
     return `${n.toFixed(n < 10 && i > 0 ? 1 : 0)} ${units[i]}`;
   };
 
+  // ============ Send Mail tab ============
+  const [smRemarksOptions, setSmRemarksOptions] = useState([]);
+  const [smRemarks, setSmRemarks] = useState('');
+  const [smToEmail, setSmToEmail] = useState('');
+  const [smSending, setSmSending] = useState(false);
+  const [smLastResult, setSmLastResult] = useState(null);
+
+  const fetchRemarksOptions = useCallback(async () => {
+    try {
+      const token = localStorage.getItem('token');
+      const res = await fetch(`${API_URL}/api/statements/remarks-options`, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      if (!res.ok) return;
+      const d = await res.json();
+      setSmRemarksOptions(d.options || []);
+    } catch {/* silent */}
+  }, []);
+
+  useEffect(() => {
+    if (activeTab === 'send-mail') fetchRemarksOptions();
+  }, [activeTab, fetchRemarksOptions]);
+
+  const handleSendMail = async () => {
+    const to = (smToEmail || '').trim();
+    if (!to || !to.includes('@')) { toast.error('Please enter a valid recipient email'); return; }
+    if (!smRemarks) { toast.error('Please select a remarks (Month-Year)'); return; }
+    setSmSending(true);
+    setSmLastResult(null);
+    try {
+      const token = localStorage.getItem('token');
+      const res = await fetch(`${API_URL}/api/statements/send-mail`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+        body: JSON.stringify({ to_email: to, remarks: smRemarks }),
+      });
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}));
+        throw new Error(err.detail || 'Failed to send mail');
+      }
+      const data = await res.json();
+      setSmLastResult(data);
+      toast.success(`Email sent: ${data.invoices_attached} invoice(s) + ${data.files_attached} statement file(s)`);
+    } catch (e) { toast.error(e.message); }
+    finally { setSmSending(false); }
+  };
+
   const handleCreateStmtInvoices = async () => {
     if (stmtRows.length === 0) {
       toast.error('No rows to create invoices for');
@@ -331,6 +399,7 @@ export default function Invoices({ user, onLogout }) {
           notes: r.fx_rate
             ? `Converted from INR ${Number(r.inr_amount).toFixed(2)} @ ${r.fx_rate} (USD on ${r.transaction_date})`
             : '',
+          remarks: stmtRemarksYear && stmtRemarksMonth ? `${stmtRemarksYear}-${stmtRemarksMonth}` : '',
           discount: 0,
           tax_mode: 'cgst_sgst',
           cgst_amount: 0,
@@ -600,8 +669,8 @@ export default function Invoices({ user, onLogout }) {
           </Button>
         </div>
 
-        {/* Bank Statement upload action bar (hidden on Statements tab) */}
-        {activeTab !== 'statements' && (
+        {/* Bank Statement upload action bar (only on Export/GST tabs) */}
+        {(activeTab === 'export' || activeTab === 'gst') && (
         <div className="flex items-center gap-3 bg-slate-50 border border-slate-200 rounded-lg px-4 py-3" data-testid="stmt-upload-bar">
           <Upload className="w-4 h-4 text-slate-500" />
           <div className="flex-1 text-sm text-slate-700">
@@ -637,9 +706,75 @@ export default function Invoices({ user, onLogout }) {
             <TabsTrigger value="export" data-testid="tab-export">Export Invoices</TabsTrigger>
             <TabsTrigger value="gst" data-testid="tab-gst">GST Invoices</TabsTrigger>
             <TabsTrigger value="statements" data-testid="tab-statements">Statements</TabsTrigger>
+            <TabsTrigger value="send-mail" data-testid="tab-send-mail">Send Mail</TabsTrigger>
           </TabsList>
 
-          {activeTab === 'statements' ? (
+          {activeTab === 'send-mail' ? (
+            <TabsContent value="send-mail" className="mt-6" data-testid="send-mail-panel">
+              <div className="bg-white rounded-lg border shadow-sm p-6 max-w-2xl">
+                <h2 className="text-lg font-semibold text-slate-900">Send Statements & Invoices via Email</h2>
+                <p className="text-sm text-slate-500 mt-1">
+                  Bundles all invoices and statement folder files matching the selected remarks into a single email.
+                  Uses your Project SMTP from <span className="font-medium">Settings &gt; Email Settings</span>.
+                </p>
+
+                <div className="mt-6 space-y-4">
+                  <div className="space-y-2">
+                    <Label htmlFor="sm-to-email">Recipient Email</Label>
+                    <Input
+                      id="sm-to-email"
+                      type="email"
+                      placeholder="accountant@example.com"
+                      value={smToEmail}
+                      onChange={(e) => setSmToEmail(e.target.value)}
+                      data-testid="sm-to-email-input"
+                    />
+                  </div>
+
+                  <div className="space-y-2">
+                    <Label htmlFor="sm-remarks">Remarks (Month-Year)</Label>
+                    <Select value={smRemarks} onValueChange={setSmRemarks}>
+                      <SelectTrigger id="sm-remarks" data-testid="sm-remarks-select">
+                        <SelectValue placeholder={smRemarksOptions.length === 0 ? 'No remarks yet — tag invoices/folders first' : 'Select remarks'} />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {smRemarksOptions.map(o => (
+                          <SelectItem key={o} value={o}>{formatRemarks(o)} <span className="text-xs text-slate-400 ml-2">({o})</span></SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+
+                  <Button
+                    onClick={handleSendMail}
+                    disabled={smSending || !smToEmail || !smRemarks}
+                    className="gap-2"
+                    data-testid="sm-send-btn"
+                  >
+                    <Upload className="w-4 h-4 rotate-90" />
+                    {smSending ? 'Sending...' : 'Send Email'}
+                  </Button>
+                </div>
+
+                {smLastResult && smLastResult.sent && (
+                  <div className="mt-6 bg-emerald-50 border border-emerald-200 rounded-md p-4 text-sm">
+                    <div className="font-semibold text-emerald-900">Sent successfully to {smLastResult.to}</div>
+                    <ul className="mt-2 text-emerald-800 text-xs list-disc list-inside">
+                      <li>{smLastResult.invoices_attached} invoice PDF(s) attached</li>
+                      <li>{smLastResult.files_attached} statement file(s) attached</li>
+                      <li>Subject: Statements & Invoices for {smLastResult.month_label}</li>
+                      {smLastResult.cc?.length > 0 && <li>CC: {smLastResult.cc.join(', ')}</li>}
+                    </ul>
+                    {smLastResult.failures?.length > 0 && (
+                      <div className="mt-2 text-amber-800 text-xs">
+                        {smLastResult.failures.length} attachment failure(s): {smLastResult.failures.slice(0, 3).join('; ')}
+                      </div>
+                    )}
+                  </div>
+                )}
+              </div>
+            </TabsContent>
+          ) : activeTab === 'statements' ? (
             <TabsContent value="statements" className="mt-6 space-y-4" data-testid="statements-panel">
               {/* Statements toolbar */}
               <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
@@ -707,6 +842,11 @@ export default function Invoices({ user, onLogout }) {
                           <div className="text-xs text-slate-500 mt-0.5">
                             {f.file_count || 0} file{f.file_count !== 1 ? 's' : ''}
                           </div>
+                          {f.remarks && (
+                            <div className="text-[10px] font-mono text-purple-700 bg-purple-50 inline-block px-1.5 py-0.5 rounded mt-1">
+                              {formatRemarks(f.remarks)}
+                            </div>
+                          )}
                           <Button
                             variant="ghost"
                             size="sm"
@@ -1130,17 +1270,37 @@ export default function Invoices({ user, onLogout }) {
             <DialogHeader>
               <DialogTitle>Create Folder</DialogTitle>
             </DialogHeader>
-            <div className="space-y-3 py-2">
-              <Label htmlFor="st-folder-name">Folder name</Label>
-              <Input
-                id="st-folder-name"
-                placeholder="e.g. May 2026 ICICI"
-                value={stNewFolderName}
-                onChange={(e) => setStNewFolderName(e.target.value)}
-                onKeyDown={(e) => { if (e.key === 'Enter') createStFolder(); }}
-                autoFocus
-                data-testid="st-new-folder-name-input"
-              />
+            <div className="space-y-4 py-2">
+              <div className="space-y-2">
+                <Label htmlFor="st-folder-name">Folder name</Label>
+                <Input
+                  id="st-folder-name"
+                  placeholder="e.g. May 2026 ICICI"
+                  value={stNewFolderName}
+                  onChange={(e) => setStNewFolderName(e.target.value)}
+                  onKeyDown={(e) => { if (e.key === 'Enter') createStFolder(); }}
+                  autoFocus
+                  data-testid="st-new-folder-name-input"
+                />
+              </div>
+              <div className="space-y-2">
+                <Label>Remarks (Month & Year)</Label>
+                <div className="flex items-center gap-2">
+                  <Select value={stNewFolderMonth} onValueChange={setStNewFolderMonth}>
+                    <SelectTrigger className="flex-1" data-testid="st-folder-month"><SelectValue /></SelectTrigger>
+                    <SelectContent>
+                      {MONTHS.map(m => <SelectItem key={m.v} value={m.v}>{m.l}</SelectItem>)}
+                    </SelectContent>
+                  </Select>
+                  <Select value={stNewFolderYear} onValueChange={setStNewFolderYear}>
+                    <SelectTrigger className="w-28" data-testid="st-folder-year"><SelectValue /></SelectTrigger>
+                    <SelectContent>
+                      {YEARS.map(y => <SelectItem key={y} value={y}>{y}</SelectItem>)}
+                    </SelectContent>
+                  </Select>
+                </div>
+                <p className="text-xs text-slate-500">Used by Send Mail to bundle statements + invoices.</p>
+              </div>
             </div>
             <DialogFooter>
               <Button variant="outline" onClick={() => { setStNewFolderOpen(false); setStNewFolderName(''); }}>Cancel</Button>
@@ -1194,6 +1354,30 @@ export default function Invoices({ user, onLogout }) {
                 {stmtFileName && <span className="block text-xs text-slate-500 font-normal mt-1 truncate">{stmtFileName}</span>}
               </DialogTitle>
             </DialogHeader>
+
+            {/* Remarks (Month-Year) for these invoices */}
+            <div className="bg-purple-50 border border-purple-200 rounded-md p-3 flex flex-col md:flex-row md:items-center gap-3">
+              <div className="text-sm text-slate-700 font-semibold whitespace-nowrap">Remarks</div>
+              <div className="flex items-center gap-2 flex-1">
+                <Label className="text-xs text-slate-600">Month</Label>
+                <Select value={stmtRemarksMonth} onValueChange={setStmtRemarksMonth}>
+                  <SelectTrigger className="h-8 w-36" data-testid="stmt-remarks-month"><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    {MONTHS.map(m => <SelectItem key={m.v} value={m.v}>{m.l}</SelectItem>)}
+                  </SelectContent>
+                </Select>
+                <Label className="text-xs text-slate-600">Year</Label>
+                <Select value={stmtRemarksYear} onValueChange={setStmtRemarksYear}>
+                  <SelectTrigger className="h-8 w-24" data-testid="stmt-remarks-year"><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    {YEARS.map(y => <SelectItem key={y} value={y}>{y}</SelectItem>)}
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="text-xs text-slate-500">
+                Saved on every invoice as <span className="font-mono">{stmtRemarksYear}-{stmtRemarksMonth}</span> — used by Send Mail.
+              </div>
+            </div>
 
             {/* Bulk-set toolbar */}
             <div className="bg-blue-50 border border-blue-200 rounded-md p-3 flex flex-col md:flex-row md:items-center gap-3">
