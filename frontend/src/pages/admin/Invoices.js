@@ -3,7 +3,7 @@ import Layout from '../../components/layout/Layout';
 import { Button } from '../../components/ui/button';
 import { Input } from '../../components/ui/input';
 import { Label } from '../../components/ui/label';
-import { Plus, Edit2, Trash2, Search, X, FileText, Download, Upload } from 'lucide-react';
+import { Plus, Edit2, Trash2, Search, X, FileText, Download, Upload, Folder, FolderPlus, ArrowLeft, File as FileIcon, Eye } from 'lucide-react';
 import {
   Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter,
 } from '../../components/ui/dialog';
@@ -146,6 +146,147 @@ export default function Invoices({ user, onLogout }) {
     setStmtFileName('');
     setStmtBulkBankId('');
     setStmtCreatedNumbers([]);
+  };
+
+  // ============ Statements (Folders + Files) ============
+  const [stFolders, setStFolders] = useState([]);
+  const [stCurrentFolder, setStCurrentFolder] = useState(null); // object when inside a folder
+  const [stFiles, setStFiles] = useState([]);
+  const [stLoading, setStLoading] = useState(false);
+  const [stNewFolderOpen, setStNewFolderOpen] = useState(false);
+  const [stNewFolderName, setStNewFolderName] = useState('');
+  const [stDeletingFolder, setStDeletingFolder] = useState(null);
+  const [stDeletingFile, setStDeletingFile] = useState(null);
+  const [stUploading, setStUploading] = useState(false);
+
+  const fetchStFolders = useCallback(async () => {
+    try {
+      const token = localStorage.getItem('token');
+      const res = await fetch(`${API_URL}/api/statement-folders`, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      if (!res.ok) throw new Error('Failed to load folders');
+      setStFolders(await res.json());
+    } catch (e) { toast.error(e.message); }
+  }, []);
+
+  const fetchStFiles = useCallback(async (folderId) => {
+    try {
+      setStLoading(true);
+      const token = localStorage.getItem('token');
+      const res = await fetch(`${API_URL}/api/statement-folders/${folderId}/files`, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      if (!res.ok) throw new Error('Failed to load files');
+      const data = await res.json();
+      setStFiles(data.files || []);
+      setStCurrentFolder(data.folder);
+    } catch (e) { toast.error(e.message); }
+    finally { setStLoading(false); }
+  }, []);
+
+  useEffect(() => {
+    if (activeTab === 'statements') fetchStFolders();
+  }, [activeTab, fetchStFolders]);
+
+  const createStFolder = async () => {
+    const name = stNewFolderName.trim();
+    if (!name) { toast.error('Folder name is required'); return; }
+    try {
+      const token = localStorage.getItem('token');
+      const res = await fetch(`${API_URL}/api/statement-folders`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+        body: JSON.stringify({ name }),
+      });
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}));
+        throw new Error(err.detail || 'Failed to create folder');
+      }
+      toast.success('Folder created');
+      setStNewFolderOpen(false);
+      setStNewFolderName('');
+      fetchStFolders();
+    } catch (e) { toast.error(e.message); }
+  };
+
+  const deleteStFolder = async () => {
+    if (!stDeletingFolder) return;
+    try {
+      const token = localStorage.getItem('token');
+      const res = await fetch(`${API_URL}/api/statement-folders/${stDeletingFolder.id}`, {
+        method: 'DELETE', headers: { Authorization: `Bearer ${token}` },
+      });
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}));
+        throw new Error(err.detail || 'Failed to delete folder');
+      }
+      toast.success('Folder deleted');
+      setStDeletingFolder(null);
+      fetchStFolders();
+    } catch (e) { toast.error(e.message); }
+  };
+
+  const uploadStFile = async (e) => {
+    const file = e.target.files?.[0];
+    e.target.value = '';
+    if (!file || !stCurrentFolder) return;
+    setStUploading(true);
+    try {
+      const token = localStorage.getItem('token');
+      const fd = new FormData();
+      fd.append('file', file);
+      const res = await fetch(`${API_URL}/api/statement-folders/${stCurrentFolder.id}/files`, {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${token}` },
+        body: fd,
+      });
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}));
+        throw new Error(err.detail || 'Upload failed');
+      }
+      toast.success(`Uploaded ${file.name}`);
+      fetchStFiles(stCurrentFolder.id);
+      fetchStFolders();
+    } catch (e) { toast.error(e.message); }
+    finally { setStUploading(false); }
+  };
+
+  const viewStFile = async (f) => {
+    try {
+      const token = localStorage.getItem('token');
+      const res = await fetch(`${API_URL}/api/statement-files/${f.id}/download`, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      if (!res.ok) throw new Error('Failed to fetch file');
+      const blob = await res.blob();
+      const url = URL.createObjectURL(blob);
+      window.open(url, '_blank');
+      setTimeout(() => URL.revokeObjectURL(url), 60000);
+    } catch (e) { toast.error(e.message); }
+  };
+
+  const deleteStFile = async () => {
+    if (!stDeletingFile) return;
+    try {
+      const token = localStorage.getItem('token');
+      const res = await fetch(`${API_URL}/api/statement-files/${stDeletingFile.id}`, {
+        method: 'DELETE', headers: { Authorization: `Bearer ${token}` },
+      });
+      if (!res.ok) throw new Error('Failed to delete file');
+      toast.success('File deleted');
+      setStDeletingFile(null);
+      fetchStFiles(stCurrentFolder.id);
+      fetchStFolders();
+    } catch (e) { toast.error(e.message); }
+  };
+
+  const formatBytes = (b) => {
+    if (!b) return '0 B';
+    const units = ['B', 'KB', 'MB', 'GB'];
+    let i = 0; let n = b;
+    while (n >= 1024 && i < units.length - 1) { n /= 1024; i++; }
+    return `${n.toFixed(n < 10 && i > 0 ? 1 : 0)} ${units[i]}`;
   };
 
   const handleCreateStmtInvoices = async () => {
@@ -459,7 +600,8 @@ export default function Invoices({ user, onLogout }) {
           </Button>
         </div>
 
-        {/* Bank Statement upload action bar */}
+        {/* Bank Statement upload action bar (hidden on Statements tab) */}
+        {activeTab !== 'statements' && (
         <div className="flex items-center gap-3 bg-slate-50 border border-slate-200 rounded-lg px-4 py-3" data-testid="stmt-upload-bar">
           <Upload className="w-4 h-4 text-slate-500" />
           <div className="flex-1 text-sm text-slate-700">
@@ -488,13 +630,150 @@ export default function Invoices({ user, onLogout }) {
             </span>
           </label>
         </div>
+        )}
 
         <Tabs value={activeTab} onValueChange={(v) => setActiveTab(v)}>
           <TabsList>
             <TabsTrigger value="export" data-testid="tab-export">Export Invoices</TabsTrigger>
             <TabsTrigger value="gst" data-testid="tab-gst">GST Invoices</TabsTrigger>
+            <TabsTrigger value="statements" data-testid="tab-statements">Statements</TabsTrigger>
           </TabsList>
 
+          {activeTab === 'statements' ? (
+            <TabsContent value="statements" className="mt-6 space-y-4" data-testid="statements-panel">
+              {/* Statements toolbar */}
+              <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+                <div className="flex items-center gap-2 text-sm text-slate-700">
+                  {stCurrentFolder ? (
+                    <>
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        onClick={() => { setStCurrentFolder(null); setStFiles([]); }}
+                        className="gap-1 h-8 px-2"
+                        data-testid="st-back-btn"
+                      >
+                        <ArrowLeft className="w-4 h-4" /> Back
+                      </Button>
+                      <span className="text-slate-400">/</span>
+                      <Folder className="w-4 h-4 text-blue-500" />
+                      <span className="font-semibold text-slate-900">{stCurrentFolder.name}</span>
+                      <span className="text-slate-400 text-xs">({stFiles.length} file{stFiles.length !== 1 ? 's' : ''})</span>
+                    </>
+                  ) : (
+                    <span className="text-slate-500">Organise bank statements into folders — view only</span>
+                  )}
+                </div>
+                <div className="flex items-center gap-2">
+                  {stCurrentFolder ? (
+                    <label className="cursor-pointer">
+                      <input type="file" className="hidden" onChange={uploadStFile} data-testid="st-upload-input" disabled={stUploading} />
+                      <span
+                        className={`inline-flex items-center gap-2 px-3 py-1.5 rounded-md text-sm font-medium ${stUploading ? 'bg-slate-200 text-slate-500 cursor-not-allowed' : 'bg-blue-600 text-white hover:bg-blue-700'}`}
+                        data-testid="st-upload-btn"
+                      >
+                        <Upload className="w-3.5 h-3.5" />
+                        {stUploading ? 'Uploading...' : 'Upload File'}
+                      </span>
+                    </label>
+                  ) : (
+                    <Button size="sm" onClick={() => setStNewFolderOpen(true)} className="gap-1" data-testid="st-new-folder-btn">
+                      <FolderPlus className="w-4 h-4" /> Create Folder
+                    </Button>
+                  )}
+                </div>
+              </div>
+
+              {/* Body */}
+              <div className="bg-white rounded-lg border shadow-sm overflow-hidden">
+                {!stCurrentFolder ? (
+                  // Folder grid
+                  stFolders.length === 0 ? (
+                    <div className="px-6 py-16 text-center text-slate-500 text-sm">
+                      <Folder className="w-10 h-10 mx-auto text-slate-300 mb-2" />
+                      No folders yet. Create one to start organising statements.
+                    </div>
+                  ) : (
+                    <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3 p-4">
+                      {stFolders.map(f => (
+                        <div
+                          key={f.id}
+                          className="group border border-slate-200 rounded-lg p-4 hover:border-blue-400 hover:shadow-sm cursor-pointer transition relative bg-white"
+                          onClick={() => fetchStFiles(f.id)}
+                          data-testid={`st-folder-${f.id}`}
+                        >
+                          <Folder className="w-8 h-8 text-blue-500" fill="currentColor" fillOpacity="0.1" />
+                          <div className="mt-2 font-semibold text-slate-900 truncate" title={f.name}>{f.name}</div>
+                          <div className="text-xs text-slate-500 mt-0.5">
+                            {f.file_count || 0} file{f.file_count !== 1 ? 's' : ''}
+                          </div>
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            onClick={(e) => { e.stopPropagation(); setStDeletingFolder(f); }}
+                            className="absolute top-2 right-2 opacity-0 group-hover:opacity-100 transition h-7 w-7 p-0 text-slate-400 hover:text-red-600"
+                            data-testid={`st-delete-folder-${f.id}`}
+                            title="Delete folder"
+                          >
+                            <Trash2 className="w-3.5 h-3.5" />
+                          </Button>
+                        </div>
+                      ))}
+                    </div>
+                  )
+                ) : (
+                  // Files in folder
+                  <div className="overflow-x-auto">
+                    <table className="w-full text-sm">
+                      <thead className="bg-slate-50 border-b">
+                        <tr>
+                          <th className="px-6 py-3 text-left text-xs font-medium text-slate-500 uppercase tracking-wider">File</th>
+                          <th className="px-6 py-3 text-left text-xs font-medium text-slate-500 uppercase tracking-wider">Size</th>
+                          <th className="px-6 py-3 text-left text-xs font-medium text-slate-500 uppercase tracking-wider">Uploaded</th>
+                          <th className="px-6 py-3 text-right text-xs font-medium text-slate-500 uppercase tracking-wider">Actions</th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-slate-100">
+                        {stLoading ? (
+                          <tr><td colSpan="4" className="px-6 py-8 text-center text-slate-500">Loading...</td></tr>
+                        ) : stFiles.length === 0 ? (
+                          <tr><td colSpan="4" className="px-6 py-10 text-center text-slate-500">
+                            <FileIcon className="w-8 h-8 mx-auto text-slate-300 mb-2" />
+                            No files in this folder. Click &ldquo;Upload File&rdquo; to add one.
+                          </td></tr>
+                        ) : (
+                          stFiles.map(f => (
+                            <tr key={f.id} className="hover:bg-slate-50" data-testid={`st-file-${f.id}`}>
+                              <td className="px-6 py-3">
+                                <div className="flex items-center gap-2">
+                                  <FileIcon className="w-4 h-4 text-slate-400" />
+                                  <span className="font-medium text-slate-900">{f.filename}</span>
+                                </div>
+                              </td>
+                              <td className="px-6 py-3 text-slate-600 text-xs">{formatBytes(f.size)}</td>
+                              <td className="px-6 py-3 text-slate-600 text-xs">
+                                {f.uploaded_at ? new Date(f.uploaded_at).toLocaleString('en-IN', { day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' }) : '-'}
+                              </td>
+                              <td className="px-6 py-3 text-right">
+                                <div className="flex justify-end gap-1">
+                                  <Button variant="ghost" size="sm" onClick={() => viewStFile(f)} className="text-blue-600 hover:text-blue-700 h-7 w-7 p-0" title="View" data-testid={`st-view-file-${f.id}`}>
+                                    <Eye className="w-4 h-4" />
+                                  </Button>
+                                  <Button variant="ghost" size="sm" onClick={() => setStDeletingFile(f)} className="text-red-600 hover:text-red-700 h-7 w-7 p-0" title="Delete" data-testid={`st-delete-file-${f.id}`}>
+                                    <Trash2 className="w-4 h-4" />
+                                  </Button>
+                                </div>
+                              </td>
+                            </tr>
+                          ))
+                        )}
+                      </tbody>
+                    </table>
+                  </div>
+                )}
+              </div>
+            </TabsContent>
+          ) : (
           <TabsContent value={activeTab} className="mt-6 space-y-4">
             <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2 sm:justify-between">
               <div className="relative flex-1 max-w-md">
@@ -624,6 +903,7 @@ export default function Invoices({ user, onLogout }) {
               </div>
             </div>
           </TabsContent>
+          )}
         </Tabs>
 
         {/* Add/Edit Dialog */}
@@ -839,6 +1119,67 @@ export default function Invoices({ user, onLogout }) {
                 data-testid="bulk-delete-confirm-btn"
               >
                 {loading ? 'Deleting...' : `Delete ${selectedIds.size}`}
+              </AlertDialogAction>
+            </AlertDialogFooter>
+          </AlertDialogContent>
+        </AlertDialog>
+
+        {/* Statements: create folder dialog */}
+        <Dialog open={stNewFolderOpen} onOpenChange={setStNewFolderOpen}>
+          <DialogContent data-testid="st-new-folder-dialog">
+            <DialogHeader>
+              <DialogTitle>Create Folder</DialogTitle>
+            </DialogHeader>
+            <div className="space-y-3 py-2">
+              <Label htmlFor="st-folder-name">Folder name</Label>
+              <Input
+                id="st-folder-name"
+                placeholder="e.g. May 2026 ICICI"
+                value={stNewFolderName}
+                onChange={(e) => setStNewFolderName(e.target.value)}
+                onKeyDown={(e) => { if (e.key === 'Enter') createStFolder(); }}
+                autoFocus
+                data-testid="st-new-folder-name-input"
+              />
+            </div>
+            <DialogFooter>
+              <Button variant="outline" onClick={() => { setStNewFolderOpen(false); setStNewFolderName(''); }}>Cancel</Button>
+              <Button onClick={createStFolder} data-testid="st-new-folder-save-btn">Create</Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
+
+        {/* Statements: delete folder confirm */}
+        <AlertDialog open={!!stDeletingFolder} onOpenChange={(o) => { if (!o) setStDeletingFolder(null); }}>
+          <AlertDialogContent>
+            <AlertDialogHeader>
+              <AlertDialogTitle>Delete folder &ldquo;{stDeletingFolder?.name}&rdquo;?</AlertDialogTitle>
+              <AlertDialogDescription>
+                The folder must be empty. If it contains files, please delete the files first.
+              </AlertDialogDescription>
+            </AlertDialogHeader>
+            <AlertDialogFooter>
+              <AlertDialogCancel>Cancel</AlertDialogCancel>
+              <AlertDialogAction onClick={deleteStFolder} className="bg-red-600 hover:bg-red-700" data-testid="st-confirm-delete-folder-btn">
+                Delete
+              </AlertDialogAction>
+            </AlertDialogFooter>
+          </AlertDialogContent>
+        </AlertDialog>
+
+        {/* Statements: delete file confirm */}
+        <AlertDialog open={!!stDeletingFile} onOpenChange={(o) => { if (!o) setStDeletingFile(null); }}>
+          <AlertDialogContent>
+            <AlertDialogHeader>
+              <AlertDialogTitle>Delete file &ldquo;{stDeletingFile?.filename}&rdquo;?</AlertDialogTitle>
+              <AlertDialogDescription>
+                This will permanently delete the file. This cannot be undone.
+              </AlertDialogDescription>
+            </AlertDialogHeader>
+            <AlertDialogFooter>
+              <AlertDialogCancel>Cancel</AlertDialogCancel>
+              <AlertDialogAction onClick={deleteStFile} className="bg-red-600 hover:bg-red-700" data-testid="st-confirm-delete-file-btn">
+                Delete
               </AlertDialogAction>
             </AlertDialogFooter>
           </AlertDialogContent>

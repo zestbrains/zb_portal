@@ -7362,6 +7362,149 @@ async def bulk_delete_invoices(
     return {"deleted": result.deleted_count, "requested": len(payload.ids)}
 
 
+# ==================== STATEMENTS (Folders + GridFS files) ====================
+from motor.motor_asyncio import AsyncIOMotorGridFSBucket
+
+_statement_bucket: Optional[AsyncIOMotorGridFSBucket] = None
+def _get_statement_bucket() -> AsyncIOMotorGridFSBucket:
+    global _statement_bucket
+    if _statement_bucket is None:
+        _statement_bucket = AsyncIOMotorGridFSBucket(db, bucket_name="statement_files")
+    return _statement_bucket
+
+
+class StatementFolderPayload(BaseModel):
+    name: str
+
+
+@api_router.get("/statement-folders")
+async def list_statement_folders(user: dict = Depends(require_role(["admin"]))):
+    folders = await db.statement_folders.find({}, {"_id": 0}).sort("created_at", -1).to_list(None)
+    # Attach file counts
+    for f in folders:
+        f["file_count"] = await db.statement_files.count_documents({"folder_id": f["id"]})
+    return folders
+
+
+@api_router.post("/statement-folders")
+async def create_statement_folder(
+    payload: StatementFolderPayload, user: dict = Depends(require_role(["admin"]))
+):
+    name = (payload.name or "").strip()
+    if not name:
+        raise HTTPException(status_code=400, detail="Folder name is required")
+    existing = await db.statement_folders.find_one({"name": {"$regex": f"^{name}$", "$options": "i"}})
+    if existing:
+        raise HTTPException(status_code=400, detail="Folder with this name already exists")
+    doc = {
+        "id": str(uuid.uuid4()),
+        "name": name,
+        "created_at": get_ist_now_iso(),
+        "created_by": user.get("username", ""),
+    }
+    await db.statement_folders.insert_one(doc)
+    doc.pop("_id", None)
+    doc["file_count"] = 0
+    return doc
+
+
+@api_router.delete("/statement-folders/{folder_id}")
+async def delete_statement_folder(folder_id: str, user: dict = Depends(require_role(["admin"]))):
+    files_count = await db.statement_files.count_documents({"folder_id": folder_id})
+    if files_count > 0:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Folder is not empty ({files_count} file(s)). Delete files first.",
+        )
+    result = await db.statement_folders.delete_one({"id": folder_id})
+    if result.deleted_count == 0:
+        raise HTTPException(status_code=404, detail="Folder not found")
+    return {"status": "deleted"}
+
+
+@api_router.get("/statement-folders/{folder_id}/files")
+async def list_statement_files(folder_id: str, user: dict = Depends(require_role(["admin"]))):
+    folder = await db.statement_folders.find_one({"id": folder_id}, {"_id": 0})
+    if not folder:
+        raise HTTPException(status_code=404, detail="Folder not found")
+    files = await db.statement_files.find(
+        {"folder_id": folder_id}, {"_id": 0, "gridfs_id": 0}
+    ).sort("uploaded_at", -1).to_list(None)
+    return {"folder": folder, "files": files}
+
+
+@api_router.post("/statement-folders/{folder_id}/files")
+async def upload_statement_file(
+    folder_id: str,
+    file: UploadFile = File(...),
+    user: dict = Depends(require_role(["admin"])),
+):
+    folder = await db.statement_folders.find_one({"id": folder_id})
+    if not folder:
+        raise HTTPException(status_code=404, detail="Folder not found")
+    if not file.filename:
+        raise HTTPException(status_code=400, detail="Empty filename")
+    contents = await file.read()
+    if not contents:
+        raise HTTPException(status_code=400, detail="Empty file")
+
+    bucket = _get_statement_bucket()
+    gridfs_id = await bucket.upload_from_stream(
+        file.filename,
+        contents,
+        metadata={"content_type": file.content_type or "application/octet-stream"},
+    )
+    doc = {
+        "id": str(uuid.uuid4()),
+        "folder_id": folder_id,
+        "filename": file.filename,
+        "content_type": file.content_type or "application/octet-stream",
+        "size": len(contents),
+        "gridfs_id": str(gridfs_id),
+        "uploaded_at": get_ist_now_iso(),
+        "uploaded_by": user.get("username", ""),
+    }
+    await db.statement_files.insert_one(doc)
+    doc.pop("_id", None)
+    doc.pop("gridfs_id", None)
+    return doc
+
+
+@api_router.get("/statement-files/{file_id}/download")
+async def download_statement_file(file_id: str, user: dict = Depends(require_role(["admin"]))):
+    f = await db.statement_files.find_one({"id": file_id})
+    if not f:
+        raise HTTPException(status_code=404, detail="File not found")
+    bucket = _get_statement_bucket()
+    from bson import ObjectId
+    try:
+        gridfs_oid = ObjectId(f["gridfs_id"])
+    except Exception:
+        raise HTTPException(status_code=500, detail="Corrupt file reference")
+    grid_out = await bucket.open_download_stream(gridfs_oid)
+    data = await grid_out.read()
+    return StreamingResponse(
+        io.BytesIO(data),
+        media_type=f.get("content_type", "application/octet-stream"),
+        headers={"Content-Disposition": f'inline; filename="{f["filename"]}"'},
+    )
+
+
+@api_router.delete("/statement-files/{file_id}")
+async def delete_statement_file(file_id: str, user: dict = Depends(require_role(["admin"]))):
+    f = await db.statement_files.find_one({"id": file_id})
+    if not f:
+        raise HTTPException(status_code=404, detail="File not found")
+    bucket = _get_statement_bucket()
+    from bson import ObjectId
+    try:
+        await bucket.delete(ObjectId(f["gridfs_id"]))
+    except Exception:
+        pass  # already gone — proceed
+    await db.statement_files.delete_one({"id": file_id})
+    return {"status": "deleted"}
+
+
 @api_router.get("/invoices/{invoice_id}/pdf")
 async def download_invoice_pdf(invoice_id: str, user: dict = Depends(require_role(["admin"]))):
     inv = await db.invoices.find_one({"id": invoice_id}, {"_id": 0})
