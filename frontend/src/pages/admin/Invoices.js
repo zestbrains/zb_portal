@@ -603,7 +603,7 @@ export default function Invoices({ user, onLogout }) {
 
         {/* Bank Statement Preview Dialog */}
         <Dialog open={stmtDialogOpen} onOpenChange={(o) => { if (!o) closeStmtDialog(); }}>
-          <DialogContent className="max-w-2xl" data-testid="stmt-preview-dialog">
+          <DialogContent className="max-w-4xl" data-testid="stmt-preview-dialog">
             <DialogHeader>
               <DialogTitle>
                 Bank Statement — Deposits (Cr)
@@ -619,23 +619,27 @@ export default function Invoices({ user, onLogout }) {
                 <table className="w-full text-sm border border-slate-200 rounded">
                   <thead className="bg-slate-50 border-b border-slate-200">
                     <tr>
-                      <th className="px-4 py-2 text-left text-xs font-semibold text-slate-600 uppercase">#</th>
-                      <th className="px-4 py-2 text-left text-xs font-semibold text-slate-600 uppercase">Transaction Date</th>
-                      <th className="px-4 py-2 text-right text-xs font-semibold text-slate-600 uppercase">Deposit (Cr)</th>
-                      <th className="px-4 py-2 w-12"></th>
+                      <th className="px-3 py-2 text-left text-xs font-semibold text-slate-600 uppercase w-12">#</th>
+                      <th className="px-3 py-2 text-left text-xs font-semibold text-slate-600 uppercase whitespace-nowrap">Transaction Date</th>
+                      <th className="px-3 py-2 text-right text-xs font-semibold text-slate-600 uppercase whitespace-nowrap">Deposit (Cr)</th>
+                      <th className="px-3 py-2 text-left text-xs font-semibold text-slate-600 uppercase">Transaction Remarks</th>
+                      <th className="px-3 py-2 w-12"></th>
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-slate-100">
                     {stmtRows.map((r, idx) => (
-                      <tr key={idx} className="hover:bg-slate-50" data-testid={`stmt-row-${idx}`}>
-                        <td className="px-4 py-2 text-slate-500">{idx + 1}</td>
-                        <td className="px-4 py-2 font-medium text-slate-900">
+                      <tr key={idx} className="hover:bg-slate-50 align-top" data-testid={`stmt-row-${idx}`}>
+                        <td className="px-3 py-2 text-slate-500">{idx + 1}</td>
+                        <td className="px-3 py-2 font-medium text-slate-900 whitespace-nowrap">
                           {r.transaction_date
                             ? new Date(r.transaction_date).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' })
                             : '-'}
                         </td>
-                        <td className="px-4 py-2 text-right font-mono font-semibold text-emerald-700">
+                        <td className="px-3 py-2 text-right font-mono font-semibold text-emerald-700 whitespace-nowrap">
                           {Number(r.deposit_amount).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                        </td>
+                        <td className="px-3 py-2 text-slate-700 text-xs leading-snug max-w-md break-words" title={r.transaction_remarks || ''}>
+                          {r.transaction_remarks || '-'}
                         </td>
                         <td className="px-2 py-2 text-right">
                           <Button
@@ -655,14 +659,14 @@ export default function Invoices({ user, onLogout }) {
                   {stmtRows.length > 0 && (
                     <tfoot>
                       <tr className="bg-slate-50 border-t border-slate-200">
-                        <td colSpan="2" className="px-4 py-2 text-right text-xs font-semibold text-slate-600 uppercase">
+                        <td colSpan="2" className="px-3 py-2 text-right text-xs font-semibold text-slate-600 uppercase">
                           Total ({stmtRows.length} row{stmtRows.length !== 1 ? 's' : ''})
                         </td>
-                        <td className="px-4 py-2 text-right font-mono font-bold text-slate-900">
+                        <td className="px-3 py-2 text-right font-mono font-bold text-slate-900 whitespace-nowrap">
                           {stmtRows.reduce((s, r) => s + Number(r.deposit_amount || 0), 0)
                             .toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                         </td>
-                        <td></td>
+                        <td colSpan="2"></td>
                       </tr>
                     </tfoot>
                   )}

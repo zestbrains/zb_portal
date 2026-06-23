@@ -35,18 +35,27 @@ def _is_deposit_header(text: str) -> bool:
     return "deposit" in t and ("cr" in t or "credit" in t)
 
 
-def _find_header_indices(row: List[str]) -> tuple[int, int] | None:
-    """Return (transaction_date_idx, deposit_idx) if this row is a header."""
+def _is_remarks_header(text: str) -> bool:
+    t = text.lower()
+    return ("remark" in t) or ("narration" in t) or ("description" in t)
+
+
+def _find_header_indices(row: List[str]) -> tuple[int, int, int] | None:
+    """Return (transaction_date_idx, deposit_idx, remarks_idx) if header row.
+    remarks_idx may be -1 if not found."""
     tx_idx = -1
     dep_idx = -1
+    rem_idx = -1
     for i, cell in enumerate(row or []):
         norm = _normalise(cell)
         if tx_idx == -1 and _is_transaction_date_header(norm):
             tx_idx = i
         elif dep_idx == -1 and _is_deposit_header(norm):
             dep_idx = i
+        elif rem_idx == -1 and _is_remarks_header(norm):
+            rem_idx = i
     if tx_idx >= 0 and dep_idx >= 0:
-        return tx_idx, dep_idx
+        return tx_idx, dep_idx, rem_idx
     return None
 
 
@@ -64,9 +73,11 @@ def _parse_date(raw: str) -> str:
 
 
 def _parse_amount(raw: str) -> float | None:
+    """Parse amounts that may contain newlines (PDF line-wrap), commas, ₹ sign, spaces."""
     if not raw:
         return None
-    cleaned = _normalise(raw).replace(",", "").replace("\u20b9", "").strip()
+    # Strip ALL whitespace (incl. newlines) so "2,34,705.\n17" -> "234705.17"
+    cleaned = re.sub(r"\s+", "", str(raw)).replace(",", "").replace("\u20b9", "")
     if not cleaned or cleaned in ("-", "."):
         return None
     try:
@@ -89,7 +100,7 @@ def parse_icici_statement(pdf_bytes: bytes) -> Dict[str, object]:
     """
     rows: List[Dict[str, object]] = []
     warnings: List[str] = []
-    header_idx: tuple[int, int] | None = None
+    header_idx: tuple[int, int, int] | None = None
 
     import io
     with pdfplumber.open(io.BytesIO(pdf_bytes)) as pdf:
@@ -119,8 +130,8 @@ def parse_icici_statement(pdf_bytes: bytes) -> Dict[str, object]:
                 if local_header:
                     header_idx = local_header
 
-                tx_idx, dep_idx = indices
-                max_idx = max(tx_idx, dep_idx)
+                tx_idx, dep_idx, rem_idx = indices
+                max_idx = max(tx_idx, dep_idx, rem_idx if rem_idx >= 0 else 0)
 
                 for row in table[start_data_idx:]:
                     if not row or len(row) <= max_idx:
@@ -133,9 +144,13 @@ def parse_icici_statement(pdf_bytes: bytes) -> Dict[str, object]:
                     if amount is None or amount == 0:
                         continue  # Skip rows with no credit
                     date_iso = _parse_date(tx_raw)
+                    remarks = ""
+                    if rem_idx >= 0 and rem_idx < len(row):
+                        remarks = _normalise(row[rem_idx])
                     rows.append({
                         "transaction_date": date_iso,
                         "deposit_amount": amount,
+                        "transaction_remarks": remarks,
                     })
 
     if header_idx is None:
