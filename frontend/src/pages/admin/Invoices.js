@@ -114,6 +114,8 @@ export default function Invoices({ user, onLogout }) {
         bank_id: '',
         item_name: STATIC_ITEMS[0],
         invoice_date: minusOneDay(r.transaction_date),
+        // override_usd allows manual edit if FX failed or user wants to tweak
+        override_usd: r.usd_amount != null ? Number(r.usd_amount) : 0,
       }));
       setStmtRows(enriched);
       setStmtDialogOpen(true);
@@ -162,6 +164,11 @@ export default function Invoices({ user, onLogout }) {
       // Create sequentially so backend auto-increment stays in order
       for (let i = 0; i < stmtRows.length; i++) {
         const r = stmtRows[i];
+        const usdAmount = Number(r.override_usd || 0);
+        if (!usdAmount) {
+          failures.push({ row: i + 1, error: 'Missing USD amount (FX rate not available)' });
+          continue;
+        }
         const payload = {
           type: 'export',
           invoice_date: r.invoice_date || minusOneDay(r.transaction_date),
@@ -172,12 +179,14 @@ export default function Invoices({ user, onLogout }) {
             item: r.item_name,
             description: r.transaction_remarks || '',
             quantity: 1,
-            amount: Number(r.deposit_amount || 0),
+            amount: usdAmount,
             currency: 'USD',
             sac: '998314',
             tax_percent: 0,
           }],
-          notes: '',
+          notes: r.fx_rate
+            ? `Converted from INR ${Number(r.inr_amount).toFixed(2)} @ ${r.fx_rate} (USD on ${r.transaction_date})`
+            : '',
           discount: 0,
           tax_mode: 'cgst_sgst',
           cgst_amount: 0,
@@ -755,7 +764,9 @@ export default function Invoices({ user, onLogout }) {
                       <th className="px-2 py-2 text-left text-xs font-semibold text-slate-600 uppercase w-10">#</th>
                       <th className="px-2 py-2 text-left text-xs font-semibold text-slate-600 uppercase whitespace-nowrap">Txn Date</th>
                       <th className="px-2 py-2 text-left text-xs font-semibold text-slate-600 uppercase whitespace-nowrap">Invoice Date</th>
-                      <th className="px-2 py-2 text-right text-xs font-semibold text-slate-600 uppercase whitespace-nowrap">Deposit (USD)</th>
+                      <th className="px-2 py-2 text-right text-xs font-semibold text-slate-600 uppercase whitespace-nowrap">INR</th>
+                      <th className="px-2 py-2 text-right text-xs font-semibold text-slate-600 uppercase whitespace-nowrap" title="INR -> USD rate on txn date">Rate</th>
+                      <th className="px-2 py-2 text-right text-xs font-semibold text-slate-600 uppercase whitespace-nowrap">USD</th>
                       <th className="px-2 py-2 text-left text-xs font-semibold text-slate-600 uppercase">Item</th>
                       <th className="px-2 py-2 text-left text-xs font-semibold text-slate-600 uppercase">Billed To (Client)</th>
                       <th className="px-2 py-2 text-left text-xs font-semibold text-slate-600 uppercase">Remarks</th>
@@ -780,10 +791,25 @@ export default function Invoices({ user, onLogout }) {
                             data-testid={`stmt-invoice-date-${idx}`}
                           />
                         </td>
-                        <td className="px-2 py-2 text-right font-mono font-semibold text-emerald-700 whitespace-nowrap">
-                          {Number(r.deposit_amount).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                        <td className="px-2 py-2 text-right font-mono text-slate-700 whitespace-nowrap text-xs">
+                          {Number(r.inr_amount).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                         </td>
-                        <td className="px-2 py-2 min-w-[180px]">
+                        <td className="px-2 py-2 text-right font-mono text-slate-500 whitespace-nowrap text-xs" title="INR to USD on txn date">
+                          {r.fx_rate ? Number(r.fx_rate).toFixed(5) : '—'}
+                        </td>
+                        <td className="px-2 py-2 w-28">
+                          <Input
+                            type="number"
+                            step="0.01"
+                            min="0"
+                            value={r.override_usd || ''}
+                            onChange={(e) => updateStmtRow(idx, 'override_usd', e.target.value)}
+                            className={`h-8 text-xs text-right font-mono font-semibold ${r.fx_rate ? 'text-emerald-700' : 'text-amber-700'}`}
+                            data-testid={`stmt-usd-${idx}`}
+                            placeholder={r.fx_rate ? '' : 'enter USD'}
+                          />
+                        </td>
+                        <td className="px-2 py-2 min-w-[160px]">
                           <Select value={r.item_name} onValueChange={(v) => updateStmtRow(idx, 'item_name', v)}>
                             <SelectTrigger className="h-8 text-xs" data-testid={`stmt-item-${idx}`}>
                               <SelectValue placeholder="Select item" />
@@ -793,7 +819,7 @@ export default function Invoices({ user, onLogout }) {
                             </SelectContent>
                           </Select>
                         </td>
-                        <td className="px-2 py-2 min-w-[170px]">
+                        <td className="px-2 py-2 min-w-[150px]">
                           <Select value={r.client_id} onValueChange={(v) => updateStmtRow(idx, 'client_id', v)}>
                             <SelectTrigger className="h-8 text-xs" data-testid={`stmt-client-${idx}`}>
                               <SelectValue placeholder="Select client" />
@@ -803,9 +829,9 @@ export default function Invoices({ user, onLogout }) {
                             </SelectContent>
                           </Select>
                         </td>
-                        <td className="px-2 py-2 text-slate-600 text-[11px] leading-snug max-w-[220px] break-words" title={r.transaction_remarks || ''}>
-                          {(r.transaction_remarks || '-').slice(0, 80)}
-                          {(r.transaction_remarks || '').length > 80 ? '…' : ''}
+                        <td className="px-2 py-2 text-slate-600 text-[11px] leading-snug max-w-[200px] break-words" title={r.transaction_remarks || ''}>
+                          {(r.transaction_remarks || '-').slice(0, 70)}
+                          {(r.transaction_remarks || '').length > 70 ? '…' : ''}
                         </td>
                         <td className="px-1 py-2 text-right">
                           <Button
@@ -827,9 +853,14 @@ export default function Invoices({ user, onLogout }) {
                       <td colSpan="3" className="px-3 py-2 text-right text-xs font-semibold text-slate-600 uppercase">
                         Total ({stmtRows.length} row{stmtRows.length !== 1 ? 's' : ''})
                       </td>
-                      <td className="px-2 py-2 text-right font-mono font-bold text-slate-900 whitespace-nowrap">
-                        {stmtRows.reduce((s, r) => s + Number(r.deposit_amount || 0), 0)
+                      <td className="px-2 py-2 text-right font-mono font-bold text-slate-900 whitespace-nowrap text-xs">
+                        {stmtRows.reduce((s, r) => s + Number(r.inr_amount || 0), 0)
                           .toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                      </td>
+                      <td></td>
+                      <td className="px-2 py-2 text-right font-mono font-bold text-emerald-700 whitespace-nowrap text-xs">
+                        {stmtRows.reduce((s, r) => s + Number(r.override_usd || 0), 0)
+                          .toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                       </td>
                       <td colSpan="4"></td>
                     </tr>

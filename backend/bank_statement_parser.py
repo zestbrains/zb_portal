@@ -7,14 +7,48 @@ Tuned for ICICI 'Detailed Statement' format which has the column headers:
 
 We dynamically locate the 'Transaction Date' and 'Deposit (Cr)' columns by
 header text, so minor layout drift between ICICI statements still works.
+
+Each deposit row is enriched with the INR -> USD FX rate on the transaction
+date (Frankfurter API) so the caller can create invoices in USD.
 """
 from __future__ import annotations
 
 import re
+import urllib.request
+import urllib.parse
+import json
+import logging
 from datetime import datetime
 from typing import List, Dict
 
 import pdfplumber
+
+logger = logging.getLogger(__name__)
+
+# In-process FX rate cache: { (date_iso, from_ccy, to_ccy): rate_float }
+_FX_CACHE: Dict[tuple, float] = {}
+FX_API_BASE = "https://api.frankfurter.dev/v1"
+
+
+def _fetch_fx_rate(date_iso: str, from_ccy: str = "INR", to_ccy: str = "USD") -> float | None:
+    """Return rate so that  amount_to = amount_from * rate.
+    Falls back to nearest available business day. Returns None if unavailable."""
+    if not date_iso:
+        return None
+    key = (date_iso, from_ccy, to_ccy)
+    if key in _FX_CACHE:
+        return _FX_CACHE[key]
+    try:
+        url = f"{FX_API_BASE}/{date_iso}?from={from_ccy}&to={to_ccy}"
+        req = urllib.request.Request(url, headers={"User-Agent": "Zestbrains-HR/1.0"})
+        with urllib.request.urlopen(req, timeout=8) as resp:
+            data = json.loads(resp.read().decode("utf-8"))
+        rate = float(data.get("rates", {}).get(to_ccy))
+        _FX_CACHE[key] = rate
+        return rate
+    except Exception as e:
+        logger.warning("FX fetch failed for %s %s->%s: %s", date_iso, from_ccy, to_ccy, e)
+        return None
 
 
 def _normalise(cell: str) -> str:
@@ -147,9 +181,14 @@ def parse_icici_statement(pdf_bytes: bytes) -> Dict[str, object]:
                     remarks = ""
                     if rem_idx >= 0 and rem_idx < len(row):
                         remarks = _normalise(row[rem_idx])
+                    fx_rate = _fetch_fx_rate(date_iso, "INR", "USD") if date_iso else None
+                    usd_amount = round(amount * fx_rate, 2) if fx_rate else None
                     rows.append({
                         "transaction_date": date_iso,
-                        "deposit_amount": amount,
+                        "inr_amount": amount,
+                        "deposit_amount": amount,  # kept for backward-compat
+                        "fx_rate": fx_rate,
+                        "usd_amount": usd_amount,
                         "transaction_remarks": remarks,
                     })
 
@@ -159,10 +198,15 @@ def parse_icici_statement(pdf_bytes: bytes) -> Dict[str, object]:
             "Is this an ICICI Detailed Statement?"
         )
 
-    total = round(sum(r["deposit_amount"] for r in rows), 2)
+    total = round(sum(r["inr_amount"] for r in rows), 2)
+    total_usd = round(sum(r["usd_amount"] for r in rows if r.get("usd_amount")), 2)
+    fx_failures = sum(1 for r in rows if r.get("usd_amount") is None)
+    if fx_failures:
+        warnings.append(f"Could not fetch FX rate for {fx_failures} row(s); USD amount missing.")
     return {
         "rows": rows,
         "total_credit": total,
+        "total_credit_usd": total_usd,
         "count": len(rows),
         "warnings": warnings,
     }

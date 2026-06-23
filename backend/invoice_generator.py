@@ -490,7 +490,37 @@ class InvoicePDF(FPDF):
         return self.get_y() + 3
 
     # ----------------- FOOTER -----------------
+    def draw_compliance_info(self, y_start=None):
+        """Static company compliance info bar shown just above the footer."""
+        if y_start is None:
+            y_start = PH - 32
+        items = [
+            ("IEC", "AABCZ1430F", 1.0),
+            ("LUT", "AD240423008905A", 1.3),
+            ("CIN", "U72900GJ2017PTC099760", 1.7),
+            ("TAN", "AHMZ00553A", 1.0),
+        ]
+        total_weight = sum(w for _, _, w in items)
+        # Soft background bar
+        self.set_fill_color(*PRIMARY_SOFT)
+        self.rect(LM, y_start, CW, 6.5, "F")
+
+        x = LM
+        for label, value, weight in items:
+            col_w = CW * weight / total_weight
+            self.set_xy(x + 2, y_start + 1)
+            self.set_text_color(*PRIMARY)
+            self._f("B", 8.5)
+            self.cell(9, 4.5, label)
+            self.set_text_color(*TEXT)
+            self._f("", 8.5)
+            self.cell(col_w - 12, 4.5, value)
+            x += col_w
+
     def draw_footer(self):
+        # Compliance info bar
+        self.draw_compliance_info(y_start=PH - 32)
+
         # No accent bar (it was overlapping). Use a clean two-line centered footer.
         footer_y = PH - 18
         self.set_draw_color(*BORDER)
