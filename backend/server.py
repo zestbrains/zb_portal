@@ -7347,6 +7347,21 @@ async def delete_invoice(invoice_id: str, user: dict = Depends(require_role(["ad
     return {"status": "deleted"}
 
 
+class BulkInvoiceDeletePayload(BaseModel):
+    ids: List[str]
+
+
+@api_router.post("/invoices/bulk-delete")
+async def bulk_delete_invoices(
+    payload: BulkInvoiceDeletePayload,
+    user: dict = Depends(require_role(["admin"])),
+):
+    if not payload.ids:
+        raise HTTPException(status_code=400, detail="No invoice ids provided")
+    result = await db.invoices.delete_many({"id": {"$in": payload.ids}})
+    return {"deleted": result.deleted_count, "requested": len(payload.ids)}
+
+
 @api_router.get("/invoices/{invoice_id}/pdf")
 async def download_invoice_pdf(invoice_id: str, user: dict = Depends(require_role(["admin"]))):
     inv = await db.invoices.find_one({"id": invoice_id}, {"_id": 0})

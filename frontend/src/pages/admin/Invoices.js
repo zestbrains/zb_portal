@@ -12,6 +12,7 @@ import {
   AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
 } from '../../components/ui/alert-dialog';
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '../../components/ui/tabs';
+import { Checkbox } from '../../components/ui/checkbox';
 import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from '../../components/ui/select';
@@ -50,6 +51,8 @@ export default function Invoices({ user, onLogout }) {
   const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
   const [editingInvoice, setEditingInvoice] = useState(null);
   const [deletingInvoice, setDeletingInvoice] = useState(null);
+  const [selectedIds, setSelectedIds] = useState(new Set());
+  const [bulkDeleteOpen, setBulkDeleteOpen] = useState(false);
   const [formData, setFormData] = useState(emptyForm('export'));
   const [nextNumber, setNextNumber] = useState('');
 
@@ -365,6 +368,55 @@ export default function Invoices({ user, onLogout }) {
     finally { setLoading(false); }
   };
 
+  // Bulk selection helpers (scoped to current tab/filter)
+  const toggleSelectOne = (id) => {
+    setSelectedIds(prev => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  };
+
+  const toggleSelectAll = (visibleIds) => {
+    const allSelected = visibleIds.length > 0 && visibleIds.every(id => selectedIds.has(id));
+    setSelectedIds(prev => {
+      const next = new Set(prev);
+      if (allSelected) {
+        visibleIds.forEach(id => next.delete(id));
+      } else {
+        visibleIds.forEach(id => next.add(id));
+      }
+      return next;
+    });
+  };
+
+  const clearSelection = () => setSelectedIds(new Set());
+
+  const handleBulkDelete = async () => {
+    const ids = Array.from(selectedIds);
+    if (ids.length === 0) return;
+    try {
+      setLoading(true);
+      const token = localStorage.getItem('token');
+      const res = await fetch(`${API_URL}/api/invoices/bulk-delete`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+        body: JSON.stringify({ ids }),
+      });
+      if (!res.ok) throw new Error('Failed to bulk delete');
+      const data = await res.json();
+      toast.success(`Deleted ${data.deleted} invoice${data.deleted !== 1 ? 's' : ''}`);
+      setBulkDeleteOpen(false);
+      clearSelection();
+      fetchAll();
+    } catch (e) { toast.error(e.message); }
+    finally { setLoading(false); }
+  };
+
+  // Clear selection when switching tabs
+  useEffect(() => { clearSelection(); }, [activeTab]);
+
   const downloadPdf = async (inv) => {
     try {
       const token = localStorage.getItem('token');
@@ -444,8 +496,8 @@ export default function Invoices({ user, onLogout }) {
           </TabsList>
 
           <TabsContent value={activeTab} className="mt-6 space-y-4">
-            <div className="flex items-center gap-2 max-w-md">
-              <div className="relative flex-1">
+            <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2 sm:justify-between">
+              <div className="relative flex-1 max-w-md">
                 <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-slate-400 w-4 h-4" />
                 <Input
                   placeholder="Search by invoice no. or client..."
@@ -455,6 +507,38 @@ export default function Invoices({ user, onLogout }) {
                   data-testid="invoices-search-input"
                 />
               </div>
+
+              {/* Bulk action bar — visible whenever any row is selected */}
+              {(() => {
+                const visibleIds = filtered.map(i => i.id);
+                const selectedInTab = visibleIds.filter(id => selectedIds.has(id));
+                if (selectedInTab.length === 0) return null;
+                return (
+                  <div className="flex items-center gap-2 bg-red-50 border border-red-200 rounded-md px-3 py-2" data-testid="bulk-action-bar">
+                    <span className="text-sm font-medium text-red-900" data-testid="bulk-selected-count">
+                      {selectedInTab.length} selected
+                    </span>
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      onClick={clearSelection}
+                      className="h-8"
+                      data-testid="bulk-clear-btn"
+                    >
+                      Clear
+                    </Button>
+                    <Button
+                      size="sm"
+                      onClick={() => setBulkDeleteOpen(true)}
+                      className="h-8 bg-red-600 hover:bg-red-700 text-white gap-1"
+                      data-testid="bulk-delete-btn"
+                    >
+                      <Trash2 className="w-3.5 h-3.5" />
+                      Delete Selected
+                    </Button>
+                  </div>
+                );
+              })()}
             </div>
 
             <div className="bg-white rounded-lg border shadow-sm overflow-hidden">
@@ -462,6 +546,14 @@ export default function Invoices({ user, onLogout }) {
                 <table className="w-full" data-testid="invoices-table">
                   <thead className="bg-slate-50 border-b">
                     <tr>
+                      <th className="pl-6 pr-2 py-3 w-10">
+                        <Checkbox
+                          checked={filtered.length > 0 && filtered.every(i => selectedIds.has(i.id))}
+                          onCheckedChange={() => toggleSelectAll(filtered.map(i => i.id))}
+                          aria-label="Select all"
+                          data-testid="select-all-checkbox"
+                        />
+                      </th>
                       <th className="px-6 py-3 text-left text-xs font-medium text-slate-500 uppercase tracking-wider">Invoice No</th>
                       <th className="px-6 py-3 text-left text-xs font-medium text-slate-500 uppercase tracking-wider">Date</th>
                       <th className="px-6 py-3 text-left text-xs font-medium text-slate-500 uppercase tracking-wider">Billed To</th>
@@ -472,9 +564,9 @@ export default function Invoices({ user, onLogout }) {
                   </thead>
                   <tbody className="divide-y divide-gray-200">
                     {loading && invoices.length === 0 ? (
-                      <tr><td colSpan="6" className="px-6 py-8 text-center text-slate-500">Loading...</td></tr>
+                      <tr><td colSpan="7" className="px-6 py-8 text-center text-slate-500">Loading...</td></tr>
                     ) : filtered.length === 0 ? (
-                      <tr><td colSpan="6" className="px-6 py-8 text-center text-slate-500">
+                      <tr><td colSpan="7" className="px-6 py-8 text-center text-slate-500">
                         {searchTerm ? 'No invoices found' : 'No invoices yet'}
                       </td></tr>
                     ) : (
@@ -484,8 +576,17 @@ export default function Invoices({ user, onLogout }) {
                         const tax = (inv.cgst_amount || 0) + (inv.sgst_amount || 0) + (inv.igst_amount || 0);
                         const totalShown = itemSub + tax - (inv.discount || 0);
                         const curr = (inv.items || []).find(it => it.currency)?.currency || '';
+                        const isSelected = selectedIds.has(inv.id);
                         return (
-                          <tr key={inv.id} className="hover:bg-slate-50" data-testid={`invoice-row-${inv.id}`}>
+                          <tr key={inv.id} className={`hover:bg-slate-50 ${isSelected ? 'bg-blue-50/40' : ''}`} data-testid={`invoice-row-${inv.id}`}>
+                            <td className="pl-6 pr-2 py-4">
+                              <Checkbox
+                                checked={isSelected}
+                                onCheckedChange={() => toggleSelectOne(inv.id)}
+                                aria-label={`Select ${inv.invoice_number}`}
+                                data-testid={`select-invoice-${inv.id}`}
+                              />
+                            </td>
                             <td className="px-6 py-4 font-mono text-sm font-semibold text-slate-900">{inv.invoice_number}</td>
                             <td className="px-6 py-4 text-sm text-slate-600">
                               {new Date(inv.invoice_date).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' })}
@@ -716,6 +817,28 @@ export default function Invoices({ user, onLogout }) {
               <AlertDialogCancel onClick={() => setDeletingInvoice(null)}>Cancel</AlertDialogCancel>
               <AlertDialogAction onClick={handleDelete} className="bg-red-600 hover:bg-red-700" disabled={loading}>
                 {loading ? 'Deleting...' : 'Delete'}
+              </AlertDialogAction>
+            </AlertDialogFooter>
+          </AlertDialogContent>
+        </AlertDialog>
+
+        <AlertDialog open={bulkDeleteOpen} onOpenChange={setBulkDeleteOpen}>
+          <AlertDialogContent data-testid="bulk-delete-dialog">
+            <AlertDialogHeader>
+              <AlertDialogTitle>Delete {selectedIds.size} Invoice{selectedIds.size !== 1 ? 's' : ''}?</AlertDialogTitle>
+              <AlertDialogDescription>
+                This will permanently delete the selected invoices. This action cannot be undone.
+              </AlertDialogDescription>
+            </AlertDialogHeader>
+            <AlertDialogFooter>
+              <AlertDialogCancel>Cancel</AlertDialogCancel>
+              <AlertDialogAction
+                onClick={handleBulkDelete}
+                className="bg-red-600 hover:bg-red-700"
+                disabled={loading}
+                data-testid="bulk-delete-confirm-btn"
+              >
+                {loading ? 'Deleting...' : `Delete ${selectedIds.size}`}
               </AlertDialogAction>
             </AlertDialogFooter>
           </AlertDialogContent>
