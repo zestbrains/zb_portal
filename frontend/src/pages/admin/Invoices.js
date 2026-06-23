@@ -58,6 +58,24 @@ export default function Invoices({ user, onLogout }) {
   const [stmtUploading, setStmtUploading] = useState(false);
   const [stmtFileName, setStmtFileName] = useState('');
   const [stmtRows, setStmtRows] = useState([]);
+  const [stmtBulkBankId, setStmtBulkBankId] = useState('');
+  const [stmtCreating, setStmtCreating] = useState(false);
+  const [stmtCreatedNumbers, setStmtCreatedNumbers] = useState([]);
+
+  const STATIC_ITEMS = [
+    'Mobile apps development',
+    'website development',
+    'Graphics designing',
+    'Web designing',
+  ];
+
+  const minusOneDay = (iso) => {
+    if (!iso) return '';
+    const d = new Date(iso);
+    if (Number.isNaN(d.getTime())) return '';
+    d.setDate(d.getDate() - 1);
+    return d.toISOString().slice(0, 10);
+  };
 
   const handleUploadStatement = async (e) => {
     const file = e.target.files?.[0];
@@ -70,6 +88,8 @@ export default function Invoices({ user, onLogout }) {
     setStmtUploading(true);
     setStmtFileName(file.name);
     setStmtRows([]);
+    setStmtBulkBankId('');
+    setStmtCreatedNumbers([]);
     try {
       const token = localStorage.getItem('token');
       const fd = new FormData();
@@ -87,7 +107,15 @@ export default function Invoices({ user, onLogout }) {
       if (!data.rows || data.rows.length === 0) {
         toast.warning('No credit (deposit) rows found in this statement');
       }
-      setStmtRows(data.rows || []);
+      // Enrich rows with editable per-row invoice fields
+      const enriched = (data.rows || []).map(r => ({
+        ...r,
+        client_id: '',
+        bank_id: '',
+        item_name: STATIC_ITEMS[0],
+        invoice_date: minusOneDay(r.transaction_date),
+      }));
+      setStmtRows(enriched);
       setStmtDialogOpen(true);
       if (data.warnings?.length) toast.warning(data.warnings.join('; '));
     } catch (e) { toast.error(e.message); }
@@ -98,11 +126,94 @@ export default function Invoices({ user, onLogout }) {
     setStmtRows(prev => prev.filter((_, i) => i !== idx));
   };
 
+  const updateStmtRow = (idx, field, value) => {
+    setStmtRows(prev => prev.map((r, i) => i === idx ? { ...r, [field]: value } : r));
+  };
+
+  const applyBankToAll = (bankId) => {
+    setStmtBulkBankId(bankId);
+    setStmtRows(prev => prev.map(r => ({ ...r, bank_id: bankId })));
+  };
+
   const closeStmtDialog = () => {
     setStmtDialogOpen(false);
     setStmtRows([]);
     setStmtFileName('');
+    setStmtBulkBankId('');
+    setStmtCreatedNumbers([]);
   };
+
+  const handleCreateStmtInvoices = async () => {
+    if (stmtRows.length === 0) {
+      toast.error('No rows to create invoices for');
+      return;
+    }
+    // Validate
+    const missing = stmtRows.findIndex(r => !r.bank_id || !r.client_id || !r.item_name);
+    if (missing >= 0) {
+      toast.error(`Row ${missing + 1}: Bank, Client and Item are required`);
+      return;
+    }
+    setStmtCreating(true);
+    const created = [];
+    const failures = [];
+    try {
+      const token = localStorage.getItem('token');
+      // Create sequentially so backend auto-increment stays in order
+      for (let i = 0; i < stmtRows.length; i++) {
+        const r = stmtRows[i];
+        const payload = {
+          type: 'export',
+          invoice_date: r.invoice_date || minusOneDay(r.transaction_date),
+          country_of_origin: 'India',
+          bank_id: r.bank_id,
+          client_id: r.client_id,
+          items: [{
+            item: r.item_name,
+            description: r.transaction_remarks || '',
+            quantity: 1,
+            amount: Number(r.deposit_amount || 0),
+            currency: 'USD',
+            sac: '998314',
+            tax_percent: 0,
+          }],
+          notes: '',
+          discount: 0,
+          tax_mode: 'cgst_sgst',
+          cgst_amount: 0,
+          sgst_amount: 0,
+          igst_amount: 0,
+          status: 'draft',
+        };
+        try {
+          const res = await fetch(`${API_URL}/api/invoices`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+            body: JSON.stringify(payload),
+          });
+          if (!res.ok) {
+            const err = await res.json().catch(() => ({}));
+            throw new Error(err.detail || `Failed (HTTP ${res.status})`);
+          }
+          const inv = await res.json();
+          created.push(inv.invoice_number);
+        } catch (e) {
+          failures.push({ row: i + 1, error: e.message });
+        }
+      }
+      setStmtCreatedNumbers(created);
+      if (failures.length === 0) {
+        toast.success(`Created ${created.length} invoice${created.length !== 1 ? 's' : ''}`);
+      } else {
+        toast.warning(`Created ${created.length}, failed ${failures.length}. ${failures.map(f => `Row ${f.row}: ${f.error}`).join('; ')}`);
+      }
+      fetchAll();
+      if (failures.length === 0) closeStmtDialog();
+    } finally {
+      setStmtCreating(false);
+    }
+  };
+
 
   const fetchAll = useCallback(async () => {
     try {
@@ -603,14 +714,36 @@ export default function Invoices({ user, onLogout }) {
 
         {/* Bank Statement Preview Dialog */}
         <Dialog open={stmtDialogOpen} onOpenChange={(o) => { if (!o) closeStmtDialog(); }}>
-          <DialogContent className="max-w-4xl" data-testid="stmt-preview-dialog">
+          <DialogContent className="lg:!max-w-6xl" data-testid="stmt-preview-dialog">
             <DialogHeader>
               <DialogTitle>
-                Bank Statement — Deposits (Cr)
+                Auto-Create Invoices from Bank Statement
                 {stmtFileName && <span className="block text-xs text-slate-500 font-normal mt-1 truncate">{stmtFileName}</span>}
               </DialogTitle>
             </DialogHeader>
-            <div className="py-2 max-h-[60vh] overflow-y-auto">
+
+            {/* Bulk-set toolbar */}
+            <div className="bg-blue-50 border border-blue-200 rounded-md p-3 flex flex-col md:flex-row md:items-center gap-3">
+              <div className="text-sm text-slate-700">
+                <span className="font-semibold">Apply to all rows:</span>
+              </div>
+              <div className="flex items-center gap-2 flex-1">
+                <Label className="text-xs whitespace-nowrap">Billed By (Bank)</Label>
+                <Select value={stmtBulkBankId} onValueChange={applyBankToAll}>
+                  <SelectTrigger className="h-8 max-w-xs" data-testid="stmt-bulk-bank-select">
+                    <SelectValue placeholder="Select bank..." />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {banks.map(b => <SelectItem key={b.id} value={b.id}>{b.name}</SelectItem>)}
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="text-xs text-slate-500">
+                Defaults: Type = Export · Currency = USD · SAC = 998314 · Invoice Date = Txn Date − 1
+              </div>
+            </div>
+
+            <div className="py-2 max-h-[55vh] overflow-y-auto">
               {stmtRows.length === 0 ? (
                 <div className="text-center py-8 text-slate-500 text-sm">
                   No remaining rows.
@@ -619,35 +752,68 @@ export default function Invoices({ user, onLogout }) {
                 <table className="w-full text-sm border border-slate-200 rounded">
                   <thead className="bg-slate-50 border-b border-slate-200">
                     <tr>
-                      <th className="px-3 py-2 text-left text-xs font-semibold text-slate-600 uppercase w-12">#</th>
-                      <th className="px-3 py-2 text-left text-xs font-semibold text-slate-600 uppercase whitespace-nowrap">Transaction Date</th>
-                      <th className="px-3 py-2 text-right text-xs font-semibold text-slate-600 uppercase whitespace-nowrap">Deposit (Cr)</th>
-                      <th className="px-3 py-2 text-left text-xs font-semibold text-slate-600 uppercase">Transaction Remarks</th>
-                      <th className="px-3 py-2 w-12"></th>
+                      <th className="px-2 py-2 text-left text-xs font-semibold text-slate-600 uppercase w-10">#</th>
+                      <th className="px-2 py-2 text-left text-xs font-semibold text-slate-600 uppercase whitespace-nowrap">Txn Date</th>
+                      <th className="px-2 py-2 text-left text-xs font-semibold text-slate-600 uppercase whitespace-nowrap">Invoice Date</th>
+                      <th className="px-2 py-2 text-right text-xs font-semibold text-slate-600 uppercase whitespace-nowrap">Deposit (USD)</th>
+                      <th className="px-2 py-2 text-left text-xs font-semibold text-slate-600 uppercase">Item</th>
+                      <th className="px-2 py-2 text-left text-xs font-semibold text-slate-600 uppercase">Billed To (Client)</th>
+                      <th className="px-2 py-2 text-left text-xs font-semibold text-slate-600 uppercase">Remarks</th>
+                      <th className="px-2 py-2 w-10"></th>
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-slate-100">
                     {stmtRows.map((r, idx) => (
                       <tr key={idx} className="hover:bg-slate-50 align-top" data-testid={`stmt-row-${idx}`}>
-                        <td className="px-3 py-2 text-slate-500">{idx + 1}</td>
-                        <td className="px-3 py-2 font-medium text-slate-900 whitespace-nowrap">
+                        <td className="px-2 py-2 text-slate-500">{idx + 1}</td>
+                        <td className="px-2 py-2 font-medium text-slate-900 whitespace-nowrap">
                           {r.transaction_date
                             ? new Date(r.transaction_date).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' })
                             : '-'}
                         </td>
-                        <td className="px-3 py-2 text-right font-mono font-semibold text-emerald-700 whitespace-nowrap">
+                        <td className="px-2 py-2">
+                          <Input
+                            type="date"
+                            value={r.invoice_date || ''}
+                            onChange={(e) => updateStmtRow(idx, 'invoice_date', e.target.value)}
+                            className="h-8 text-xs"
+                            data-testid={`stmt-invoice-date-${idx}`}
+                          />
+                        </td>
+                        <td className="px-2 py-2 text-right font-mono font-semibold text-emerald-700 whitespace-nowrap">
                           {Number(r.deposit_amount).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                         </td>
-                        <td className="px-3 py-2 text-slate-700 text-xs leading-snug max-w-md break-words" title={r.transaction_remarks || ''}>
-                          {r.transaction_remarks || '-'}
+                        <td className="px-2 py-2 min-w-[180px]">
+                          <Select value={r.item_name} onValueChange={(v) => updateStmtRow(idx, 'item_name', v)}>
+                            <SelectTrigger className="h-8 text-xs" data-testid={`stmt-item-${idx}`}>
+                              <SelectValue placeholder="Select item" />
+                            </SelectTrigger>
+                            <SelectContent>
+                              {STATIC_ITEMS.map(it => <SelectItem key={it} value={it}>{it}</SelectItem>)}
+                            </SelectContent>
+                          </Select>
                         </td>
-                        <td className="px-2 py-2 text-right">
+                        <td className="px-2 py-2 min-w-[170px]">
+                          <Select value={r.client_id} onValueChange={(v) => updateStmtRow(idx, 'client_id', v)}>
+                            <SelectTrigger className="h-8 text-xs" data-testid={`stmt-client-${idx}`}>
+                              <SelectValue placeholder="Select client" />
+                            </SelectTrigger>
+                            <SelectContent>
+                              {clients.map(c => <SelectItem key={c.id} value={c.id}>{c.name}</SelectItem>)}
+                            </SelectContent>
+                          </Select>
+                        </td>
+                        <td className="px-2 py-2 text-slate-600 text-[11px] leading-snug max-w-[220px] break-words" title={r.transaction_remarks || ''}>
+                          {(r.transaction_remarks || '-').slice(0, 80)}
+                          {(r.transaction_remarks || '').length > 80 ? '…' : ''}
+                        </td>
+                        <td className="px-1 py-2 text-right">
                           <Button
                             variant="ghost"
                             size="sm"
                             onClick={() => removeStmtRow(idx)}
                             className="h-7 w-7 p-0 text-slate-400 hover:text-red-600"
-                            title="Remove this row"
+                            title="Remove this row (won't be invoiced)"
                             data-testid={`stmt-remove-row-${idx}`}
                           >
                             <X className="w-4 h-4" />
@@ -656,25 +822,40 @@ export default function Invoices({ user, onLogout }) {
                       </tr>
                     ))}
                   </tbody>
-                  {stmtRows.length > 0 && (
-                    <tfoot>
-                      <tr className="bg-slate-50 border-t border-slate-200">
-                        <td colSpan="2" className="px-3 py-2 text-right text-xs font-semibold text-slate-600 uppercase">
-                          Total ({stmtRows.length} row{stmtRows.length !== 1 ? 's' : ''})
-                        </td>
-                        <td className="px-3 py-2 text-right font-mono font-bold text-slate-900 whitespace-nowrap">
-                          {stmtRows.reduce((s, r) => s + Number(r.deposit_amount || 0), 0)
-                            .toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
-                        </td>
-                        <td colSpan="2"></td>
-                      </tr>
-                    </tfoot>
-                  )}
+                  <tfoot>
+                    <tr className="bg-slate-50 border-t border-slate-200">
+                      <td colSpan="3" className="px-3 py-2 text-right text-xs font-semibold text-slate-600 uppercase">
+                        Total ({stmtRows.length} row{stmtRows.length !== 1 ? 's' : ''})
+                      </td>
+                      <td className="px-2 py-2 text-right font-mono font-bold text-slate-900 whitespace-nowrap">
+                        {stmtRows.reduce((s, r) => s + Number(r.deposit_amount || 0), 0)
+                          .toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                      </td>
+                      <td colSpan="4"></td>
+                    </tr>
+                  </tfoot>
                 </table>
               )}
             </div>
-            <DialogFooter>
+
+            {stmtCreatedNumbers.length > 0 && (
+              <div className="bg-emerald-50 border border-emerald-200 rounded-md p-3 text-xs text-emerald-900">
+                <span className="font-semibold">Created invoices:</span>{' '}
+                {stmtCreatedNumbers.join(', ')}
+              </div>
+            )}
+
+            <DialogFooter className="gap-2">
               <Button variant="outline" onClick={closeStmtDialog} data-testid="stmt-close-btn">Cancel</Button>
+              <Button
+                onClick={handleCreateStmtInvoices}
+                disabled={stmtCreating || stmtRows.length === 0}
+                data-testid="stmt-create-invoices-btn"
+              >
+                {stmtCreating
+                  ? `Creating... (${stmtCreatedNumbers.length}/${stmtRows.length})`
+                  : `Create ${stmtRows.length} Invoice${stmtRows.length !== 1 ? 's' : ''}`}
+              </Button>
             </DialogFooter>
           </DialogContent>
         </Dialog>
