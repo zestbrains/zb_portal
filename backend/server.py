@@ -7746,13 +7746,16 @@ async def download_invoice_pdf(invoice_id: str, user: dict = Depends(require_rol
 @api_router.post("/invoices/parse-bank-statement")
 async def parse_bank_statement(
     file: UploadFile = File(...),
+    mode: str = "deposit",
     user: dict = Depends(require_role(["admin"])),
 ):
     """
-    Accept an ICICI bank statement PDF and return only credit (deposit) rows
-    with two fields: transaction_date (YYYY-MM-DD) and deposit_amount.
+    Accept an ICICI bank statement PDF and return rows.
+    mode='deposit' (default) -> credit rows; 'withdrawal' -> debit rows.
     View-only — nothing is persisted.
     """
+    if mode not in ("deposit", "withdrawal"):
+        raise HTTPException(status_code=400, detail="mode must be 'deposit' or 'withdrawal'")
     if not file.filename or not file.filename.lower().endswith(".pdf"):
         raise HTTPException(status_code=400, detail="Please upload a PDF file")
     contents = await file.read()
@@ -7761,14 +7764,89 @@ async def parse_bank_statement(
 
     from bank_statement_parser import parse_icici_statement
     try:
-        result = parse_icici_statement(contents)
+        result = parse_icici_statement(contents, mode=mode)
     except Exception as e:
         raise HTTPException(status_code=400, detail=f"Failed to parse PDF: {e}")
 
     if not result["rows"] and result["warnings"]:
-        # No data and parser flagged warnings — surface them as a 400
         raise HTTPException(status_code=400, detail="; ".join(result["warnings"]))
     return result
+
+
+# ==================== HELPDESK (Google Sheets webhook) ====================
+class HelpdeskConfigPayload(BaseModel):
+    webhook_url: str = ""
+
+
+@api_router.get("/helpdesk-config")
+async def get_helpdesk_config(user: dict = Depends(require_role(["admin"]))):
+    cfg = await db.helpdesk_config.find_one({}, {"_id": 0}) or {}
+    return {"webhook_url": cfg.get("webhook_url", "")}
+
+
+@api_router.put("/helpdesk-config")
+async def update_helpdesk_config(
+    payload: HelpdeskConfigPayload, user: dict = Depends(require_role(["admin"]))
+):
+    await db.helpdesk_config.update_one(
+        {},
+        {"$set": {"webhook_url": (payload.webhook_url or "").strip(),
+                  "updated_at": get_ist_now_iso(),
+                  "updated_by": user.get("username", "")}},
+        upsert=True,
+    )
+    return {"webhook_url": (payload.webhook_url or "").strip()}
+
+
+class HelpdeskSubmitRow(BaseModel):
+    transaction_date: str = ""
+    amount: float = 0
+    transaction_remarks: str = ""
+
+
+class HelpdeskSubmitPayload(BaseModel):
+    type: str  # 'income' | 'expense'
+    rows: List[HelpdeskSubmitRow]
+
+
+@api_router.post("/helpdesk/submit-to-sheet")
+async def submit_to_sheet(
+    payload: HelpdeskSubmitPayload, user: dict = Depends(require_role(["admin"]))
+):
+    if payload.type not in ("income", "expense"):
+        raise HTTPException(status_code=400, detail="type must be 'income' or 'expense'")
+    if not payload.rows:
+        raise HTTPException(status_code=400, detail="No rows to submit")
+    cfg = await db.helpdesk_config.find_one({}, {"_id": 0}) or {}
+    url = (cfg.get("webhook_url") or "").strip()
+    if not url:
+        raise HTTPException(
+            status_code=400,
+            detail="Helpdesk webhook URL not configured. Set it under Helpdesk → Settings.",
+        )
+
+    # Forward to Apps Script webhook
+    import urllib.request
+    import json as _json
+    body = _json.dumps({
+        "type": payload.type,
+        "rows": [r.model_dump() for r in payload.rows],
+    }).encode("utf-8")
+    req = urllib.request.Request(
+        url, data=body,
+        headers={"Content-Type": "application/json", "User-Agent": "Zestbrains-HR/1.0"},
+        method="POST",
+    )
+    try:
+        with urllib.request.urlopen(req, timeout=30) as resp:
+            raw = resp.read().decode("utf-8")
+    except Exception as e:
+        raise HTTPException(status_code=502, detail=f"Failed to call webhook: {e}")
+    try:
+        result = _json.loads(raw)
+    except Exception:
+        result = {"raw": raw}
+    return {"sent": len(payload.rows), "webhook_response": result}
 
 
 

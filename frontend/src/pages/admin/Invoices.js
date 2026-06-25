@@ -317,6 +317,131 @@ export default function Invoices({ user, onLogout }) {
   const [smSending, setSmSending] = useState(false);
   const [smLastResult, setSmLastResult] = useState(null);
 
+  // ============ Helpdesk tab ============
+  const [hdWebhookUrl, setHdWebhookUrl] = useState('');
+  const [hdSavingConfig, setHdSavingConfig] = useState(false);
+  const [hdSettingsOpen, setHdSettingsOpen] = useState(false);
+  const [hdMode, setHdMode] = useState(null); // 'income' | 'expense' | null
+  const [hdRows, setHdRows] = useState([]);
+  const [hdUploading, setHdUploading] = useState(false);
+  const [hdSubmitting, setHdSubmitting] = useState(false);
+  const [hdFileName, setHdFileName] = useState('');
+  const [hdDialogOpen, setHdDialogOpen] = useState(false);
+  const [hdLastResult, setHdLastResult] = useState(null);
+
+  const fetchHelpdeskConfig = useCallback(async () => {
+    try {
+      const token = localStorage.getItem('token');
+      const res = await fetch(`${API_URL}/api/helpdesk-config`, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      if (!res.ok) return;
+      const d = await res.json();
+      setHdWebhookUrl(d.webhook_url || '');
+    } catch {/* silent */}
+  }, []);
+
+  useEffect(() => {
+    if (activeTab === 'helpdesk') fetchHelpdeskConfig();
+  }, [activeTab, fetchHelpdeskConfig]);
+
+  const saveHelpdeskConfig = async () => {
+    setHdSavingConfig(true);
+    try {
+      const token = localStorage.getItem('token');
+      const res = await fetch(`${API_URL}/api/helpdesk-config`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+        body: JSON.stringify({ webhook_url: hdWebhookUrl }),
+      });
+      if (!res.ok) throw new Error('Failed to save');
+      toast.success('Webhook URL saved');
+    } catch (e) { toast.error(e.message); }
+    finally { setHdSavingConfig(false); }
+  };
+
+  const handleHelpdeskUpload = async (file, mode) => {
+    if (!file) return;
+    if (!file.name.toLowerCase().endsWith('.pdf')) {
+      toast.error('Please select a PDF file');
+      return;
+    }
+    setHdUploading(true);
+    setHdRows([]);
+    setHdMode(mode);
+    setHdFileName(file.name);
+    setHdLastResult(null);
+    try {
+      const token = localStorage.getItem('token');
+      const fd = new FormData();
+      fd.append('file', file);
+      const apiMode = mode === 'income' ? 'deposit' : 'withdrawal';
+      const res = await fetch(`${API_URL}/api/invoices/parse-bank-statement?mode=${apiMode}`, {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${token}` },
+        body: fd,
+      });
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}));
+        throw new Error(err.detail || 'Failed to parse PDF');
+      }
+      const data = await res.json();
+      setHdRows(data.rows || []);
+      setHdDialogOpen(true);
+      if (data.warnings?.length) toast.warning(data.warnings.join('; '));
+    } catch (e) { toast.error(e.message); }
+    finally { setHdUploading(false); }
+  };
+
+  const removeHdRow = (idx) => {
+    setHdRows(prev => prev.filter((_, i) => i !== idx));
+  };
+
+  const submitHelpdeskRows = async () => {
+    if (hdRows.length === 0) { toast.error('No rows to submit'); return; }
+    if (!hdWebhookUrl.trim()) { toast.error('Configure Helpdesk webhook URL first (top-right Settings)'); return; }
+    setHdSubmitting(true);
+    try {
+      const token = localStorage.getItem('token');
+      const payload = {
+        type: hdMode,
+        rows: hdRows.map(r => ({
+          transaction_date: r.transaction_date || '',
+          amount: Number(r.amount || r.deposit_amount || 0),
+          transaction_remarks: r.transaction_remarks || '',
+        })),
+      };
+      const res = await fetch(`${API_URL}/api/helpdesk/submit-to-sheet`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+        body: JSON.stringify(payload),
+      });
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}));
+        throw new Error(err.detail || 'Submit failed');
+      }
+      const data = await res.json();
+      setHdLastResult(data);
+      const wr = data.webhook_response || {};
+      if (wr.ok === false) {
+        toast.error(`Apps Script error: ${wr.error || 'unknown'}`);
+      } else {
+        toast.success(`Submitted ${data.sent} rows to Google Sheet`);
+        setHdDialogOpen(false);
+        setHdRows([]);
+      }
+    } catch (e) { toast.error(e.message); }
+    finally { setHdSubmitting(false); }
+  };
+
+  const closeHelpdeskDialog = () => {
+    setHdDialogOpen(false);
+    setHdRows([]);
+    setHdMode(null);
+    setHdFileName('');
+    setHdLastResult(null);
+  };
+
   const fetchRemarksOptions = useCallback(async () => {
     try {
       const token = localStorage.getItem('token');
@@ -707,9 +832,189 @@ export default function Invoices({ user, onLogout }) {
             <TabsTrigger value="gst" data-testid="tab-gst">GST Invoices</TabsTrigger>
             <TabsTrigger value="statements" data-testid="tab-statements">Statements</TabsTrigger>
             <TabsTrigger value="send-mail" data-testid="tab-send-mail">Send Mail</TabsTrigger>
+            <TabsTrigger value="helpdesk" data-testid="tab-helpdesk">Helpdesk</TabsTrigger>
           </TabsList>
 
-          {activeTab === 'send-mail' ? (
+          {activeTab === 'helpdesk' ? (
+            <TabsContent value="helpdesk" className="mt-6 space-y-4" data-testid="helpdesk-panel">
+              <div className="bg-white rounded-lg border shadow-sm p-6">
+                <div className="flex items-start justify-between">
+                  <div>
+                    <h2 className="text-lg font-semibold text-slate-900">Helpdesk — Push to Google Sheets</h2>
+                    <p className="text-sm text-slate-500 mt-1 max-w-2xl">
+                      Upload an ICICI bank statement. Each row is reviewed in a popup; on Submit the system clears columns G, M, N of the destination sheet and writes the kept rows.
+                    </p>
+                  </div>
+                  <Button variant="outline" size="sm" onClick={() => setHdSettingsOpen(o => !o)} data-testid="hd-toggle-settings">
+                    ⚙ Settings
+                  </Button>
+                </div>
+
+                {hdSettingsOpen && (
+                  <div className="mt-4 bg-slate-50 border border-slate-200 rounded p-4 space-y-3">
+                    <div className="space-y-2">
+                      <Label htmlFor="hd-webhook">Apps Script Webhook URL</Label>
+                      <Input
+                        id="hd-webhook"
+                        placeholder="https://script.google.com/macros/s/.../exec"
+                        value={hdWebhookUrl}
+                        onChange={(e) => setHdWebhookUrl(e.target.value)}
+                        data-testid="hd-webhook-input"
+                      />
+                      <div className="flex justify-end">
+                        <Button size="sm" onClick={saveHelpdeskConfig} disabled={hdSavingConfig} data-testid="hd-save-config-btn">
+                          {hdSavingConfig ? 'Saving...' : 'Save'}
+                        </Button>
+                      </div>
+                    </div>
+                    <details className="text-xs text-slate-600">
+                      <summary className="cursor-pointer font-semibold text-slate-700">📜 How to deploy the Apps Script (5 min, one-time)</summary>
+                      <ol className="list-decimal ml-5 mt-2 space-y-1">
+                        <li>Open <a className="underline text-blue-600" href="https://script.google.com" target="_blank" rel="noreferrer">script.google.com</a> → New project</li>
+                        <li>Paste the script below into <code>Code.gs</code></li>
+                        <li>Click <b>Deploy → New deployment → Web app</b></li>
+                        <li>Execute as: <b>Me</b> · Who has access: <b>Anyone</b></li>
+                        <li>Copy the deployment URL (ends with <code>/exec</code>) and paste it above ☝️</li>
+                        <li>Authorise the script when prompted</li>
+                      </ol>
+                      <pre className="mt-3 bg-slate-900 text-emerald-300 text-[11px] p-3 rounded overflow-auto whitespace-pre">{`const SHEETS = {
+  income:  { id: '1JHnXCPvQeH4_aMiQR3qsmwIGJbY9MNaXsE0rfQCX_e4', gid: '1212899483' },
+  expense: { id: '1SeUGHcjCr9H0Amy78Z340beyUw0Pjc9v7--Ai-6XeIg', gid: '0' },
+};
+const COLS = { amount: 7 /* G */, date: 13 /* M */, remarks: 14 /* N */ };
+
+function doPost(e) {
+  try {
+    const data = JSON.parse(e.postData.contents);
+    const target = SHEETS[data.type];
+    if (!target) throw new Error('Invalid type: ' + data.type);
+    const ss = SpreadsheetApp.openById(target.id);
+    const sheet = ss.getSheets().filter(s => String(s.getSheetId()) === target.gid)[0] || ss.getSheets()[0];
+    const lastRow = sheet.getLastRow();
+    if (lastRow > 1) {
+      sheet.getRange(2, COLS.amount,  lastRow - 1, 1).clearContent();
+      sheet.getRange(2, COLS.date,    lastRow - 1, 1).clearContent();
+      sheet.getRange(2, COLS.remarks, lastRow - 1, 1).clearContent();
+    }
+    const rows = data.rows || [];
+    rows.forEach((r, i) => {
+      const row = 2 + i;
+      sheet.getRange(row, COLS.amount).setValue(r.amount);
+      sheet.getRange(row, COLS.date).setValue(r.transaction_date);
+      sheet.getRange(row, COLS.remarks).setValue(r.transaction_remarks);
+    });
+    return ContentService.createTextOutput(JSON.stringify({ok: true, count: rows.length}))
+      .setMimeType(ContentService.MimeType.JSON);
+  } catch (err) {
+    return ContentService.createTextOutput(JSON.stringify({ok: false, error: String(err)}))
+      .setMimeType(ContentService.MimeType.JSON);
+  }
+}`}</pre>
+                    </details>
+                  </div>
+                )}
+
+                <div className="mt-6 grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <label className={`cursor-pointer border-2 border-dashed border-emerald-300 hover:border-emerald-500 hover:bg-emerald-50 rounded-lg p-6 text-center transition ${hdUploading ? 'opacity-50 cursor-not-allowed' : ''}`} data-testid="hd-income-card">
+                    <input
+                      type="file"
+                      accept="application/pdf"
+                      className="hidden"
+                      disabled={hdUploading}
+                      onChange={(e) => { const f = e.target.files?.[0]; e.target.value = ''; handleHelpdeskUpload(f, 'income'); }}
+                      data-testid="hd-income-input"
+                    />
+                    <Upload className="w-8 h-8 text-emerald-600 mx-auto" />
+                    <div className="mt-2 font-semibold text-emerald-900">Upload Invoice PDF</div>
+                    <div className="text-xs text-emerald-700 mt-1">Income — writes Deposit (Cr) rows to the Income sheet</div>
+                  </label>
+
+                  <label className={`cursor-pointer border-2 border-dashed border-amber-300 hover:border-amber-500 hover:bg-amber-50 rounded-lg p-6 text-center transition ${hdUploading ? 'opacity-50 cursor-not-allowed' : ''}`} data-testid="hd-expense-card">
+                    <input
+                      type="file"
+                      accept="application/pdf"
+                      className="hidden"
+                      disabled={hdUploading}
+                      onChange={(e) => { const f = e.target.files?.[0]; e.target.value = ''; handleHelpdeskUpload(f, 'expense'); }}
+                      data-testid="hd-expense-input"
+                    />
+                    <Upload className="w-8 h-8 text-amber-600 mx-auto" />
+                    <div className="mt-2 font-semibold text-amber-900">Upload Expense PDF</div>
+                    <div className="text-xs text-amber-700 mt-1">Expense — writes Withdrawal (Dr) rows to the Expense sheet</div>
+                  </label>
+                </div>
+              </div>
+
+              {/* Helpdesk preview dialog */}
+              <Dialog open={hdDialogOpen} onOpenChange={(o) => { if (!o) closeHelpdeskDialog(); }}>
+                <DialogContent className="lg:!max-w-3xl" data-testid="hd-preview-dialog">
+                  <DialogHeader>
+                    <DialogTitle>
+                      {hdMode === 'income' ? 'Invoice (Income)' : 'Expense'} — Review rows
+                      {hdFileName && <span className="block text-xs text-slate-500 font-normal mt-1 truncate">{hdFileName}</span>}
+                    </DialogTitle>
+                  </DialogHeader>
+                  <div className="py-2 max-h-[55vh] overflow-y-auto">
+                    {hdRows.length === 0 ? (
+                      <div className="text-center py-8 text-slate-500 text-sm">No rows.</div>
+                    ) : (
+                      <table className="w-full text-sm border border-slate-200 rounded">
+                        <thead className="bg-slate-50 border-b border-slate-200">
+                          <tr>
+                            <th className="px-3 py-2 text-left text-xs font-semibold text-slate-600 uppercase w-10">#</th>
+                            <th className="px-3 py-2 text-left text-xs font-semibold text-slate-600 uppercase whitespace-nowrap">Date</th>
+                            <th className="px-3 py-2 text-right text-xs font-semibold text-slate-600 uppercase whitespace-nowrap">
+                              {hdMode === 'income' ? 'Deposit (Cr)' : 'Withdrawal (Dr)'}
+                            </th>
+                            <th className="px-3 py-2 text-left text-xs font-semibold text-slate-600 uppercase">Remarks</th>
+                            <th className="w-10"></th>
+                          </tr>
+                        </thead>
+                        <tbody className="divide-y divide-slate-100">
+                          {hdRows.map((r, idx) => (
+                            <tr key={idx} className="hover:bg-slate-50 align-top" data-testid={`hd-row-${idx}`}>
+                              <td className="px-3 py-2 text-slate-500">{idx + 1}</td>
+                              <td className="px-3 py-2 font-mono text-slate-800">{r.transaction_date || '-'}</td>
+                              <td className={`px-3 py-2 text-right font-mono font-semibold ${hdMode === 'income' ? 'text-emerald-700' : 'text-amber-700'}`}>
+                                {Number(r.amount || r.deposit_amount || 0).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                              </td>
+                              <td className="px-3 py-2 text-slate-600 text-[11px] leading-snug max-w-[260px] break-words" title={r.transaction_remarks || ''}>
+                                {(r.transaction_remarks || '-').slice(0, 90)}
+                                {(r.transaction_remarks || '').length > 90 ? '…' : ''}
+                              </td>
+                              <td className="px-1 py-2 text-right">
+                                <Button variant="ghost" size="sm" onClick={() => removeHdRow(idx)} className="h-7 w-7 p-0 text-slate-400 hover:text-red-600" data-testid={`hd-remove-row-${idx}`}>
+                                  <X className="w-4 h-4" />
+                                </Button>
+                              </td>
+                            </tr>
+                          ))}
+                        </tbody>
+                        <tfoot>
+                          <tr className="bg-slate-50 border-t border-slate-200">
+                            <td colSpan="2" className="px-3 py-2 text-right text-xs font-semibold text-slate-600 uppercase">
+                              Total ({hdRows.length} row{hdRows.length !== 1 ? 's' : ''})
+                            </td>
+                            <td className={`px-3 py-2 text-right font-mono font-bold whitespace-nowrap ${hdMode === 'income' ? 'text-emerald-800' : 'text-amber-800'}`}>
+                              {hdRows.reduce((s, r) => s + Number(r.amount || r.deposit_amount || 0), 0)
+                                .toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                            </td>
+                            <td colSpan="2"></td>
+                          </tr>
+                        </tfoot>
+                      </table>
+                    )}
+                  </div>
+                  <DialogFooter className="gap-2">
+                    <Button variant="outline" onClick={closeHelpdeskDialog} data-testid="hd-close-btn">Cancel</Button>
+                    <Button onClick={submitHelpdeskRows} disabled={hdSubmitting || hdRows.length === 0} data-testid="hd-submit-btn">
+                      {hdSubmitting ? 'Submitting...' : `Submit ${hdRows.length} Row${hdRows.length !== 1 ? 's' : ''} to Sheet`}
+                    </Button>
+                  </DialogFooter>
+                </DialogContent>
+              </Dialog>
+            </TabsContent>
+          ) : activeTab === 'send-mail' ? (
             <TabsContent value="send-mail" className="mt-6" data-testid="send-mail-panel">
               <div className="bg-white rounded-lg border shadow-sm p-6 max-w-2xl">
                 <h2 className="text-lg font-semibold text-slate-900">Send Statements & Invoices via Email</h2>

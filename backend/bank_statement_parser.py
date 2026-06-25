@@ -69,27 +69,35 @@ def _is_deposit_header(text: str) -> bool:
     return "deposit" in t and ("cr" in t or "credit" in t)
 
 
+def _is_withdrawal_header(text: str) -> bool:
+    t = text.lower().replace(" ", "")
+    # ICICI: "Withdrawal(Dr)" / "Withdrawal (Dr)"
+    return "withdraw" in t and ("dr" in t or "debit" in t)
+
+
 def _is_remarks_header(text: str) -> bool:
     t = text.lower()
     return ("remark" in t) or ("narration" in t) or ("description" in t)
 
 
-def _find_header_indices(row: List[str]) -> tuple[int, int, int] | None:
-    """Return (transaction_date_idx, deposit_idx, remarks_idx) if header row.
+def _find_header_indices(row: List[str], amount_kind: str = "deposit") -> tuple[int, int, int] | None:
+    """Return (transaction_date_idx, amount_idx, remarks_idx) if header row.
+    amount_kind: 'deposit' | 'withdrawal'
     remarks_idx may be -1 if not found."""
     tx_idx = -1
-    dep_idx = -1
+    amount_idx = -1
     rem_idx = -1
+    amount_pred = _is_deposit_header if amount_kind == "deposit" else _is_withdrawal_header
     for i, cell in enumerate(row or []):
         norm = _normalise(cell)
         if tx_idx == -1 and _is_transaction_date_header(norm):
             tx_idx = i
-        elif dep_idx == -1 and _is_deposit_header(norm):
-            dep_idx = i
+        elif amount_idx == -1 and amount_pred(norm):
+            amount_idx = i
         elif rem_idx == -1 and _is_remarks_header(norm):
             rem_idx = i
-    if tx_idx >= 0 and dep_idx >= 0:
-        return tx_idx, dep_idx, rem_idx
+    if tx_idx >= 0 and amount_idx >= 0:
+        return tx_idx, amount_idx, rem_idx
     return None
 
 
@@ -120,17 +128,15 @@ def _parse_amount(raw: str) -> float | None:
         return None
 
 
-def parse_icici_statement(pdf_bytes: bytes) -> Dict[str, object]:
+def parse_icici_statement(pdf_bytes: bytes, mode: str = "deposit") -> Dict[str, object]:
     """
-    Extract credit (deposit) rows from an ICICI Detailed Statement PDF.
+    Extract rows from an ICICI Detailed Statement PDF.
 
-    Returns
-    -------
-    dict with keys:
-        rows: list[ {transaction_date: 'YYYY-MM-DD', deposit_amount: float} ]
-        total_credit: float
-        count: int
-        warnings: list[str]
+    Parameters
+    ----------
+    mode : 'deposit' (default) extracts credit/deposit rows;
+           'withdrawal' extracts debit/withdrawal rows. The amount field is
+           always returned as `amount` (and `deposit_amount` for legacy).
     """
     rows: List[Dict[str, object]] = []
     warnings: List[str] = []
@@ -148,11 +154,10 @@ def parse_icici_statement(pdf_bytes: bytes) -> Dict[str, object]:
             for table in tables:
                 if not table:
                     continue
-                # Try to find header row inside this table
                 local_header = None
                 start_data_idx = 0
                 for ri, row in enumerate(table):
-                    found = _find_header_indices(row)
+                    found = _find_header_indices(row, amount_kind=mode)
                     if found:
                         local_header = found
                         start_data_idx = ri + 1
@@ -164,43 +169,46 @@ def parse_icici_statement(pdf_bytes: bytes) -> Dict[str, object]:
                 if local_header:
                     header_idx = local_header
 
-                tx_idx, dep_idx, rem_idx = indices
-                max_idx = max(tx_idx, dep_idx, rem_idx if rem_idx >= 0 else 0)
+                tx_idx, amt_idx, rem_idx = indices
+                max_idx = max(tx_idx, amt_idx, rem_idx if rem_idx >= 0 else 0)
 
                 for row in table[start_data_idx:]:
                     if not row or len(row) <= max_idx:
                         continue
                     tx_raw = _normalise(row[tx_idx])
-                    dep_raw = _normalise(row[dep_idx])
-                    if not tx_raw and not dep_raw:
+                    amt_raw = _normalise(row[amt_idx])
+                    if not tx_raw and not amt_raw:
                         continue
-                    amount = _parse_amount(dep_raw)
+                    amount = _parse_amount(amt_raw)
                     if amount is None or amount == 0:
-                        continue  # Skip rows with no credit
+                        continue  # Skip rows with no value in this column
                     date_iso = _parse_date(tx_raw)
                     remarks = ""
                     if rem_idx >= 0 and rem_idx < len(row):
                         remarks = _normalise(row[rem_idx])
-                    fx_rate = _fetch_fx_rate(date_iso, "INR", "USD") if date_iso else None
+                    # FX rate only needed for deposit/invoice mode
+                    fx_rate = _fetch_fx_rate(date_iso, "INR", "USD") if (date_iso and mode == "deposit") else None
                     usd_amount = round(amount * fx_rate, 2) if fx_rate else None
                     rows.append({
                         "transaction_date": date_iso,
                         "inr_amount": amount,
-                        "deposit_amount": amount,  # kept for backward-compat
+                        "amount": amount,
+                        "deposit_amount": amount,  # backward-compat
                         "fx_rate": fx_rate,
                         "usd_amount": usd_amount,
                         "transaction_remarks": remarks,
                     })
 
     if header_idx is None:
+        column_label = "Deposit (Cr)" if mode == "deposit" else "Withdrawal (Dr)"
         warnings.append(
-            "Could not locate 'Transaction Date' and 'Deposit (Cr)' columns. "
+            f"Could not locate 'Transaction Date' and '{column_label}' columns. "
             "Is this an ICICI Detailed Statement?"
         )
 
-    total = round(sum(r["inr_amount"] for r in rows), 2)
+    total = round(sum(r["amount"] for r in rows), 2)
     total_usd = round(sum(r["usd_amount"] for r in rows if r.get("usd_amount")), 2)
-    fx_failures = sum(1 for r in rows if r.get("usd_amount") is None)
+    fx_failures = sum(1 for r in rows if mode == "deposit" and r.get("usd_amount") is None)
     if fx_failures:
         warnings.append(f"Could not fetch FX rate for {fx_failures} row(s); USD amount missing.")
     return {
@@ -209,4 +217,5 @@ def parse_icici_statement(pdf_bytes: bytes) -> Dict[str, object]:
         "total_credit_usd": total_usd,
         "count": len(rows),
         "warnings": warnings,
+        "mode": mode,
     }
