@@ -13,15 +13,18 @@ https://payroll-mgmt-app.preview.emergentagent.com
 
 ## Recent Changes
 
-### Feb 2026 — Sandwich Leave Rule (Strict Two-Sided)
-- **Sandwich detection uses `leave_groups >= 2`** across 6 code sites in `/app/backend/server.py` (lines 5118, 5497, 5924, 6581, 6792, 6965).
-- **Rule**: A weekend/holiday counts as sandwich ONLY when there is a full-day leave on BOTH sides of it (leaves flanking on Fri AND Mon, or leaves flanking a holiday). A single leave adjacent to a weekend does NOT trigger sandwich.
-- **Full-day leave types**: PL, CL, PL/2 & CL/2. Half-day leaves (Half PL, Half CL, PL/2) break the chain.
-- **Examples**:
-  1. Fri Leave + Sat WO + Sun WO + Mon Leave → 4 days deducted ✅
-  2. Mon Leave + Tue Public Holiday + Wed Leave → 3 days deducted ✅
-  3. Chirag Patel Mon-only leave (13 Jul 2026) → 1 day deducted, weekends 11/12 free ✅
-  4. Milan Mon-Fri leave (13-17 Jul 2026) → 5 days deducted, flanking weekends 11/12 & 18/19 free ✅
+### Feb 2026 — Sandwich Leave Rule (Unified Hybrid)
+- **Extracted single helper `_chain_triggers_sandwich(statuses)`** in `/app/backend/server.py` (line 48). All 6 sandwich call sites (lines ~5145, 5516, 5935, 6584, 6787, 6952) now call this helper — no more duplicated logic.
+- **Unified rule**:
+  - **Case A**: Chain has 2+ separate leave blocks → sandwich all nonworking days in chain (Fri+Mon pattern, Mon+Holiday+Wed pattern).
+  - **Case B**: Chain has exactly 1 leave block AND that block has nonworking days on BOTH sides within the chain → sandwich all nonworking (Mon-Fri full week between weekends; Mon leave between weekend and holiday).
+  - Chirag case (Sat/Sun + Mon-L, chain ends): 1 block at chain end, no nonworking after → NOT sandwich.
+- **Verified with all user examples**:
+  - Ex 1 (Fri-L + weekend + Mon-L) → 4 days deducted ✅
+  - Ex 2 (Sat/Sun + Mon-L + Tue-H + Wed-L) → 5 days ✅
+  - Ex 3/Milan (Sat/Sun + Mon-Fri-L + Sat/Sun) → 9 days ✅
+  - Rule 3 (Sat/Sun + Mon-L + Tue-H, Wed present) → 4 days ✅
+  - Chirag (Sat/Sun + Mon-L only) → 1 day ✅
 
 ### May 2026 — Clients & Invoices Modules
 - **Clients module** (under Admin > Settings > Clients): CRUD for client master data (name, address, country, city, email, phone, PAN, GST). Supports dynamic extra parameters (key/value pairs) that render on the invoice PDF.
@@ -37,7 +40,7 @@ https://payroll-mgmt-app.preview.emergentagent.com
 - Project Email: Separate SMTP config + async BackgroundTask on project create
 - Projects: POC, Platform fields + Send Mail button
 - Bank module: Added 7 fields (PAN, GST, Address, IFSC, Swift, A/c Holder, Bank Name)
-- Sandwich Rule (Feb 2026, reverted to strict): 2+ leave groups in chain → all nonworking days between = sandwich (leaves must be on BOTH sides of weekend/holiday)
+- Sandwich Rule (Feb 2026, unified hybrid): _chain_triggers_sandwich() helper. Case A: 2+ leave blocks in chain → sandwich all. Case B: 1 leave block flanked by nonworking on both sides within chain → sandwich all. Chirag case (1 block at chain end) → no sandwich.
 - OT: Admin-approved weekend entries bypass 4.5h threshold
 - Duplicate email login fix (checks password across all accounts sharing the email)
 
