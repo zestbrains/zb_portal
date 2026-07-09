@@ -44,6 +44,41 @@ def is_full_day_leave(leave_type):
     """Returns True if the leave type is a full-day leave that triggers sandwich rule"""
     return leave_type in FULL_DAY_LEAVE_TYPES
 
+
+def _chain_triggers_sandwich(statuses):
+    """
+    Determine if a chain of consecutive (leave|nonworking) day statuses triggers sandwich.
+    `statuses` is a list of strings, each 'leave' or 'nonworking' (other values ignored).
+    Rule (unified):
+      Case A: 2+ separate leave blocks in the chain (leaves on both sides of some nonworking).
+      Case B: exactly 1 leave block AND that block has nonworking days on BOTH sides within the chain.
+    Chirag case: [Sat WO, Sun WO, Mon L] → 1 block at chain END, no nonworking after → NOT sandwich.
+    Milan case (Mon-Fri leave): [Sat, Sun, L, L, L, L, L, Sat, Sun] → 1 block with nonworking on both sides → sandwich all weekends.
+    Ex1: [Fri L, Sat, Sun, Mon L] → 2 blocks → sandwich Sat/Sun.
+    Rule3: [Sat, Sun, Mon L, Tue H] → 1 block with nonworking (Sat,Sun) before AND (Tue) after → sandwich all.
+    """
+    if not statuses:
+        return False
+    leave_positions = [i for i, s in enumerate(statuses) if s == 'leave']
+    if not leave_positions:
+        return False
+    # Count separate leave blocks
+    leave_blocks = 0
+    in_leave = False
+    for s in statuses:
+        if s == 'leave':
+            if not in_leave:
+                leave_blocks += 1
+                in_leave = True
+        else:
+            in_leave = False
+    if leave_blocks >= 2:
+        return True  # Case A
+    # Case B: exactly 1 leave block, must have nonworking on BOTH sides within chain
+    first_leave = leave_positions[0]
+    last_leave = leave_positions[-1]
+    return first_leave > 0 and last_leave < len(statuses) - 1
+
 ROOT_DIR = Path(__file__).parent
 load_dotenv(ROOT_DIR / '.env')
 
@@ -5106,16 +5141,8 @@ async def calculate_sandwich_dates(employees, attendance, year, month, num_days,
         
         sandwich_indices = set()
         for c_start, c_end in chains:
-            leave_groups = 0
-            in_leave = False
-            for j in range(c_start, c_end + 1):
-                if day_types[j][2] == 'leave':
-                    if not in_leave:
-                        leave_groups += 1
-                        in_leave = True
-                else:
-                    in_leave = False
-            if leave_groups >= 2:
+            chain_statuses = [day_types[j][2] for j in range(c_start, c_end + 1)]
+            if _chain_triggers_sandwich(chain_statuses):
                 for j in range(c_start, c_end + 1):
                     if day_types[j][2] == 'nonworking':
                         sandwich_indices.add(j)
@@ -5485,16 +5512,8 @@ async def get_salary(year: int, month: int, user: dict = Depends(require_role(["
 
         sandwich_indices = set()
         for c_start, c_end in chains:
-            leave_groups = 0
-            in_leave = False
-            for j in range(c_start, c_end + 1):
-                if day_types[j][2] == 'leave':
-                    if not in_leave:
-                        leave_groups += 1
-                        in_leave = True
-                else:
-                    in_leave = False
-            if leave_groups >= 2:
+            chain_statuses = [day_types[j][2] for j in range(c_start, c_end + 1)]
+            if _chain_triggers_sandwich(chain_statuses):
                 for j in range(c_start, c_end + 1):
                     if day_types[j][2] == 'nonworking':
                         sandwich_indices.add(j)
@@ -5912,16 +5931,8 @@ async def download_salary_sheet(
         
         sandwich_count = 0
         for c_start, c_end in chains:
-            leave_groups = 0
-            in_leave = False
-            for j in range(c_start, c_end + 1):
-                if day_types[j] == 'leave':
-                    if not in_leave:
-                        leave_groups += 1
-                        in_leave = True
-                else:
-                    in_leave = False
-            if leave_groups >= 2:
+            chain_statuses = [day_types[j] for j in range(c_start, c_end + 1)]
+            if _chain_triggers_sandwich(chain_statuses):
                 for j in range(c_start, c_end + 1):
                     if day_types[j] == 'nonworking':
                         sandwich_count += 1
@@ -6569,16 +6580,8 @@ async def get_my_attendance(year: int, month: int, user: dict = Depends(require_
     
     sandwich_indices = set()
     for c_start, c_end in chains:
-        leave_groups = 0
-        in_leave = False
-        for j in range(c_start, c_end + 1):
-            if day_types[j][2] == 'leave':
-                if not in_leave:
-                    leave_groups += 1
-                    in_leave = True
-            else:
-                in_leave = False
-        if leave_groups >= 2:
+        chain_statuses = [day_types[j][2] for j in range(c_start, c_end + 1)]
+        if _chain_triggers_sandwich(chain_statuses):
             for j in range(c_start, c_end + 1):
                 if day_types[j][2] == 'nonworking':
                     sandwich_indices.add(j)
@@ -6780,16 +6783,8 @@ async def get_my_salary(year: int, month: int, user: dict = Depends(require_role
 
     sandwich_indices = set()
     for c_start, c_end in chains:
-        leave_groups = 0
-        in_leave = False
-        for j in range(c_start, c_end + 1):
-            if day_types[j][2] == 'leave':
-                if not in_leave:
-                    leave_groups += 1
-                    in_leave = True
-            else:
-                in_leave = False
-        if leave_groups >= 2:
+        chain_statuses = [day_types[j][2] for j in range(c_start, c_end + 1)]
+        if _chain_triggers_sandwich(chain_statuses):
             for j in range(c_start, c_end + 1):
                 if day_types[j][2] == 'nonworking':
                     sandwich_indices.add(j)
@@ -6953,16 +6948,8 @@ async def check_sandwich_warning(data: dict = Body(...), user: dict = Depends(ge
                     idx += 1
             sw_set = set()
             for c_start, c_end in chains:
-                leave_groups = 0
-                in_leave = False
-                for j in range(c_start, c_end + 1):
-                    if dt_list[j][2] == 'leave':
-                        if not in_leave:
-                            leave_groups += 1
-                            in_leave = True
-                    else:
-                        in_leave = False
-                if leave_groups >= 2:
+                chain_statuses = [dt_list[j][2] for j in range(c_start, c_end + 1)]
+                if _chain_triggers_sandwich(chain_statuses):
                     for j in range(c_start, c_end + 1):
                         if dt_list[j][2] == 'nonworking':
                             sw_set.add(dt_list[j][1])

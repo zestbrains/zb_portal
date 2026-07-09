@@ -1,0 +1,23 @@
+{
+  "summary": "Hybrid sandwich rule (Chirag single-Mon = NO sandwich, Milan Mon-Fri = SW on both flanking weekends) fully verified. 18/18 pytest tests pass (9 unit tests on _chain_triggers_sandwich helper + 3 salary/attendance API tests + 6 check-sandwich regression tests). Frontend UI verified for July 2026 Admin Attendance: Milan Tandel row cells 11,12,18,19 render as 'SW', Chirag Patel row cells 11,12 render as 'WO'. Rule 3 case ([N,N,L,N]) is covered by direct unit test; no live holiday-seeding attempted (as instructed).",
+  "backend_issues": {"critical": [], "minor": []},
+  "frontend_issues": {"ui_bugs": [], "integration_issues": [], "design_issues": []},
+  "test_report_links": [
+    "/app/backend/tests/test_sandwich_hybrid.py",
+    "/app/test_reports/pytest/iter12.xml"
+  ],
+  "action_items": [],
+  "critical_code_review_comments": [
+    "server.py is 7867 lines - should be modularised into routers/services for long-term maintainability.",
+    "_chain_triggers_sandwich helper is clean, single source of truth, and used at 6 call sites - good DRY.",
+    "on_event('startup'/'shutdown') is deprecated in FastAPI; migrate to lifespan handlers."
+  ],
+  "updated_files": ["/app/backend/tests/test_sandwich_hybrid.py"],
+  "success_rate": {"backend": "100% (18/18)", "frontend": "100%"},
+  "test_credentials": "Admin renish/Zb@0075588, Employee hr/Prashant@zb@101",
+  "seed_data_creation": "None. Did not attempt to seed a holiday for Rule 3 live test; unit test [N,N,L,N] covers it.",
+  "retest_needed": false,
+  "should_main_agent_self_test": false,
+  "context_for_next_testing_agent": "Sandwich rule hybrid finalised. Helper _chain_triggers_sandwich at server.py:48. Tests live at /app/backend/tests/test_sandwich_hybrid.py. All 6 helper call sites (lines 5145,5516,5935,6584,6787,6952) exercised via salary + attendance + check-sandwich endpoints. Milan emp_id=1 Jul 2026 leaves Mon-Fri produce SW on 11,12,18,19; Chirag emp_id=117 single Mon leave produces no SW.",
+  "rca of the issue": "N/A - no bugs found in this iteration."
+}
