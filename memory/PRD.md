@@ -13,6 +13,16 @@ https://payroll-mgmt-app.preview.emergentagent.com
 
 ## Recent Changes
 
+### Feb 2026 — Sandwich Leave Rule (Aggressive)
+- **Changed sandwich detection threshold from `leave_groups >= 2` to `leave_groups >= 1`** across 6 code sites in `/app/backend/server.py` (lines 5117, 5496, 5923, 6580, 6791, 6964).
+- **New rule**: A weekend/holiday counts as sandwich if it belongs to a consecutive (leave|nonworking) chain containing **at least one full-day leave** (PL, CL, PL/2 & CL/2). Half-day leaves (Half PL, Half CL, PL/2) still break the chain.
+- **Examples**:
+  1. Fri leave + Sat WO + Sun WO + Mon leave → 4 days deducted
+  2. Mon leave + Tue Public Holiday + Wed leave → 3 days deducted
+  3. Mon–Fri leave (5) → weekends before AND after become sandwich → 9 days deducted
+- **Verified**: Milan Tandel (emp 1) July 2026 → sandwich_days=4 (weekends 11,12,18,19) + 5 leaves = 9 days total.
+- Testing agent iteration_9 all 7 backend cases passed.
+
 ### May 2026 — Clients & Invoices Modules
 - **Clients module** (under Admin > Settings > Clients): CRUD for client master data (name, address, country, city, email, phone, PAN, GST). Supports dynamic extra parameters (key/value pairs) that render on the invoice PDF.
 - **Invoices module** (top-level Admin menu): Export & GST tabs. Auto-incrementing invoice number per Indian Financial Year (Apr 1 to Mar 31).
@@ -27,7 +37,7 @@ https://payroll-mgmt-app.preview.emergentagent.com
 - Project Email: Separate SMTP config + async BackgroundTask on project create
 - Projects: POC, Platform fields + Send Mail button
 - Bank module: Added 7 fields (PAN, GST, Address, IFSC, Swift, A/c Holder, Bank Name)
-- Sandwich Rule rewrite: 2+ leave groups separated by non-working days
+- Sandwich Rule (Feb 2026): 1+ leave group in chain → all adjacent non-working days = sandwich (aggressive)
 - OT: Admin-approved weekend entries bypass 4.5h threshold
 - Duplicate email login fix (checks password across all accounts sharing the email)
 

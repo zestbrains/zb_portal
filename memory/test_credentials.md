@@ -7,6 +7,7 @@
 ## Employee - Reeman Saiyed (emp 56)
 - **Username**: hr1 (email hr@zestbrains.com is shared with emp 101, use username instead)
 - **Password**: Reeman@zb@56
+- **Note**: Account currently returns "Account is inactive" during login (as of Feb 2026). Use hr/Prashant@zb@101 for employee flows.
 
 ## Employee - Prashant (emp 101)
 - **Username**: hr (or email: hr@zestbrains.com)
