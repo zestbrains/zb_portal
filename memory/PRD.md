@@ -13,15 +13,15 @@ https://payroll-mgmt-app.preview.emergentagent.com
 
 ## Recent Changes
 
-### Feb 2026 — Sandwich Leave Rule (Aggressive)
-- **Changed sandwich detection threshold from `leave_groups >= 2` to `leave_groups >= 1`** across 6 code sites in `/app/backend/server.py` (lines 5117, 5496, 5923, 6580, 6791, 6964).
-- **New rule**: A weekend/holiday counts as sandwich if it belongs to a consecutive (leave|nonworking) chain containing **at least one full-day leave** (PL, CL, PL/2 & CL/2). Half-day leaves (Half PL, Half CL, PL/2) still break the chain.
+### Feb 2026 — Sandwich Leave Rule (Strict Two-Sided)
+- **Sandwich detection uses `leave_groups >= 2`** across 6 code sites in `/app/backend/server.py` (lines 5118, 5497, 5924, 6581, 6792, 6965).
+- **Rule**: A weekend/holiday counts as sandwich ONLY when there is a full-day leave on BOTH sides of it (leaves flanking on Fri AND Mon, or leaves flanking a holiday). A single leave adjacent to a weekend does NOT trigger sandwich.
+- **Full-day leave types**: PL, CL, PL/2 & CL/2. Half-day leaves (Half PL, Half CL, PL/2) break the chain.
 - **Examples**:
-  1. Fri leave + Sat WO + Sun WO + Mon leave → 4 days deducted
-  2. Mon leave + Tue Public Holiday + Wed leave → 3 days deducted
-  3. Mon–Fri leave (5) → weekends before AND after become sandwich → 9 days deducted
-- **Verified**: Milan Tandel (emp 1) July 2026 → sandwich_days=4 (weekends 11,12,18,19) + 5 leaves = 9 days total.
-- Testing agent iteration_9 all 7 backend cases passed.
+  1. Fri Leave + Sat WO + Sun WO + Mon Leave → 4 days deducted ✅
+  2. Mon Leave + Tue Public Holiday + Wed Leave → 3 days deducted ✅
+  3. Chirag Patel Mon-only leave (13 Jul 2026) → 1 day deducted, weekends 11/12 free ✅
+  4. Milan Mon-Fri leave (13-17 Jul 2026) → 5 days deducted, flanking weekends 11/12 & 18/19 free ✅
 
 ### May 2026 — Clients & Invoices Modules
 - **Clients module** (under Admin > Settings > Clients): CRUD for client master data (name, address, country, city, email, phone, PAN, GST). Supports dynamic extra parameters (key/value pairs) that render on the invoice PDF.
@@ -37,7 +37,7 @@ https://payroll-mgmt-app.preview.emergentagent.com
 - Project Email: Separate SMTP config + async BackgroundTask on project create
 - Projects: POC, Platform fields + Send Mail button
 - Bank module: Added 7 fields (PAN, GST, Address, IFSC, Swift, A/c Holder, Bank Name)
-- Sandwich Rule (Feb 2026): 1+ leave group in chain → all adjacent non-working days = sandwich (aggressive)
+- Sandwich Rule (Feb 2026, reverted to strict): 2+ leave groups in chain → all nonworking days between = sandwich (leaves must be on BOTH sides of weekend/holiday)
 - OT: Admin-approved weekend entries bypass 4.5h threshold
 - Duplicate email login fix (checks password across all accounts sharing the email)
 
