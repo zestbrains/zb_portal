@@ -1,157 +1,18 @@
-<analysis>**original_problem_statement**: 
-The user requested the addition of two major new modules:
-1. **Client Module** (Admin Settings): Full CRUD module for clients including Client Name, Address, Country, City, and the ability to add dynamic/custom extra parameters during editing.
-2. **Invoices Module** (Admin): Manage Export and GST type invoices. 
-   - Invoice creation needs auto-generating numbers (e.g.,  where 001 auto-increments and 2026-27 is the current Indian financial year).
-   - Fields include: Invoice Date, Country of Origin, Billed By (dropdown fetching from Bank module), Billed To (dropdown fetching from Client module).
-   - Items section: Item, Description, Quantity, Amount, Currency (manual text), and SAC column.
-   - Generate PDF invoices using the Zestbrains logo and mapped Bank/Client details (Company Name, Address, PAN, GST).
-   - Specific footer requirement: For any enquiry, reach out via email at hello@zestbrains.com, call on +91 72260 62508. This is an electronically generated document, no signature is required.
-
-**User's preferred language**: English (INSTRUCT next agent to respond in English only)
-
-**what currently exists?**: A comprehensive HR portal (FastAPI + React + MongoDB) tracking complex attendance, dynamic pro-rated salaries, highly sophisticated sandwich leave rules, multi-user project allocations, email configurations, and PDF HR letter generation. The codebase was just successfully synced with the  GitHub main branch.
-
-**Last working item**: 
-    - Last item agent was working: Building the new **Client Module** and **Invoices Module**. The agent analyzed the provided sample invoice PDF, clarified requirements with the user via  (confirmed SAC column, footer text, and manual currency entry), and downloaded the  to . Implementation of the frontend/backend routes has not yet started.
-    - Status: NOT STARTED
-    - Agent Testing Done: N
-    - Which testing method agent to use? both (backend testing agent for CRUD, screenshot tool for UI, and manual PDF validation)
-    - User Testing Done: N
-
-**All Pending/In progress Issue list**:
-  Issue 1: Weekend working hours taking too much time to load (P1)
-  
-  Issues Detail:
-  - Issue 1: 
-     - Attempted fixes: Agent previously checked API response times which were fast (< 0.3s). User has not clarified what specifically is slow.
-     - Next debug checklist: Awaiting user clarification on whether it's frontend rendering or network lag.
-     - Why fix this issue and what will be achieved with the fix?: Better UX for admins checking weekend hours.
-     - Status: BLOCKED
-     - Is recurring issue?: Y
-     - Should Test frontend/backend/both after fix?: Both
-     - Blocked on other issue: User Clarification
-
-**In progress Task List**:
-  Task 1: Client Module (Settings) (P0)
-  Task 2: Invoices Module (Export & GST) & PDF Generation (P0)
-
- Task Detail:
-  - Task 1: 
-     - Where to resume: Create backend schema/routes for Clients and frontend  view in admin settings. Needs support for dynamic extra parameters (key/value pairs) during editing.
-     - What will be achieved with this?: Foundation for the Billed To dropdown in invoices.
-     - Status: NOT STARTED
-     - Should Test frontend/backend/both after fix?: Both
-     - Blocked on something: None
-  - Task 2: 
-     - Where to resume: Create backend models for Invoices. Implement the auto-incrementing invoice number logic (). Create the React UI. Build a new PDF generator class using  matching the requirements and mapping bank/client details.
-     - What will be achieved with this?: Automated invoicing for the company.
-     - Status: NOT STARTED
-     - Should Test frontend/backend/both after fix?: Both
-     - Blocked on something: Task 1 (needs clients for the dropdown)
-
-**Upcoming and Future Tasks**
-    Upcoming Tasks:
-    - P2: Configure dynamic thresholds for Late Coming salary deductions (currently hardcoded).
-    - P2: Bulk bank assignment for employees.
-    Future Tasks:
-    - P2: Refactor  (>7000 lines) by breaking routes and models into separate folders.
-
-**Completed work in this session**
-- Restored and configured new MongoDB staging database backup (DONE)
-- Synced the preview environment with the  GitHub main branch (DONE)
-- Completely rewrote Sandwich Leave Logic: Triggers if 2+ leave groups are separated by non-working days. Treated  as a full day. (DONE)
-- Ex-Employee Salary & Attendance Pro-rating: Added . Auto-calculates  and  deductions. Shows L (Left) in attendance. (DONE)
-- Leave Tracker fixes: Replaced  with  to prevent double entries. Fixed  upsert ID conflict. (DONE)
-- Project Module Enhancements: Added POC, Platform fields. Added background asynchronous email notification on project creation using a new dedicated Project Email SMTP configuration. (DONE)
-- Bank Module Enhancements: Added 7 new fields (PAN, GST, Address, IFSC, Swift Code, A/c Holder, Bank Name). (DONE)
-- Leave Balance: Added Available PL, Current Month PL/CL view in Admin Leave Approval dialog. (DONE)
-- Document Generation: Removed  and hardcoded , added dynamic Salutation dropdown. (DONE)
-- Fixed duplicate email login issue by checking password against all accounts sharing an email. (DONE)
-
-**Earlier issues found/mentioned but not fixed**
-- None.
-
-**Known issue recurrence from previous fork**
-  - Issue recurrence in previous fork: 
-  - Recurrence count: High (Prints constantly in backend logs)
-  - Status: NOT STARTED (Non-fatal warning from . Safe to ignore but pollutes logs).
-
-**Code Architecture**
-
-
-**Key Technical Concepts**
-React.js (Frontend), FastAPI (Backend), MongoDB (Database),  (Backend PDF Generation), BackgroundTasks (FastAPI Async jobs), PyMongo.
-
-**key DB schema**
-  - : {..., pancard, gst, address, ifsc, swift_code, account_holder, bank_name}
-  - : {..., status, last_working_date}
-  - : {..., poc, platform}
-  - : {..., project_smtp_host, project_smtp_email, cc_emails_project}
-
-**changes in tech stack**
-  - Converted async  to a completely synchronous function running in FastAPI  to avoid asyncio event loop conflicts.
-
-**All files of reference** 
-  - : Enormous monolith. You will add  and  here.
-  - : Existing PDF generator. Good reference for FPDF usage.
-  - : Downloaded in the final step, ready for the invoice generator.
-  - : Recently updated with new fields, good reference for forms.
-
-**Areas that need refactoring**: 
-  -  is >7000 lines. The Invoice module is large and will bloat this further. Consider putting the invoice PDF logic in a separate file.
-
-**key api endpoints**
-  - 
-  - 
-  - 
-  - *New endpoints to be created:* , , 
-
-**Critical Info for New Agent** 
-- **Database Context**: A new MongoDB backup was restored. The system currently uses  database. If the DB fails to connect or finds empty records, double-check that  in  is correctly pointing to the staging DB.
-- **GitHub Sync**: The codebase is fully synced with the user's  branch. No immediate git pulls or conflict resolutions are needed.
-- **Invoice PDF Requirements**: The user requires specific mappings. Billed By fetches fields from the  collection (Company Name, Address, PAN, GST). Billed To fetches fields from the upcoming  collection. The invoice number must auto-calculate based on the current Indian Financial Year (April 1 to March 31).
-
-**documents and test reports created in this job** 
-  -  through 
-  - 
-  -  (Updated with corrected hashes/logins)
-
-**Last 10 User Messages and any pending HUMAN messages** 
-1. User asked to fix View button in Projects (Agent proved it worked).
-2. User requested 7 new fields for Banks module (PAN, GST, etc). Agent implemented.
-3. User uploaded Invoice PDF and asked for new Client Module and Invoices Module.
-4. Agent used  to confirm SAC column, footer text, and currency behavior.
-5. User confirmed SAC column, footer text, and manual currency entry.
-6. Agent downloaded the Zestbrains logo image and was preparing to implement the modules when context ended. **(PENDING)**
-
-**Project Health Check:**
-- Broken: None.
-- Mocked: None.
-
-**3rd Party Integrations**
-- SMTP Email integration ( running synchronously in background tasks).
-
-**Testing status**
-  - Testing agent used after significant changes: YES
-  - Troubleshoot agent used after agent stuck in loop: NO
-  - Test files created: None
-  - Known regressions: None
-
-**Credentials to test flow:**
-- Admin:  / 
-- Employee:  /  (Note: multiple accounts share , use the username  for testing).
-
-**What agent forgot to execute**
-- The agent was just beginning the implementation of the massive **Client and Invoices modules**. You must pick this up immediately.
-
-**Debugging checklist for current issue**
-    Issue: Build Client Module & Invoice Module
-
-    Backend files to update: 
-    -  (Add CRUD endpoints for clients and invoices)
-    -  (Suggested: create a new file for Invoice PDF generation using FPDF to avoid bloating server.py further).
-    
-    Frontend files to create:
-    - 
-    -  (Export / GST tabs)</analysis>
+<analysis>pdfplumberserver.pyserver.pywithdrawal_amountdeposit_amountamountserver.py/api/clients/api/invoicesfpdf2lucide-reactX/app/scripts/leave_dedupe.pypdfplumberAttributeError: module 'bcrypt' has no attribute '__about__'passlib
+/app/
+├── backend/
+│   ├── server.py                   # Main FastAPI file (>7700 lines, NEEDS REFACTOR)
+│   ├── invoice_generator.py        # Generates PDFs using fpdf2
+│   ├── bank_statement_parser.py    # Parses PDFs using pdfplumber + FX API
+│   ├── zestbrains_logo.png         
+│   └── ...
+├── frontend/
+│   ├── src/
+│   │   ├── pages/
+│   │   │   ├── admin/        
+│   │   │   │   ├── Clients.js      # New
+│   │   │   │   ├── Invoices.js     # New (Massive file: Tabs for Export, GST, Statements, Send Mail, Helpdesk)
+│   │   │   │   └── ...
+├── scripts/
+│   └── leave_dedupe.py             # Utility to clean up DB duplicates
+gridfsfpdf2pdfplumberclientsinvoicesstatement_foldersstatement_filesfs.filesfs.chunkspdfplumberpdf2imagefpdf2Pillow/app/backend/server.py/app/frontend/src/pages/admin/Invoices.js/app/backend/invoice_generator.py/app/backend/bank_statement_parser.py/app/backend/server.py/app/frontend/src/pages/admin/Invoices.jsPOST /api/invoices/parse-bank-statementPOST /api/invoices/send-mailPOST /api/statement-files/uploadPOST /api/invoices/bulk-delete/app/test_reports/iteration_8.json/app/memory/PRD.mdask_humanserver.pyrenishZb@0075588grepserver.py/app/backend/server.pyClassify for sandwich: full day leave or present</analysis>

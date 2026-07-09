@@ -7,7 +7,7 @@ HR Management Portal for Zestbrains - employees, attendance, leave, payroll, ban
 - Username: renish / Password: Zb@0075588
 
 ## URL
-https://zb-invoicing.preview.emergentagent.com
+https://payroll-mgmt-app.preview.emergentagent.com
 
 ---
 

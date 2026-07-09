@@ -31,7 +31,7 @@
   "seed_data_creation": "Created TEST_Acme_Corp(_Updated), TEST_Invoice_Client clients + 3 invoices via pytest - all cleaned up in test_16. One UI_TEST_Client_<ts> + 1 Exp invoice still in DB from frontend smoke run (low priority; can be cleaned up by main agent if desired).",
   "retest_needed": false,
   "should_main_agent_self_test": false,
-  "context_for_next_testing_agent": "Backend route ordering is correct: /api/invoices/next-number is registered before /api/invoices/{id}. FY logic verified: Feb 2026 -> 2025-26, Apr 2026 -> 2026-27. Auto-increment per (type, FY) verified via count_documents pattern match. PDF generation works for both export & GST invoices. Frontend login page is at '/' (not '/login') - using '/login' results in blank screen since no route matches. Use REACT_APP_BACKEND_URL from /app/frontend/.env which is https://zb-invoicing.preview.emergentagent.com.",
+  "context_for_next_testing_agent": "Backend route ordering is correct: /api/invoices/next-number is registered before /api/invoices/{id}. FY logic verified: Feb 2026 -> 2025-26, Apr 2026 -> 2026-27. Auto-increment per (type, FY) verified via count_documents pattern match. PDF generation works for both export & GST invoices. Frontend login page is at '/' (not '/login') - using '/login' results in blank screen since no route matches. Use REACT_APP_BACKEND_URL from /app/frontend/.env which is https://payroll-mgmt-app.preview.emergentagent.com.",
   "features_tested": {
     "clients_list_create_update_delete": "PASS",
     "clients_duplicate_name_400": "PASS",
