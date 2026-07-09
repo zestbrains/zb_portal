@@ -1,0 +1,22 @@
+{
+  "summary": "Verified STRICT sandwich rule (leave_groups >= 2) revert. All 8 backend tests PASSED. Chirag Patel (117) with single Mon leave on 2026-07-13: sandwich_days=0, cl_count=0, sandwich_amount=0.0, and not present in attendance sandwich_dates. Milan Tandel (1) with Mon-Fri leaves (13-17 July): sandwich_days=0, cl_count=0.5, sandwich_amount=0.0, and not in sandwich_dates. Frontend Attendance July 2026 verified visually: Milan row shows WO on days 11,12,18,19; Chirag row shows WO on days 11,12 (NO 'SW' badges for either employee). check-sandwich regressions: Fri+Mon (2026-08-07,10) correctly triggers has_sandwich=true with dates [08,09]; single Mon (08-10) returns false; Mon-Fri block returns false; Mon+Wed (no holiday between) returns false as expected.",
+  "backend_issues": {"critical": [], "minor": []},
+  "frontend_issues": {"ui_bugs": [], "integration_issues": [], "design_issues": []},
+  "test_report_links": [
+    "/app/backend/tests/test_sandwich_strict.py",
+    "/app/test_reports/pytest/iter11.xml"
+  ],
+  "action_items": [],
+  "critical_code_review_comments": [
+    "server.py is very large (>6900 lines). Consider splitting sandwich logic into a separate module and adding unit tests for edge cases (holidays flanked, half-day leaves, mixed leave types).",
+    "The sandwich_dates response for attendance uses employee_id as string key ('117'); ensure consistency with salary_data where employee_id can be int."
+  ],
+  "updated_files": ["/app/backend/tests/test_sandwich_strict.py"],
+  "success_rate": {"backend": "100%", "frontend": "100%"},
+  "test_credentials": "admin: renish/Zb@0075588; employee: hr/Prashant@zb@101",
+  "seed_data_creation": "None - used existing production data for Milan (1) and Chirag (117).",
+  "retest_needed": false,
+  "should_main_agent_self_test": false,
+  "context_for_next_testing_agent": "Strict sandwich rule (leave_groups >= 2) is confirmed working via 8 pytest tests and visual DOM verification of Attendance grid. For future testing: salary endpoint returns {year,month,num_days,salary_data:[...]} (not a flat list). Attendance sandwich_dates keys are string employee_ids. The doubled-text array from row extraction is due to buttons containing both testid and text nodes—use every-other value or filter accordingly.",
+  "rca of the issue": "Previous iteration_9 aggressive rule (leave_groups >= 1) caused single-side leaves to incorrectly sandwich adjacent weekends. Reverting to leave_groups >= 2 requires flanking leaves on BOTH sides of a weekend/holiday cluster to count as sandwich. Verified across all 6 code locations (5118, 5497, 5924, 6581, 6792, 6965)."
+}
