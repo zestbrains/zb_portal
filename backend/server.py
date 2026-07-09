@@ -5090,8 +5090,9 @@ async def calculate_sandwich_dates(employees, attendance, year, month, num_days,
             else:
                 day_types.append((day, date_str, 'present'))
         
-        # Sandwich: find chains of (leave+nonworking). If chain has 2+ separate
-        # leave groups (leave on both sides of nonworking), ALL nonworking = sandwich
+        # Sandwich: find chains of (leave+nonworking). If chain has 1+ leave
+        # group, ALL nonworking days in that chain = sandwich (adjacent weekends
+        # to any leave block are counted as sandwich).
         chains = []
         i = 0
         while i < len(day_types):
@@ -5114,7 +5115,7 @@ async def calculate_sandwich_dates(employees, attendance, year, month, num_days,
                         in_leave = True
                 else:
                     in_leave = False
-            if leave_groups >= 2:
+            if leave_groups >= 1:
                 for j in range(c_start, c_end + 1):
                     if day_types[j][2] == 'nonworking':
                         sandwich_indices.add(j)
@@ -5470,7 +5471,7 @@ async def get_salary(year: int, month: int, user: dict = Depends(require_role(["
             else:
                 day_types.append((day, date_str, 'present'))
 
-        # Sandwich: chains of (leave+nonworking) with 2+ leave groups → all nonworking = sandwich
+        # Sandwich: chains of (leave+nonworking) with 1+ leave group → all adjacent nonworking = sandwich
         chains = []
         i = 0
         while i < len(day_types):
@@ -5493,7 +5494,7 @@ async def get_salary(year: int, month: int, user: dict = Depends(require_role(["
                         in_leave = True
                 else:
                     in_leave = False
-            if leave_groups >= 2:
+            if leave_groups >= 1:
                 for j in range(c_start, c_end + 1):
                     if day_types[j][2] == 'nonworking':
                         sandwich_indices.add(j)
@@ -5897,7 +5898,7 @@ async def download_salary_sheet(
             else:
                 day_types.append('present')
         
-        # Sandwich: chains of (leave+nonworking) with 2+ leave groups
+        # Sandwich: chains of (leave+nonworking) with 1+ leave group → all adjacent nonworking = sandwich
         chains = []
         i = 0
         while i < len(day_types):
@@ -5920,7 +5921,7 @@ async def download_salary_sheet(
                         in_leave = True
                 else:
                     in_leave = False
-            if leave_groups >= 2:
+            if leave_groups >= 1:
                 for j in range(c_start, c_end + 1):
                     if day_types[j] == 'nonworking':
                         sandwich_count += 1
@@ -6554,7 +6555,7 @@ async def get_my_attendance(year: int, month: int, user: dict = Depends(require_
                 attendance[day] = "P"
                 day_types.append((day, date_str, 'present'))
     
-    # Sandwich: chains of (leave+nonworking) with 2+ leave groups
+    # Sandwich: chains of (leave+nonworking) with 1+ leave group → all adjacent nonworking = sandwich
     chains = []
     i = 0
     while i < len(day_types):
@@ -6577,7 +6578,7 @@ async def get_my_attendance(year: int, month: int, user: dict = Depends(require_
                     in_leave = True
             else:
                 in_leave = False
-        if leave_groups >= 2:
+        if leave_groups >= 1:
             for j in range(c_start, c_end + 1):
                 if day_types[j][2] == 'nonworking':
                     sandwich_indices.add(j)
@@ -6764,8 +6765,8 @@ async def get_my_salary(year: int, month: int, user: dict = Depends(require_role
         else:
             day_types.append((day, date_str, 'present'))
 
-    # Sandwich: nonworking days with full-day leave on BOTH sides
-    # Sandwich: chains of (leave+nonworking) with 2+ leave groups
+    # Sandwich: adjacent-weekend rule - any nonworking day in a chain that
+    # contains 1+ full-day leave = sandwich (weekends adjacent to any leave block counted).
     chains = []
     i = 0
     while i < len(day_types):
@@ -6788,7 +6789,7 @@ async def get_my_salary(year: int, month: int, user: dict = Depends(require_role
                     in_leave = True
             else:
                 in_leave = False
-        if leave_groups >= 2:
+        if leave_groups >= 1:
             for j in range(c_start, c_end + 1):
                 if day_types[j][2] == 'nonworking':
                     sandwich_indices.add(j)
@@ -6939,7 +6940,7 @@ async def check_sandwich_warning(data: dict = Body(...), user: dict = Depends(ge
             return dt_list
 
         def detect_sandwich(dt_list):
-            """Sandwich: chains with 2+ separate leave groups → all nonworking = sandwich"""
+            """Sandwich: chains with 1+ leave group → all adjacent nonworking = sandwich"""
             chains = []
             idx = 0
             while idx < len(dt_list):
@@ -6961,7 +6962,7 @@ async def check_sandwich_warning(data: dict = Body(...), user: dict = Depends(ge
                             in_leave = True
                     else:
                         in_leave = False
-                if leave_groups >= 2:
+                if leave_groups >= 1:
                     for j in range(c_start, c_end + 1):
                         if dt_list[j][2] == 'nonworking':
                             sw_set.add(dt_list[j][1])

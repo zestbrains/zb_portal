@@ -1,0 +1,31 @@
+{
+  "summary": "Verified aggressive sandwich-leave rule (leave_groups>=1) across /api/attendance, /api/salary, and /api/leaves/check-sandwich. All 7 pytest cases passed. Milan Tandel (emp_id=1) July 2026 confirmed: sandwich_days=4 (11,12,18,19), cl_count=0.5, sandwich_amount=8387.10, cl_amount=1048.39, gross=55364.51 (matches formula exactly). check-sandwich regressions for Aug 2026 (Mon-Fri, Fri+Mon, single Mon, half-day) all behave per spec.",
+  "backend_issues": {"critical": [], "minor": []},
+  "frontend_issues": {"ui_bugs": [], "integration_issues": [], "design_issues": []},
+  "test_report_links": [
+    "/app/backend/tests/test_sandwich_aggressive_rule.py",
+    "/app/test_reports/pytest/pytest_sandwich_iter9.xml"
+  ],
+  "action_items": [],
+  "critical_code_review_comments": [
+    "server.py is still >7000 lines with the sandwich rule duplicated in 6 places (lines 5117, 5496, 5923, 6580, 6791, 6964). A single duplication just caused the bug; extracting a single compute_sandwich_dates(...) helper used by all 6 endpoints would eliminate the drift risk.",
+    "GET /api/salary/employee/{employee_id} route not verified to exist; /api/salary/my requires the target employee to log in (Milan). Not blocking since /api/salary and /api/attendance already cover Milan's data.",
+    "Employee login for hr1 (Reeman) returns 'Account is inactive'. Used hr/Prashant@zb@101 which worked. Update /app/memory/test_credentials.md if needed."
+  ],
+  "updated_files": ["/app/backend/tests/test_sandwich_aggressive_rule.py (new)"],
+  "success_rate": {"backend": "100% (7/7 tests passed)", "frontend": "N/A (backend-only per request)"},
+  "test_credentials": {"admin": "renish / Zb@0075588", "employee": "hr / Prashant@zb@101 (hr1 returned Account is inactive)"},
+  "seed_data_creation": "None - only read-only calls and check-sandwich (no persistence).",
+  "retest_needed": false,
+  "should_main_agent_self_test": false,
+  "context_for_next_testing_agent": "Sandwich rule aggressive threshold verified end-to-end. Salary response envelope is {year, month, num_days, salary_data:[...]}. Attendance response contains sandwich_dates as map keyed by employee_id (string) → list of day numbers. check-sandwich response: {has_sandwich, sandwich_dates:[YYYY-MM-DD], sandwich_day_count, warnings:[]}. Milan Tandel emp_id='1' has real production leave data 13-17 Jul 2026 which now produces sandwich_days=4 with flanking weekends 11,12,18,19.",
+  "features_tested": {
+    "attendance_sandwich_dates_milan_jul2026": "PASS (11,12,18,19)",
+    "salary_sandwich_days_and_cl_milan_jul2026": "PASS (sandwich_days=4, cl_count=0.5)",
+    "salary_totals_formula_consistency": "PASS (gross=55364.51 exactly)",
+    "check_sandwich_mon_fri_full_week_aug2026": "PASS (8,9,15,16)",
+    "check_sandwich_fri_mon_only": "PASS (8,9)",
+    "check_sandwich_half_day_no_trigger": "PASS (has_sandwich=false)",
+    "check_sandwich_single_full_day_mon_adjacent_weekend": "PASS (8,9 flagged - aggressive rule confirmed)"
+  }
+}
