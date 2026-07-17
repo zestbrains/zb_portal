@@ -103,6 +103,36 @@ export default function EmployeeDetail({ user, onLogout }) {
   const [selectedLetterType, setSelectedLetterType] = useState(null);
   const [formInputs, setFormInputs] = useState({});
   const [generating, setGenerating] = useState(false);
+  const currentDate = new Date();
+  const [slipMonth, setSlipMonth] = useState(currentDate.getMonth() + 1);
+  const [slipYear, setSlipYear] = useState(currentDate.getFullYear());
+  const [generatingSlip, setGeneratingSlip] = useState(false);
+
+  const handleGenerateSalarySlip = async () => {
+    setGeneratingSlip(true);
+    try {
+      const res = await api.post('/documents/salary-slip', {
+        employee_id: employeeId,
+        year: slipYear,
+        month: slipMonth,
+      });
+      const pdfBytes = Uint8Array.from(atob(res.data.pdf_base64), c => c.charCodeAt(0));
+      const blob = new Blob([pdfBytes], { type: 'application/pdf' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `${employee?.name}_${res.data.letter_title}.pdf`;
+      a.click();
+      URL.revokeObjectURL(url);
+      toast.success('Salary slip generated!');
+      const docsRes = await api.get(`/documents/${employeeId}`);
+      setDocuments(docsRes.data);
+    } catch (error) {
+      toast.error(error.response?.data?.detail || 'Failed to generate salary slip');
+    } finally {
+      setGeneratingSlip(false);
+    }
+  };
 
   useEffect(() => {
     fetchData();
@@ -396,6 +426,51 @@ export default function EmployeeDetail({ user, onLogout }) {
                     <p className="text-xs font-semibold text-slate-700 group-hover:text-indigo-700">{lt.label}</p>
                   </button>
                 ))}
+              </div>
+
+              {/* Salary Slip Generator */}
+              <div className="mb-6 p-4 border-2 border-dashed border-emerald-300 bg-emerald-50/40 rounded-xl" data-testid="salary-slip-section">
+                <h3 className="text-base font-semibold text-slate-800 mb-3 flex items-center gap-2">
+                  <FileText size={16} className="text-emerald-600" /> Salary Slip (Month-wise)
+                </h3>
+                <div className="flex flex-wrap items-end gap-3">
+                  <div className="flex-1 min-w-[140px]">
+                    <Label className="text-xs text-slate-500 mb-1">Month</Label>
+                    <select
+                      value={slipMonth}
+                      onChange={e => setSlipMonth(Number(e.target.value))}
+                      className="w-full h-9 px-2 border border-slate-200 rounded-md text-sm bg-white"
+                      data-testid="salary-slip-month"
+                    >
+                      {['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'].map((m, i) => (
+                        <option key={i+1} value={i+1}>{m}</option>
+                      ))}
+                    </select>
+                  </div>
+                  <div className="flex-1 min-w-[120px]">
+                    <Label className="text-xs text-slate-500 mb-1">Year</Label>
+                    <select
+                      value={slipYear}
+                      onChange={e => setSlipYear(Number(e.target.value))}
+                      className="w-full h-9 px-2 border border-slate-200 rounded-md text-sm bg-white"
+                      data-testid="salary-slip-year"
+                    >
+                      {Array.from({length: 6}, (_, i) => new Date().getFullYear() - 3 + i).map(y => (
+                        <option key={y} value={y}>{y}</option>
+                      ))}
+                    </select>
+                  </div>
+                  <Button
+                    onClick={handleGenerateSalarySlip}
+                    disabled={generatingSlip}
+                    className="h-9 bg-emerald-600 hover:bg-emerald-700 text-white"
+                    data-testid="generate-salary-slip-btn"
+                  >
+                    {generatingSlip ? <Loader2 size={14} className="mr-1.5 animate-spin" /> : <Download size={14} className="mr-1.5" />}
+                    Generate Slip
+                  </Button>
+                </div>
+                <p className="text-xs text-slate-500 mt-2">Uses attendance, leaves and salary data for the selected month.</p>
               </div>
 
               {/* Previously Generated Documents */}

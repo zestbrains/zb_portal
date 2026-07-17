@@ -7071,6 +7071,239 @@ async def delete_document(doc_id: str, user: dict = Depends(require_role(["admin
     return {"status": "deleted"}
 
 
+# ============ SALARY SLIP ============
+from salary_slip_generator import generate_salary_slip_pdf
+
+@api_router.post("/documents/salary-slip")
+async def generate_salary_slip(data: dict = Body(...), user: dict = Depends(require_role(["admin", "hr"]))):
+    """Generate monthly salary slip PDF for an employee using computed salary data."""
+    employee_id = data.get("employee_id")
+    year = data.get("year")
+    month = data.get("month")
+
+    if not employee_id or not year or not month:
+        raise HTTPException(status_code=400, detail="employee_id, year, month required")
+    try:
+        year = int(year); month = int(month)
+    except (ValueError, TypeError):
+        raise HTTPException(status_code=400, detail="year/month must be integers")
+
+    employee = await db.employees.find_one({"employee_id": employee_id}, {"_id": 0})
+    if not employee:
+        raise HTTPException(status_code=404, detail="Employee not found")
+
+    # Reuse existing salary computation for the whole month, then pick this employee
+    salary_response = await get_salary(year=year, month=month, user=user)
+    emp_row = next((r for r in salary_response.get("salary_data", []) if r.get("employee_id") == employee_id), None)
+    if not emp_row:
+        raise HTTPException(status_code=404, detail="Salary data not found for this employee/month (employee may be inactive or not joined yet)")
+
+    num_days = salary_response.get("num_days", 30)
+
+    # Attendance for working-details day counts
+    att_response = await get_attendance_admin(year=year, month=month, user=user) if False else None
+    # Directly compute working details from attendance route via internal helper
+    att = await _build_attendance_for_slip(employee_id, year, month, num_days)
+
+    # Bank info for company header
+    bank = None
+    if employee.get("bank_id"):
+        bank = await db.banks.find_one({"id": employee["bank_id"]}, {"_id": 0})
+
+    # Department names
+    dept_names = []
+    for did in (employee.get("department_ids") or []):
+        d = await db.departments.find_one({"id": did}, {"_id": 0, "name": 1})
+        if d:
+            dept_names.append(d["name"])
+
+    salary_val = float(emp_row.get("salary") or 0)
+    # CTC split (Basic 50%, HRA 20%, SP.ALL 30%)
+    basic = round(salary_val * 0.50, 2)
+    hra = round(salary_val * 0.20, 2)
+    sp_all = round(salary_val - basic - hra, 2)
+
+    # Additional earnings
+    ot_amount = float(emp_row.get("ot_amount") or 0)
+    other_income = float(emp_row.get("other_income") or 0)
+    extra_hours_amount = float(emp_row.get("extra_hours_amount") or 0)
+    incentive = round(ot_amount + other_income + extra_hours_amount, 2)
+
+    # Payable pro-rating: fraction of paid days
+    unpaid_deduction_days = (
+        float(emp_row.get("cl_count") or 0)
+        + float(emp_row.get("sandwich_days") or 0)
+        + float(emp_row.get("not_joined_days") or 0)
+        + float(emp_row.get("left_days") or 0)
+        + float(emp_row.get("late_coming_deduction_days") or 0)
+    )
+    paid_days = max(num_days - unpaid_deduction_days, 0)
+    payable_ratio = (paid_days / num_days) if num_days else 0
+
+    payable_basic = round(basic * payable_ratio, 2)
+    payable_hra = round(hra * payable_ratio, 2)
+    payable_sp_all = round(sp_all * payable_ratio, 2)
+
+    # Compose earnings list
+    earnings = [
+        ("Basic", basic, payable_basic),
+        ("DA", 0, 0),
+        ("HRA", hra, payable_hra),
+        ("SP. ALL.", sp_all, payable_sp_all),
+        ("INCENTIVE", incentive, incentive),
+    ]
+
+    # Deductions
+    pt = float(emp_row.get("pt") or 0)
+    esic = float(emp_row.get("esic") or 0)
+    epf = float(emp_row.get("epf") or 0)
+    cpf = float(emp_row.get("cpf") or 0)
+
+    deductions = [
+        ("P.F", epf),
+        ("ESI", esic),
+        ("P.T.", pt),
+        ("I.T.", 0),
+        ("L.W.F", 0),
+        ("Advance", 0),
+        ("Loan Installment", 0),
+        ("CPF (Company)", cpf) if cpf > 0 else ("Oth. Ded", 0),
+        ("Food", 0),
+        ("E/Mbill", 0),
+    ]
+
+    gross_income = round(payable_basic + payable_hra + payable_sp_all + incentive, 2)
+    total_deduction = round(pt + esic + epf + cpf, 2)
+    # Net matches existing gross_salary formula (already accounts for leave deductions via pro-rated payable)
+    net_amount = round(gross_income - total_deduction, 2)
+
+    # Working details
+    working = [
+        ("Working Days", num_days),
+        ("Weekoff", att["weekoff"]),
+        ("Pay Holiday", att["pay_holiday"]),
+        ("Present Days", att["present_days"]),
+        ("CL", emp_row.get("cl_count") or 0),
+        ("PL", att.get("pl_count", 0)),
+        ("SL", 0),
+        ("M.L.", 0),
+        ("LWP", round(float(emp_row.get("sandwich_days") or 0)
+                       + float(emp_row.get("not_joined_days") or 0)
+                       + float(emp_row.get("left_days") or 0), 2)),
+    ]
+
+    totals = {
+        "working_total": num_days,
+        "gross_income": gross_income,
+        "total_deduction": total_deduction,
+        "net_amount": net_amount,
+    }
+
+    company = {
+        "name": (bank.get("name") if bank else "") or "ZESTBRAINS",
+        "address": (bank.get("address") if bank else "") or "",
+    }
+
+    emp_info = {
+        "emp_id": employee.get("employee_id", ""),
+        "name": (employee.get("name") or "").upper(),
+        "designation": employee.get("designation", "") or "",
+        "department": ", ".join(dept_names) if dept_names else "",
+        "location": employee.get("location", "") or "Ahmedabad",
+        "doj": (employee.get("joining_date") or "")[:10],
+        "bank_name": (bank.get("name") if bank else "") or "",
+        "account_no": employee.get("bank_account_number", "") or "",
+        "pan": employee.get("pan", "") or "",
+        "pf_no": employee.get("pf_no", "") or "N/A",
+        "uan": employee.get("uan", "") or "",
+        "esi_no": employee.get("esi_no", "") or "",
+    }
+
+    month_label = f"{['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'][month-1]}-{year}"
+
+    try:
+        pdf_bytes = generate_salary_slip_pdf(company, emp_info, working, earnings, deductions, totals, month_label)
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Salary slip generation failed: {str(e)}")
+
+    import base64
+    pdf_b64 = base64.b64encode(pdf_bytes).decode('utf-8')
+
+    doc_record = {
+        "id": str(uuid.uuid4()),
+        "employee_id": employee_id,
+        "employee_name": employee.get("name", ""),
+        "letter_type": "salary_slip",
+        "letter_title": f"Salary Slip - {month_label}",
+        "inputs": {"year": year, "month": month},
+        "pdf_data": pdf_b64,
+        "generated_by": user.get("email", user.get("username", "")),
+        "created_at": datetime.now(IST).isoformat()
+    }
+    await db.documents.insert_one(doc_record)
+
+    return {
+        "id": doc_record["id"],
+        "letter_title": doc_record["letter_title"],
+        "pdf_base64": pdf_b64,
+        "created_at": doc_record["created_at"]
+    }
+
+
+async def _build_attendance_for_slip(emp_id: str, year: int, month: int, num_days: int):
+    """Compute weekoff / pay holiday / present / PL counts for the salary slip working-details column."""
+    from calendar import monthrange as _mr  # noqa
+    start_date = f"{year}-{month:02d}-01"
+    end_date = f"{year}-{month:02d}-{num_days:02d}"
+
+    holidays_list = await db.holidays.find({"date": {"$gte": start_date, "$lte": end_date}}, {"_id": 0}).to_list(None)
+    holiday_dates = {h["date"] for h in holidays_list}
+
+    leave_apps = await db.leave_applications.find({"employee_id": emp_id, "status": "approved"}, {"_id": 0}).to_list(None)
+    leave_map = {}
+    for la in leave_apps:
+        for ld in (la.get("leave_dates") or []):
+            d = ld.get("date")
+            lt = ld.get("leave_type", "PL")
+            if d and d.startswith(f"{year}-{month:02d}") and lt != "Rejected":
+                leave_map[d] = lt
+
+    weekoff = 0
+    pay_holiday = 0
+    present_days = 0
+    pl_count = 0.0
+
+    for day in range(1, num_days + 1):
+        date_str = f"{year}-{month:02d}-{day:02d}"
+        dow = datetime(year, month, day).weekday()
+        is_weekend = dow >= 5
+        is_holiday = date_str in holiday_dates
+
+        if date_str in leave_map:
+            lt = leave_map[date_str]
+            if lt in ("PL",):
+                pl_count += 1
+            elif lt in ("PL/2", "Half PL"):
+                pl_count += 0.5
+            elif lt == "PL/2 & CL/2":
+                pl_count += 0.5
+            # leaves count towards absence not "present"
+            continue
+        if is_holiday:
+            pay_holiday += 1
+        elif is_weekend:
+            weekoff += 1
+        else:
+            present_days += 1
+
+    return {
+        "weekoff": weekoff,
+        "pay_holiday": pay_holiday,
+        "present_days": present_days,
+        "pl_count": pl_count,
+    }
+
+
 # ==================== CLIENTS MODULE ====================
 class ClientExtraParam(BaseModel):
     key: str = ""
