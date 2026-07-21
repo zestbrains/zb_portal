@@ -13,6 +13,12 @@ https://payroll-mgmt-app.preview.emergentagent.com
 
 ## Recent Changes
 
+### Feb 2026 — Salary Slip: Mar-2026 Auto Floor + Manual Any-Year + Employee Picker in Manual Page
+- **Auto endpoint** now enforces `(year, month) >= (2026, 3)` — matches system's actual data availability. Error message points admin to Manual Salary Slip for earlier months.
+- **Manual endpoint** relaxed floor to year >= 2000. Still blocks current/future.
+- **EmployeeDetail auto UI**: year dropdown = [2026..currentYear], month dropdown disables months < Mar 2026 AND current+future.
+- **ManualSalarySlip page**: year range 2015 → currentYear; new **Employee dropdown** (Active + Ex/Inactive optgroups) that pre-fills company (from linked bank), employee info fields, CTC split (Basic/HRA/SP.ALL 50/20/30), and PT/EPF/ESIC from employee record.
+
 ### Feb 2026 — Salary Slip: Past-Month Guard + Manual Fallback + Settings Page
 - **Backend guards** in `POST /api/documents/salary-slip`: (a) year >= 2021, (b) (year, month) strictly < today's (year, month), (c) if month < employee.joining_date → return `{needs_manual: true, prefill, message}` instead of erroring.
 - **New endpoint** `POST /api/documents/salary-slip/manual`: fully manual payload → PDF. Same guards. Persists to `db.documents` only if `employee_id` provided.

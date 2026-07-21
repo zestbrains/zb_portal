@@ -578,7 +578,7 @@ export default function EmployeeDetail({ user, onLogout }) {
                       className="w-full h-9 px-2 border border-slate-200 rounded-md text-sm bg-white"
                       data-testid="salary-slip-year"
                     >
-                      {Array.from({length: currentDate.getFullYear() - 2021 + 1}, (_, i) => 2021 + i).map(y => (
+                      {Array.from({length: currentDate.getFullYear() - AUTO_MIN_Y + 1}, (_, i) => AUTO_MIN_Y + i).map(y => (
                         <option key={y} value={y}>{y}</option>
                       ))}
                     </select>
