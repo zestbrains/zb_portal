@@ -104,11 +104,32 @@ export default function EmployeeDetail({ user, onLogout }) {
   const [formInputs, setFormInputs] = useState({});
   const [generating, setGenerating] = useState(false);
   const currentDate = new Date();
-  const [slipMonth, setSlipMonth] = useState(currentDate.getMonth() + 1);
-  const [slipYear, setSlipYear] = useState(currentDate.getFullYear());
+  const [slipMonth, setSlipMonth] = useState(new Date(currentDate.getFullYear(), currentDate.getMonth() - 1, 1).getMonth() + 1);
+  const [slipYear, setSlipYear] = useState(new Date(currentDate.getFullYear(), currentDate.getMonth() - 1, 1).getFullYear());
   const [generatingSlip, setGeneratingSlip] = useState(false);
+  const [manualFormOpen, setManualFormOpen] = useState(false);
+  const [manualPrefill, setManualPrefill] = useState(null);
+  const [manualValues, setManualValues] = useState({
+    working_days: 30, present_days: 22, weekoff: 8, pay_holiday: 0,
+    cl: 0, pl: 0, sl: 0, ml: 0, lwp: 0,
+    basic_a: 0, basic_p: 0, hra_a: 0, hra_p: 0, sp_a: 0, sp_p: 0, incentive_a: 0, incentive_p: 0,
+    pf: 0, esi: 0, pt: 0, it: 0, lwf: 0, advance: 0, loan: 0, oth: 0, food: 0, emmbill: 0,
+  });
+  const [submittingManual, setSubmittingManual] = useState(false);
+
+  const isFutureOrCurrent = (y, m) => {
+    return (y > currentDate.getFullYear()) || (y === currentDate.getFullYear() && m >= currentDate.getMonth() + 1);
+  };
 
   const handleGenerateSalarySlip = async () => {
+    if (slipYear < 2021) {
+      toast.error('Year must be 2021 or later');
+      return;
+    }
+    if (isFutureOrCurrent(slipYear, slipMonth)) {
+      toast.error('Only past months allowed (not current or future)');
+      return;
+    }
     setGeneratingSlip(true);
     try {
       const res = await api.post('/documents/salary-slip', {
@@ -116,6 +137,22 @@ export default function EmployeeDetail({ user, onLogout }) {
         year: slipYear,
         month: slipMonth,
       });
+      if (res.data.needs_manual) {
+        // Prefill defaults from employee record and split CTC
+        const pf = res.data.prefill || {};
+        const salary = Number(pf.salary || 0);
+        setManualPrefill(pf);
+        setManualValues(v => ({
+          ...v,
+          basic_a: Math.round(salary * 0.5), basic_p: Math.round(salary * 0.5),
+          hra_a: Math.round(salary * 0.2), hra_p: Math.round(salary * 0.2),
+          sp_a: Math.round(salary * 0.3), sp_p: Math.round(salary * 0.3),
+          pf: pf.epf || 0, esi: pf.esic || 0, pt: pf.pt || 0,
+        }));
+        setManualFormOpen(true);
+        toast.info(res.data.message || 'No auto data — please fill values manually.');
+        return;
+      }
       const pdfBytes = Uint8Array.from(atob(res.data.pdf_base64), c => c.charCodeAt(0));
       const blob = new Blob([pdfBytes], { type: 'application/pdf' });
       const url = URL.createObjectURL(blob);
@@ -131,6 +168,77 @@ export default function EmployeeDetail({ user, onLogout }) {
       toast.error(error.response?.data?.detail || 'Failed to generate salary slip');
     } finally {
       setGeneratingSlip(false);
+    }
+  };
+
+  const submitManualSalarySlip = async () => {
+    const v = manualValues;
+    const gross = (Number(v.basic_p) || 0) + (Number(v.hra_p) || 0) + (Number(v.sp_p) || 0) + (Number(v.incentive_p) || 0);
+    const totalDed = ['pf','esi','pt','it','lwf','advance','loan','oth','food','emmbill'].reduce((a,k)=>a+(Number(v[k])||0),0);
+    const net = Math.max(gross - totalDed, 0);
+    const p = manualPrefill || {};
+    const payload = {
+      year: slipYear, month: slipMonth,
+      employee_id: employeeId,
+      company: { name: p.company_name || 'ZESTBRAINS', address: p.company_address || '' },
+      employee: {
+        emp_id: p.employee_id || '', name: (p.name || employee?.name || '').toUpperCase(),
+        designation: p.designation || '', department: p.department || '',
+        location: p.location || 'Ahmedabad', doj: p.doj || '',
+        bank_name: p.bank_name || '', account_no: p.account_no || '',
+        pan: p.pan || '', pf_no: p.pf_no || '', uan: p.uan || '', esi_no: p.esi_no || '',
+      },
+      working: [
+        { label: 'Working Days', value: Number(v.working_days) || 0 },
+        { label: 'Weekoff', value: Number(v.weekoff) || 0 },
+        { label: 'Pay Holiday', value: Number(v.pay_holiday) || 0 },
+        { label: 'Present Days', value: Number(v.present_days) || 0 },
+        { label: 'CL', value: Number(v.cl) || 0 },
+        { label: 'PL', value: Number(v.pl) || 0 },
+        { label: 'SL', value: Number(v.sl) || 0 },
+        { label: 'M.L.', value: Number(v.ml) || 0 },
+        { label: 'LWP', value: Number(v.lwp) || 0 },
+      ],
+      earnings: [
+        { label: 'Basic', actual: Number(v.basic_a) || 0, payable: Number(v.basic_p) || 0 },
+        { label: 'DA', actual: 0, payable: 0 },
+        { label: 'HRA', actual: Number(v.hra_a) || 0, payable: Number(v.hra_p) || 0 },
+        { label: 'SP. ALL.', actual: Number(v.sp_a) || 0, payable: Number(v.sp_p) || 0 },
+        { label: 'INCENTIVE', actual: Number(v.incentive_a) || 0, payable: Number(v.incentive_p) || 0 },
+      ],
+      deductions: [
+        { label: 'P.F', value: Number(v.pf) || 0 },
+        { label: 'ESI', value: Number(v.esi) || 0 },
+        { label: 'P.T.', value: Number(v.pt) || 0 },
+        { label: 'I.T.', value: Number(v.it) || 0 },
+        { label: 'L.W.F', value: Number(v.lwf) || 0 },
+        { label: 'Advance', value: Number(v.advance) || 0 },
+        { label: 'Loan Installment', value: Number(v.loan) || 0 },
+        { label: 'Oth. Ded', value: Number(v.oth) || 0 },
+        { label: 'Food', value: Number(v.food) || 0 },
+        { label: 'E/Mbill', value: Number(v.emmbill) || 0 },
+      ],
+      totals: { gross_income: gross, total_deduction: totalDed, net_amount: net },
+    };
+    setSubmittingManual(true);
+    try {
+      const res = await api.post('/documents/salary-slip/manual', payload);
+      const pdfBytes = Uint8Array.from(atob(res.data.pdf_base64), c => c.charCodeAt(0));
+      const blob = new Blob([pdfBytes], { type: 'application/pdf' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `${employee?.name}_${res.data.letter_title}.pdf`;
+      a.click();
+      URL.revokeObjectURL(url);
+      toast.success('Manual salary slip generated!');
+      setManualFormOpen(false);
+      const docsRes = await api.get(`/documents/${employeeId}`);
+      setDocuments(docsRes.data);
+    } catch (e) {
+      toast.error(e.response?.data?.detail || 'Failed to generate');
+    } finally {
+      setSubmittingManual(false);
     }
   };
 
@@ -442,9 +550,10 @@ export default function EmployeeDetail({ user, onLogout }) {
                       className="w-full h-9 px-2 border border-slate-200 rounded-md text-sm bg-white"
                       data-testid="salary-slip-month"
                     >
-                      {['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'].map((m, i) => (
-                        <option key={i+1} value={i+1}>{m}</option>
-                      ))}
+                      {['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'].map((m, i) => {
+                        const disabled = isFutureOrCurrent(slipYear, i+1);
+                        return <option key={i+1} value={i+1} disabled={disabled}>{m}{disabled ? ' (locked)' : ''}</option>;
+                      })}
                     </select>
                   </div>
                   <div className="flex-1 min-w-[120px]">
@@ -455,7 +564,7 @@ export default function EmployeeDetail({ user, onLogout }) {
                       className="w-full h-9 px-2 border border-slate-200 rounded-md text-sm bg-white"
                       data-testid="salary-slip-year"
                     >
-                      {Array.from({length: 6}, (_, i) => new Date().getFullYear() - 3 + i).map(y => (
+                      {Array.from({length: currentDate.getFullYear() - 2021 + 1}, (_, i) => 2021 + i).map(y => (
                         <option key={y} value={y}>{y}</option>
                       ))}
                     </select>
@@ -470,7 +579,7 @@ export default function EmployeeDetail({ user, onLogout }) {
                     Generate Slip
                   </Button>
                 </div>
-                <p className="text-xs text-slate-500 mt-2">Uses attendance, leaves and salary data for the selected month.</p>
+                <p className="text-xs text-slate-500 mt-2">Only past months (2021 to previous month). If auto data is missing, a manual form will open with your defaults pre-filled.</p>
               </div>
 
               {/* Previously Generated Documents */}
@@ -575,6 +684,73 @@ export default function EmployeeDetail({ user, onLogout }) {
               >
                 {generating ? <Loader2 className="animate-spin mr-2" size={16} /> : <Download size={16} className="mr-2" />}
                 {generating ? 'Generating PDF...' : 'Generate & Download PDF'}
+              </Button>
+            </div>
+          </DialogContent>
+        </Dialog>
+        {/* Manual Salary Slip Dialog */}
+        <Dialog open={manualFormOpen} onOpenChange={setManualFormOpen}>
+          <DialogContent className="sm:max-w-3xl max-h-[90vh] overflow-y-auto" data-testid="manual-slip-dialog">
+            <DialogHeader>
+              <DialogTitle className="flex items-center gap-2 text-base">
+                <FileText size={18} className="text-emerald-600" />
+                Manual Salary Slip — {['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'][slipMonth-1]} {slipYear}
+              </DialogTitle>
+            </DialogHeader>
+            <div className="space-y-4 mt-2 text-sm">
+              <div className="p-3 bg-amber-50 border border-amber-200 rounded-lg text-xs text-amber-800">
+                {manualPrefill && (
+                  <>
+                    <strong>{manualPrefill.name}</strong> · {manualPrefill.designation || '—'} · {manualPrefill.department || '—'}
+                  </>
+                )}
+              </div>
+
+              <div>
+                <p className="text-xs font-semibold text-slate-600 mb-2">Working Details</p>
+                <div className="grid grid-cols-3 md:grid-cols-5 gap-2">
+                  {[['working_days','Working'], ['weekoff','Weekoff'], ['pay_holiday','Pay Hol'], ['present_days','Present'], ['cl','CL'], ['pl','PL'], ['sl','SL'], ['ml','M.L.'], ['lwp','LWP']].map(([k, lbl]) => (
+                    <div key={k}>
+                      <Label className="text-[10px] text-slate-500">{lbl}</Label>
+                      <Input type="number" value={manualValues[k]} onChange={e => setManualValues({...manualValues, [k]: e.target.value})} className="h-8 text-xs" data-testid={`ms-${k}`} />
+                    </div>
+                  ))}
+                </div>
+              </div>
+
+              <div>
+                <p className="text-xs font-semibold text-slate-600 mb-2">Earnings (Actual / Payable)</p>
+                <div className="grid grid-cols-2 md:grid-cols-4 gap-2">
+                  {[['basic','Basic'], ['hra','HRA'], ['sp','SP.ALL'], ['incentive','Incentive']].map(([k, lbl]) => (
+                    <div key={k} className="col-span-1 grid grid-cols-2 gap-1">
+                      <div>
+                        <Label className="text-[10px] text-slate-500">{lbl} Actual</Label>
+                        <Input type="number" value={manualValues[k+'_a']} onChange={e => setManualValues({...manualValues, [k+'_a']: e.target.value})} className="h-8 text-xs" data-testid={`ms-${k}-a`} />
+                      </div>
+                      <div>
+                        <Label className="text-[10px] text-slate-500">{lbl} Payable</Label>
+                        <Input type="number" value={manualValues[k+'_p']} onChange={e => setManualValues({...manualValues, [k+'_p']: e.target.value})} className="h-8 text-xs" data-testid={`ms-${k}-p`} />
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+
+              <div>
+                <p className="text-xs font-semibold text-slate-600 mb-2">Deductions</p>
+                <div className="grid grid-cols-3 md:grid-cols-5 gap-2">
+                  {[['pf','P.F'], ['esi','ESI'], ['pt','P.T.'], ['it','I.T.'], ['lwf','L.W.F'], ['advance','Advance'], ['loan','Loan'], ['oth','Oth'], ['food','Food'], ['emmbill','E/Mbill']].map(([k, lbl]) => (
+                    <div key={k}>
+                      <Label className="text-[10px] text-slate-500">{lbl}</Label>
+                      <Input type="number" value={manualValues[k]} onChange={e => setManualValues({...manualValues, [k]: e.target.value})} className="h-8 text-xs" data-testid={`ms-${k}`} />
+                    </div>
+                  ))}
+                </div>
+              </div>
+
+              <Button onClick={submitManualSalarySlip} disabled={submittingManual} className="w-full bg-emerald-600 hover:bg-emerald-700 text-white" data-testid="submit-manual-slip">
+                {submittingManual ? <Loader2 size={14} className="mr-2 animate-spin" /> : <Download size={14} className="mr-2" />}
+                {submittingManual ? 'Generating...' : 'Generate & Download Slip'}
               </Button>
             </div>
           </DialogContent>

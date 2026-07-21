@@ -7092,11 +7092,68 @@ async def generate_salary_slip(data: dict = Body(...), user: dict = Depends(requ
     if not employee:
         raise HTTPException(status_code=404, detail="Employee not found")
 
-    # Reuse existing salary computation for the whole month, then pick this employee
-    salary_response = await get_salary(year=year, month=month, user=user)
-    emp_row = next((r for r in salary_response.get("salary_data", []) if r.get("employee_id") == employee_id), None)
+    # Validate year >= 2021 and (year, month) is in the PAST (not current, not future)
+    from datetime import date
+    today = date.today()
+    if year < 2021:
+        raise HTTPException(status_code=400, detail="Year must be 2021 or later")
+    if (year, month) >= (today.year, today.month):
+        raise HTTPException(status_code=400, detail="Salary slip can only be generated for past months (not current or future)")
+
+    # Check if the requested month is BEFORE the employee's joining date → force manual
+    joining_date_str = (employee.get("joining_date") or "")[:10]
+    needs_manual_reason = None
+    if joining_date_str and len(joining_date_str) >= 7:
+        try:
+            j_year = int(joining_date_str[:4])
+            j_month = int(joining_date_str[5:7])
+            if (year, month) < (j_year, j_month):
+                needs_manual_reason = f"Employee joined on {joining_date_str} — before {year}-{month:02d}. Please fill manually."
+        except (ValueError, TypeError):
+            pass
+
+    # Try to reuse existing salary computation for the whole month
+    if needs_manual_reason:
+        emp_row = None
+    else:
+        salary_response = await get_salary(year=year, month=month, user=user)
+        emp_row = next((r for r in salary_response.get("salary_data", []) if r.get("employee_id") == employee_id), None)
+
     if not emp_row:
-        raise HTTPException(status_code=404, detail="Salary data not found for this employee/month (employee may be inactive or not joined yet)")
+        # No auto-computable data for this employee/month → return prefill for manual form
+        bank = None
+        if employee.get("bank_id"):
+            bank = await db.banks.find_one({"id": employee["bank_id"]}, {"_id": 0})
+        dept_names = []
+        for did in (employee.get("department_ids") or []):
+            d = await db.departments.find_one({"id": did}, {"_id": 0, "name": 1})
+            if d:
+                dept_names.append(d["name"])
+        prefill = {
+            "employee_id": employee.get("employee_id", ""),
+            "name": (employee.get("name") or "").upper(),
+            "designation": employee.get("designation", "") or "",
+            "department": ", ".join(dept_names),
+            "location": employee.get("location", "Ahmedabad") or "Ahmedabad",
+            "doj": (employee.get("joining_date") or "")[:10],
+            "bank_name": (bank.get("name") if bank else "") or "",
+            "account_no": employee.get("bank_account_number", "") or "",
+            "pan": employee.get("pan", "") or "",
+            "pf_no": employee.get("pf_no", "") or "",
+            "uan": employee.get("uan", "") or "",
+            "esi_no": employee.get("esi_no", "") or "",
+            "company_name": (bank.get("name") if bank else "") or "ZESTBRAINS",
+            "company_address": (bank.get("address") if bank else "") or "",
+            "salary": float(employee.get("salary") or 0),
+            "pt": float(employee.get("pt") or 0),
+            "esic": float(employee.get("esic") or 0),
+            "epf": float(employee.get("epf") or 0),
+        }
+        return {
+            "needs_manual": True,
+            "prefill": prefill,
+            "message": needs_manual_reason or "No salary data available for this month. Please fill values manually."
+        }
 
     num_days = salary_response.get("num_days", 30)
 
@@ -7157,7 +7214,7 @@ async def generate_salary_slip(data: dict = Body(...), user: dict = Depends(requ
     epf = float(emp_row.get("epf") or 0)
     cpf = float(emp_row.get("cpf") or 0)
 
-    deductions = [
+    deductions_list = [
         ("P.F", epf),
         ("ESI", esic),
         ("P.T.", pt),
@@ -7165,10 +7222,14 @@ async def generate_salary_slip(data: dict = Body(...), user: dict = Depends(requ
         ("L.W.F", 0),
         ("Advance", 0),
         ("Loan Installment", 0),
-        ("CPF (Company)", cpf) if cpf > 0 else ("Oth. Ded", 0),
-        ("Food", 0),
-        ("E/Mbill", 0),
     ]
+    if cpf > 0:
+        deductions_list.append(("CPF (Company)", cpf))
+    else:
+        deductions_list.append(("Oth. Ded", 0))
+    deductions_list.append(("Food", 0))
+    deductions_list.append(("E/Mbill", 0))
+    deductions = deductions_list
 
     gross_income = round(payable_basic + payable_hra + payable_sp_all + incentive, 2)
     total_deduction = round(pt + esic + epf + cpf, 2)
@@ -7239,6 +7300,90 @@ async def generate_salary_slip(data: dict = Body(...), user: dict = Depends(requ
         "created_at": datetime.now(IST).isoformat()
     }
     await db.documents.insert_one(doc_record)
+
+    return {
+        "id": doc_record["id"],
+        "letter_title": doc_record["letter_title"],
+        "pdf_base64": pdf_b64,
+        "created_at": doc_record["created_at"]
+    }
+
+
+@api_router.post("/documents/salary-slip/manual")
+async def generate_salary_slip_manual(data: dict = Body(...), user: dict = Depends(require_role(["admin", "hr"]))):
+    """Generate salary slip PDF from fully-manual input. Used when no computed salary data exists."""
+    try:
+        year = int(data.get("year"))
+        month = int(data.get("month"))
+    except (ValueError, TypeError):
+        raise HTTPException(status_code=400, detail="year/month must be integers")
+    if year < 2021:
+        raise HTTPException(status_code=400, detail="Year must be 2021 or later")
+    from datetime import date
+    today = date.today()
+    if (year, month) >= (today.year, today.month):
+        raise HTTPException(status_code=400, detail="Salary slip can only be generated for past months (not current or future)")
+
+    company = data.get("company") or {"name": "ZESTBRAINS", "address": ""}
+    employee_info = data.get("employee") or {}
+    working = data.get("working") or []
+    earnings = data.get("earnings") or []
+    deductions = data.get("deductions") or []
+    totals = data.get("totals") or {}
+    employee_id = data.get("employee_id") or ""
+
+    try:
+        totals["gross_income"] = float(totals.get("gross_income", 0))
+        totals["total_deduction"] = float(totals.get("total_deduction", 0))
+        totals["net_amount"] = float(totals.get("net_amount", totals["gross_income"] - totals["total_deduction"]))
+    except (ValueError, TypeError):
+        raise HTTPException(status_code=400, detail="totals must be numeric")
+
+    def _norm_pair(rows):
+        out = []
+        for r in rows:
+            if isinstance(r, dict):
+                out.append((r.get("label", ""), r.get("value", "")))
+            elif isinstance(r, (list, tuple)) and len(r) >= 2:
+                out.append((r[0], r[1]))
+        return out
+
+    def _norm_triple(rows):
+        out = []
+        for r in rows:
+            if isinstance(r, dict):
+                out.append((r.get("label", ""), r.get("actual", ""), r.get("payable", "")))
+            elif isinstance(r, (list, tuple)) and len(r) >= 3:
+                out.append((r[0], r[1], r[2]))
+        return out
+
+    working_rows = _norm_pair(working)
+    earnings_rows = _norm_triple(earnings)
+    deductions_rows = _norm_pair(deductions)
+
+    month_label = f"{['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'][month-1]}-{year}"
+
+    try:
+        pdf_bytes = generate_salary_slip_pdf(company, employee_info, working_rows, earnings_rows, deductions_rows, totals, month_label)
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Salary slip generation failed: {str(e)}")
+
+    import base64
+    pdf_b64 = base64.b64encode(pdf_bytes).decode('utf-8')
+
+    doc_record = {
+        "id": str(uuid.uuid4()),
+        "employee_id": employee_id,
+        "employee_name": employee_info.get("name", ""),
+        "letter_type": "salary_slip",
+        "letter_title": f"Salary Slip - {month_label} (Manual)",
+        "inputs": {"year": year, "month": month, "manual": True},
+        "pdf_data": pdf_b64,
+        "generated_by": user.get("email", user.get("username", "")),
+        "created_at": datetime.now(IST).isoformat()
+    }
+    if employee_id:
+        await db.documents.insert_one(doc_record)
 
     return {
         "id": doc_record["id"],

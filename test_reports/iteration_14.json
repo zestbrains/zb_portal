@@ -1,0 +1,33 @@
+{
+  "summary": "Manual/past-month Salary Slip feature verified end-to-end. Backend: 11/11 pytest PASS — guards (future year 400, current month 2026-07 400, pre-2021 400), auto-gen Milan Jun-2026 returns pdf_base64 + letter_title 'Salary Slip - Jun-2026', needs_manual for Milan 2022-01 (pre-joining 2022-11-17) with prefill.name='MILAN TANDEL', prefill.salary>0 and message includes '2022-11-17', manual endpoint success Jan-2022 (PDF header %PDF, letter_title 'Salary Slip - Jan-2022 (Manual)'), manual guards (future/pre-2021/current-month all 400), regression /api/documents/generate offer_letter still 200/400, and Milan Jul-2026 sandwich_days=4.0 intact. Frontend: login as renish OK, EmployeeDetail /admin/employee/1 Documents tab shows salary-slip-section, year dropdown = [2021..2026] only, month dropdown Jul-Dec 2026 disabled=true, default month=6 year=2026; Generate downloads 'Milan Tandel_Salary Slip - Jun-2026.pdf'. Change to Jan-2022 → manual-slip-dialog opens with header 'Manual Salary Slip — Jan 2022' → submit-manual-slip downloads 'Milan Tandel_Salary Slip - Jan-2022 (Manual).pdf' and dialog closes. /admin/manual-salary-slip loads, manual-generate-btn visible, year/month dropdowns correctly restricted; empty Employee Name → toast 'Employee Name is required'; after filling TEST USER + 10000 basic_p + 200 PT → PDF downloads.",
+  "backend_issues": {"critical": [], "minor": []},
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": [
+      {"screen": "Manual Slip Dialog + Manual Salary Slip page", "issues": ["Console warning: shadcn DialogContent missing aria-describedby/Description — accessibility warning only, non-blocking."]}
+    ]
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_salary_slip_manual.py",
+    "/app/test_reports/pytest/iter14.xml"
+  ],
+  "action_items": [
+    "(Minor) Add DialogDescription or aria-describedby to the Manual Slip Dialog to silence React shadcn a11y warning.",
+    "(Carried-over from iter13) num2words==0.5.14 not in /app/backend/requirements.txt; will break on container rebuild.",
+    "(Carried-over) server.py ~8200 lines — extract documents/salary-slip routes to a router module."
+  ],
+  "critical_code_review_comments": [
+    "Manual endpoint accepts totals in body but frontend also sends earnings/deductions; server recomputes net if omitted but does NOT server-side-validate that gross - deductions == net. Trusting client math is fine for admin-only, but consider adding a tolerance check.",
+    "generate_salary_slip's needs_manual path re-fetches bank/departments; the auto path does the same again a few lines below. Extract a helper.",
+    "Manual page uses previous-month defaults from client-side Date.now() — server date drift will make defaults inconsistent. Consider having server return 'allowed_max' (year,month) and default from that."
+  ],
+  "updated_files": ["/app/backend/tests/test_salary_slip_manual.py"],
+  "success_rate": {"backend": "100% (11/11)", "frontend": "100%"},
+  "test_credentials": "Admin renish/Zb@0075588",
+  "seed_data_creation": "None",
+  "retest_needed": false,
+  "should_main_agent_self_test": false,
+  "context_for_next_testing_agent": "Backend endpoints: POST /api/documents/salary-slip (auto/needs_manual/guards) and POST /api/documents/salary-slip/manual (fully-manual). Guards: year>=2021 AND (year,month) < (today.year, today.month). Server date is Jul 9 2026 → allowed range 2021-01..2026-06. Milan joining_date=2022-11-17 → anything before triggers needs_manual with prefill. Frontend routes: /admin/employee/:id (Documents tab has salary-slip-section, generate-salary-slip-btn, salary-slip-year, salary-slip-month, manual-slip-dialog, submit-manual-slip); new /admin/manual-salary-slip page (manual-generate-btn, manual-slip-year, manual-slip-month, manual-emp-name, manual-company-name, manual-basic-p, manual-pt, manual-net). Native <select>. Downloads triggered via base64→Blob. Tests: /app/backend/tests/test_salary_slip_manual.py (11 tests).",
+  "rca of the issue": "N/A — feature fully working."
+}

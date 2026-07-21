@@ -21,6 +21,7 @@ import AdminAttendance from './pages/admin/Attendance';
 import AdminSalary from './pages/admin/Salary';
 import AdminLateMarks from './pages/admin/LateMarks';
 import AdminEmployeeDetail from './pages/admin/EmployeeDetail';
+import AdminManualSalarySlip from './pages/admin/ManualSalarySlip';
 import HRDashboard from './pages/hr/Dashboard';
 import HREmployees from './pages/hr/Employees';
 import HRWorkingHours from './pages/hr/WorkingHours';
@@ -115,6 +116,7 @@ function App() {
           <Route path="/admin/salary" element={user?.role === 'admin' ? <AdminSalary user={user} onLogout={handleLogout} /> : <Navigate to="/" />} />
           <Route path="/admin/late-marks" element={user?.role === 'admin' ? <AdminLateMarks user={user} onLogout={handleLogout} /> : <Navigate to="/" />} />
           <Route path="/admin/employee/:employeeId" element={user?.role === 'admin' ? <AdminEmployeeDetail user={user} onLogout={handleLogout} /> : <Navigate to="/" />} />
+          <Route path="/admin/manual-salary-slip" element={user?.role === 'admin' ? <AdminManualSalarySlip user={user} onLogout={handleLogout} /> : <Navigate to="/" />} />
           
           {/* HR Routes */}
           <Route path="/hr/dashboard" element={user?.role === 'hr' ? <HRDashboard user={user} onLogout={handleLogout} /> : <Navigate to="/" />} />

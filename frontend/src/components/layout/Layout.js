@@ -51,6 +51,7 @@ export default function Layout({ children, user, onLogout }) {
             { path: '/admin/email-settings', label: 'Email Settings' },
             { path: '/admin/banks', label: 'Banks' },
             { path: '/admin/clients', label: 'Clients' },
+            { path: '/admin/manual-salary-slip', label: 'Manual Salary Slip' },
           ]
         },
       ];
