@@ -13,6 +13,13 @@ https://payroll-mgmt-app.preview.emergentagent.com
 
 ## Recent Changes
 
+### Feb 2026 — Salary Slip: Past-Month Guard + Manual Fallback + Settings Page
+- **Backend guards** in `POST /api/documents/salary-slip`: (a) year >= 2021, (b) (year, month) strictly < today's (year, month), (c) if month < employee.joining_date → return `{needs_manual: true, prefill, message}` instead of erroring.
+- **New endpoint** `POST /api/documents/salary-slip/manual`: fully manual payload → PDF. Same guards. Persists to `db.documents` only if `employee_id` provided.
+- **EmployeeDetail Documents tab**: Year dropdown 2021→currentYear only. Month dropdown disables current + future months (shows "(locked)"). Defaults to previous month. If backend returns `needs_manual`, opens Dialog (`data-testid='manual-slip-dialog'`) pre-filled with CTC split (Basic 50% / HRA 20% / SP.ALL 30%) + PT/EPF/ESIC defaults from employee record.
+- **New page** `/admin/manual-salary-slip` (`ManualSalarySlip.js`) under Settings → "Manual Salary Slip": fully-manual entry for employees not in the system. Company/Employee/Working/Earnings/Deductions grid + live totals preview + Generate button.
+- **Verified** (iteration_14.json): 11/11 backend + 100% frontend PASS. Milan 2022-01 correctly triggers needs_manual (joined 2022-11-17). Milan Jun-2026 auto-generates. Guards reject 2027, current-month 2026-07, and 2020-12.
+
 ### Feb 2026 — Salary Slip Generator (Month-wise, Documents Tab)
 - New `/app/backend/salary_slip_generator.py` using fpdf2 + num2words (en_IN locale) recreates the "Form IV B [Rule 26(2)(b)]" sample layout.
 - New endpoint `POST /api/documents/salary-slip {employee_id, year, month}` in `/app/backend/server.py` — reuses `get_salary()` for computation, persists to `db.documents` with `letter_type='salary_slip'`.
