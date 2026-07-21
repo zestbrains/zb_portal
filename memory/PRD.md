@@ -13,6 +13,16 @@ https://payroll-mgmt-app.preview.emergentagent.com
 
 ## Recent Changes
 
+### Feb 2026 — Salary Slip Generator (Month-wise, Documents Tab)
+- New `/app/backend/salary_slip_generator.py` using fpdf2 + num2words (en_IN locale) recreates the "Form IV B [Rule 26(2)(b)]" sample layout.
+- New endpoint `POST /api/documents/salary-slip {employee_id, year, month}` in `/app/backend/server.py` — reuses `get_salary()` for computation, persists to `db.documents` with `letter_type='salary_slip'`.
+- CTC split: Basic 50%, HRA 20%, SP.ALL 30%. Payable amounts pro-rated by `(num_days - unpaid_days) / num_days`. Incentive = OT + Extra Hours + Other Income.
+- Deductions section: PF, ESI, PT, IT, LWF, Advance, Loan, CPF (Company) or Oth. Ded, Food, E-Mbill.
+- Working details: Working Days, Weekoff, Pay Holiday, Present Days, CL, PL, SL, M.L., LWP (= sandwich + not_joined + left).
+- Frontend: Documents tab in `EmployeeDetail.js` shows a "Salary Slip (Month-wise)" section (data-testid `salary-slip-section`) with month/year selectors and Generate button. Downloads PDF directly and appends to Generated Documents list.
+- Verified: Milan Jul 2026 → Gross 55564.51, PT 200, Net 55364.51, "In Words: Rupees Fifty Five Thousand Three Hundred And Sixty Five Only". Chirag Jul 2026 → LWP 5.00, PL 1.50, CL 1.50 (correctly reflects hybrid sandwich rule).
+- num2words==0.5.14 pinned in `/app/backend/requirements.txt`.
+
 ### Feb 2026 — Sandwich Leave Rule (Unified Hybrid)
 - **Extracted single helper `_chain_triggers_sandwich(statuses)`** in `/app/backend/server.py` (line 48). All 6 sandwich call sites (lines ~5145, 5516, 5935, 6584, 6787, 6952) now call this helper — no more duplicated logic.
 - **Unified rule**:

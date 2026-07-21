@@ -7100,8 +7100,6 @@ async def generate_salary_slip(data: dict = Body(...), user: dict = Depends(requ
 
     num_days = salary_response.get("num_days", 30)
 
-    # Attendance for working-details day counts
-    att_response = await get_attendance_admin(year=year, month=month, user=user) if False else None
     # Directly compute working details from attendance route via internal helper
     att = await _build_attendance_for_slip(employee_id, year, month, num_days)
 
