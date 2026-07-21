@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import Layout from '../../components/layout/Layout';
 import { api } from '../../utils/api';
 import { Button } from '../../components/ui/button';
@@ -29,6 +29,11 @@ export default function ManualSalarySlip({ user, onLogout }) {
   const [year, setYear] = useState(lastMonthDate.getFullYear());
   const [busy, setBusy] = useState(false);
 
+  const [employeesList, setEmployeesList] = useState([]);
+  const [selectedEmpId, setSelectedEmpId] = useState('');
+  const [banks, setBanks] = useState([]);
+  const [departments, setDepartments] = useState([]);
+
   const [company, setCompany] = useState({ name: 'ZESTBRAINS', address: '' });
   const [emp, setEmp] = useState({
     emp_id: '', name: '', designation: '', department: '',
@@ -51,27 +56,72 @@ export default function ManualSalarySlip({ user, onLogout }) {
     pf: 0, esi: 0, pt: 0, it: 0, lwf: 0, advance: 0, loan: 0, oth: 0, food: 0, emmbill: 0,
   });
 
-  const gross = Object.values({
-    b: Number(earnings.basic_p) || 0,
-    d: Number(earnings.da_p) || 0,
-    h: Number(earnings.hra_p) || 0,
-    s: Number(earnings.sp_p) || 0,
-    i: Number(earnings.incentive_p) || 0,
-  }).reduce((a, b) => a + b, 0);
+  useEffect(() => {
+    (async () => {
+      try {
+        const [empRes, bankRes, deptRes] = await Promise.all([
+          api.get('/employees'),
+          api.get('/banks'),
+          api.get('/departments'),
+        ]);
+        setEmployeesList(empRes.data || []);
+        setBanks(bankRes.data || []);
+        setDepartments(deptRes.data || []);
+      } catch (e) {
+        toast.error('Failed to load employees list');
+      }
+    })();
+  }, []);
+
+  const handleEmployeeSelect = (id) => {
+    setSelectedEmpId(id);
+    if (!id) return;
+    const e = employeesList.find(x => x.employee_id === id || x.id === id);
+    if (!e) return;
+    const bank = banks.find(b => b.id === e.bank_id);
+    const deptNames = (e.department_ids || []).map(did => (departments.find(d => d.id === did) || {}).name).filter(Boolean);
+    setEmp({
+      emp_id: e.employee_id || '',
+      name: (e.name || '').toUpperCase(),
+      designation: e.designation || '',
+      department: deptNames.join(', '),
+      location: e.location || 'Ahmedabad',
+      doj: (e.joining_date || '').slice(0, 10),
+      bank_name: bank ? bank.name : '',
+      account_no: e.bank_account_number || '',
+      pan: e.pan || '',
+      pf_no: e.pf_no || '',
+      uan: e.uan || '',
+      esi_no: e.esi_no || '',
+    });
+    if (bank) {
+      setCompany({ name: bank.name || 'ZESTBRAINS', address: bank.address || '' });
+    }
+    // Prefill CTC split
+    const s = Number(e.salary || 0);
+    setEarnings(v => ({
+      ...v,
+      basic_a: Math.round(s * 0.5), basic_p: Math.round(s * 0.5),
+      hra_a: Math.round(s * 0.2), hra_p: Math.round(s * 0.2),
+      sp_a: Math.round(s * 0.3), sp_p: Math.round(s * 0.3),
+    }));
+    setDed(v => ({
+      ...v,
+      pf: Number(e.epf || 0),
+      esi: Number(e.esic || 0),
+      pt: Number(e.pt || 0),
+    }));
+  };
+
+  const gross = ['basic_p','da_p','hra_p','sp_p','incentive_p'].reduce((a, k) => a + (Number(earnings[k]) || 0), 0);
   const totalDed = Object.values(ded).reduce((a, b) => a + (Number(b) || 0), 0);
   const net = Math.max(gross - totalDed, 0);
 
-  const isFutureOrCurrent = (y, m) => {
-    return (y > now.getFullYear()) || (y === now.getFullYear() && m >= now.getMonth() + 1);
-  };
+  const isFutureOrCurrent = (y, m) => (y > now.getFullYear()) || (y === now.getFullYear() && m >= now.getMonth() + 1);
 
   const handleGenerate = async () => {
     if (!emp.name.trim()) {
       toast.error('Employee Name is required');
-      return;
-    }
-    if (year < 2021) {
-      toast.error('Year must be 2021 or later');
       return;
     }
     if (isFutureOrCurrent(year, month)) {
@@ -139,8 +189,12 @@ export default function ManualSalarySlip({ user, onLogout }) {
   const N = NumField;
   const T = TextField;
 
+  // Any year from 2015 up to current
   const availableYears = [];
-  for (let y = 2021; y <= now.getFullYear(); y++) availableYears.push(y);
+  for (let y = 2015; y <= now.getFullYear(); y++) availableYears.push(y);
+
+  const activeEmps = employeesList.filter(e => (e.status || '').toLowerCase() === 'active' || e.is_active);
+  const exEmps = employeesList.filter(e => !((e.status || '').toLowerCase() === 'active' || e.is_active));
 
   return (
     <Layout user={user} onLogout={onLogout}>
@@ -149,9 +203,9 @@ export default function ManualSalarySlip({ user, onLogout }) {
           <FileText className="text-emerald-600" />
           <h1 className="text-xl font-semibold text-slate-800">Manual Salary Slip Generator</h1>
         </div>
-        <p className="text-sm text-slate-500">Use this when the employee doesn&apos;t exist in the system OR when there is no salary data for the selected past month.</p>
+        <p className="text-sm text-slate-500">Use this for months before March 2026 (when auto data isn&apos;t available) or for employees who no longer exist in the system.</p>
 
-        {/* Month/Year */}
+        {/* Month/Year + Employee picker */}
         <div className="bg-white rounded-xl border border-slate-200 p-4 flex flex-wrap items-end gap-3">
           <div>
             <Label className="text-xs text-slate-500 mb-1">Month</Label>
@@ -168,7 +222,22 @@ export default function ManualSalarySlip({ user, onLogout }) {
               {availableYears.map(y => <option key={y} value={y}>{y}</option>)}
             </select>
           </div>
-          <span className="text-xs text-slate-400 pb-2">Only past months (up to previous month) allowed.</span>
+          <div className="flex-1 min-w-[280px]">
+            <Label className="text-xs text-slate-500 mb-1">Pick Employee (Active + Ex — pre-fills all fields)</Label>
+            <select value={selectedEmpId} onChange={e => handleEmployeeSelect(e.target.value)} className="w-full h-9 px-2 border border-slate-200 rounded-md text-sm bg-white" data-testid="manual-emp-picker">
+              <option value="">— Select an employee (optional) —</option>
+              {activeEmps.length > 0 && (
+                <optgroup label="Active">
+                  {activeEmps.map(e => <option key={e.id || e.employee_id} value={e.employee_id}>{e.name} ({e.employee_id})</option>)}
+                </optgroup>
+              )}
+              {exEmps.length > 0 && (
+                <optgroup label="Ex-Employees / Inactive">
+                  {exEmps.map(e => <option key={e.id || e.employee_id} value={e.employee_id}>{e.name} ({e.employee_id})</option>)}
+                </optgroup>
+              )}
+            </select>
+          </div>
         </div>
 
         {/* Company */}

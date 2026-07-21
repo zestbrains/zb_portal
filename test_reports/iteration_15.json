@@ -1,0 +1,30 @@
+{
+  "summary": "Backend + Frontend verified for new Mar-2026+ auto guard and Manual (year>=2000) rules. Backend: 13/13 pytest PASS — auto guard rejects Feb-2026 and Dec-2025 with detail containing 'March 2026' and 'Manual Salary Slip'; current month (Jul-2026) and future year still blocked; auto success Mar-2026 (letter_title 'Salary Slip - Mar-2026'), Jun-2026 (letter_title 'Salary Slip - Jun-2026') both return pdf_base64; sandwich_days=4.0 for Milan Jul-2026 regression intact; manual endpoint success for 2019-05 (letter_title 'Salary Slip - May-2019 (Manual)') and 2015-06 (letter_title 'Salary Slip - Jun-2015 (Manual)'); manual guards year<2000 → 400 with '2000', current month (2026-07) → 400, future year → 400; offer_letter /api/documents/generate still responds 200/400 (no 500). Frontend: login OK, /admin/employee/1 Documents tab month dropdown correctly disables 8 months (Jan, Feb, Jul-Dec) for year=2026 leaving only Mar-Jun enabled, default y=2026 m=6, helper text contains both 'Mar 2026' and 'Manual Salary Slip'; Generate flow works. /admin/manual-salary-slip: year options 2015..2026 (12 entries) ✓, manual-emp-picker has 98 options with optgroups ['Active', 'Ex-Employees / Inactive'] ✓, picking Milan (id=1) prefills manual-emp-name='MILAN TANDEL', manual-company-name='Zestbrains ICICI', manual-basic-p='32500', manual-pt='200' ✓; changing to y=2019 m=5 + clicking manual-generate-btn downloads 'MILAN TANDEL_Salary Slip - May-2019 (Manual).pdf' ✓.",
+  "backend_issues": {"critical": [], "minor": []},
+  "frontend_issues": {
+    "ui_bugs": [
+      {"component": "EmployeeDetail Documents tab year dropdown", "issue": "Year <select data-testid=salary-slip-year> renders options 2021..2026 (6 options). Per revised spec (Auto restricted to Mar-2026+), year list should only contain [2026]. Auto guard on backend blocks any pre-Mar-2026 selection so it is not functionally broken, but the UI still allows selecting 2021-2025 which then only shows disabled months. Requirement says 'year dropdown min = 2026' — code at /app/frontend/src/pages/admin/EmployeeDetail.js:581 uses `Array.from({length: currentDate.getFullYear() - 2021 + 1}, ...)` and should start from AUTO_MIN_Y (2026) instead of 2021.", "selector": "[data-testid='salary-slip-year']", "priority": "MEDIUM"}
+    ],
+    "integration_issues": [],
+    "design_issues": [
+      {"screen": "Manual Slip page + Dialog", "issues": ["Carried over: shadcn DialogContent still missing aria-describedby (non-blocking a11y warning)."]}
+    ]
+  },
+  "test_report_links": ["/app/backend/tests/test_salary_slip_manual.py", "/app/test_reports/pytest/iter15.xml"],
+  "action_items": [
+    "Change year options in /app/frontend/src/pages/admin/EmployeeDetail.js line 581 from `Array.from({length: currentDate.getFullYear() - 2021 + 1}, (_, i) => 2021 + i)` to start at AUTO_MIN_Y (2026) so only 2026 (and forward) show up. Currently the dropdown offers 2021-2025 which are effectively unusable (all months locked)."
+  ],
+  "critical_code_review_comments": [
+    "EmployeeDetail year list not aligned with AUTO_MIN_Y — hardcoded 2021 constant; should derive from AUTO_MIN_Y.",
+    "ManualSalarySlip.js handleEmployeeSelect refetches employees/banks/departments on every pick; consider caching in useEffect on mount instead of per-selection.",
+    "Server /api/documents/salary-slip guard order: (year,month)<(2026,3) check happens before current/future — good. But error messages diverge (auto detail mentions Manual page path, manual detail says '2000 or later'). Keep this consistent for the frontend to lookup via error code."
+  ],
+  "updated_files": ["/app/backend/tests/test_salary_slip_manual.py"],
+  "success_rate": {"backend": "100% (13/13)", "frontend": "95% (year dropdown range mismatch, rest OK)"},
+  "test_credentials": "renish / Zb@0075588",
+  "seed_data_creation": "None",
+  "retest_needed": false,
+  "should_main_agent_self_test": true,
+  "context_for_next_testing_agent": "Auto guard now allows Mar-2026..Jun-2026 (current month is Jul 2026). Manual endpoint allows 2000..Jun-2026. Frontend EmployeeDetail month dropdown for y=2026 has 8 disabled months and default=6. Manual page has employee picker (data-testid=manual-emp-picker) with optgroups Active/Ex-Employees, 97 employees + placeholder = 98 options. All 97 employees currently is_active=false so only Ex-Employees group is populated. Milan (id=1) prefill values: name=MILAN TANDEL, company=Zestbrains ICICI, basic=32500, pt=200. Regression: sandwich_days=4.0 for Milan Jul-2026 intact.",
+  "rca of the issue": "N/A"
+}

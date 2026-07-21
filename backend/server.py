@@ -7092,11 +7092,11 @@ async def generate_salary_slip(data: dict = Body(...), user: dict = Depends(requ
     if not employee:
         raise HTTPException(status_code=404, detail="Employee not found")
 
-    # Validate year >= 2021 and (year, month) is in the PAST (not current, not future)
+    # Auto-gen restricted to Mar-2026 onwards (system has data starting March 2026).
     from datetime import date
     today = date.today()
-    if year < 2021:
-        raise HTTPException(status_code=400, detail="Year must be 2021 or later")
+    if (year, month) < (2026, 3):
+        raise HTTPException(status_code=400, detail="Auto-generation supported only from March 2026 onwards. Use the Manual Salary Slip page (Settings → Manual Salary Slip) for earlier months.")
     if (year, month) >= (today.year, today.month):
         raise HTTPException(status_code=400, detail="Salary slip can only be generated for past months (not current or future)")
 
@@ -7311,14 +7311,14 @@ async def generate_salary_slip(data: dict = Body(...), user: dict = Depends(requ
 
 @api_router.post("/documents/salary-slip/manual")
 async def generate_salary_slip_manual(data: dict = Body(...), user: dict = Depends(require_role(["admin", "hr"]))):
-    """Generate salary slip PDF from fully-manual input. Used when no computed salary data exists."""
+    """Generate salary slip PDF from fully-manual input. Any past month/year allowed (>=2000) except current/future."""
     try:
         year = int(data.get("year"))
         month = int(data.get("month"))
     except (ValueError, TypeError):
         raise HTTPException(status_code=400, detail="year/month must be integers")
-    if year < 2021:
-        raise HTTPException(status_code=400, detail="Year must be 2021 or later")
+    if year < 2000:
+        raise HTTPException(status_code=400, detail="Year must be 2000 or later")
     from datetime import date
     today = date.today()
     if (year, month) >= (today.year, today.month):

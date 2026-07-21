@@ -104,8 +104,18 @@ export default function EmployeeDetail({ user, onLogout }) {
   const [formInputs, setFormInputs] = useState({});
   const [generating, setGenerating] = useState(false);
   const currentDate = new Date();
-  const [slipMonth, setSlipMonth] = useState(new Date(currentDate.getFullYear(), currentDate.getMonth() - 1, 1).getMonth() + 1);
-  const [slipYear, setSlipYear] = useState(new Date(currentDate.getFullYear(), currentDate.getMonth() - 1, 1).getFullYear());
+  // Auto-gen supported only from March 2026 onwards
+  const AUTO_MIN_Y = 2026, AUTO_MIN_M = 3;
+  const defaultAuto = (() => {
+    const prev = new Date(currentDate.getFullYear(), currentDate.getMonth() - 1, 1);
+    // clamp to March 2026
+    if (prev.getFullYear() < AUTO_MIN_Y || (prev.getFullYear() === AUTO_MIN_Y && prev.getMonth() + 1 < AUTO_MIN_M)) {
+      return { y: AUTO_MIN_Y, m: AUTO_MIN_M };
+    }
+    return { y: prev.getFullYear(), m: prev.getMonth() + 1 };
+  })();
+  const [slipMonth, setSlipMonth] = useState(defaultAuto.m);
+  const [slipYear, setSlipYear] = useState(defaultAuto.y);
   const [generatingSlip, setGeneratingSlip] = useState(false);
   const [manualFormOpen, setManualFormOpen] = useState(false);
   const [manualPrefill, setManualPrefill] = useState(null);
@@ -120,6 +130,10 @@ export default function EmployeeDetail({ user, onLogout }) {
   const isFutureOrCurrent = (y, m) => {
     return (y > currentDate.getFullYear()) || (y === currentDate.getFullYear() && m >= currentDate.getMonth() + 1);
   };
+  const isBeforeAutoMin = (y, m) => {
+    return (y < AUTO_MIN_Y) || (y === AUTO_MIN_Y && m < AUTO_MIN_M);
+  };
+  const isMonthLocked = (y, m) => isFutureOrCurrent(y, m) || isBeforeAutoMin(y, m);
 
   const handleGenerateSalarySlip = async () => {
     if (slipYear < 2021) {
@@ -551,7 +565,7 @@ export default function EmployeeDetail({ user, onLogout }) {
                       data-testid="salary-slip-month"
                     >
                       {['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'].map((m, i) => {
-                        const disabled = isFutureOrCurrent(slipYear, i+1);
+                        const disabled = isMonthLocked(slipYear, i+1);
                         return <option key={i+1} value={i+1} disabled={disabled}>{m}{disabled ? ' (locked)' : ''}</option>;
                       })}
                     </select>
@@ -579,7 +593,7 @@ export default function EmployeeDetail({ user, onLogout }) {
                     Generate Slip
                   </Button>
                 </div>
-                <p className="text-xs text-slate-500 mt-2">Only past months (2021 to previous month). If auto data is missing, a manual form will open with your defaults pre-filled.</p>
+                <p className="text-xs text-slate-500 mt-2">Auto-generation supports Mar 2026 → previous month. For earlier months, use <strong>Settings → Manual Salary Slip</strong>.</p>
               </div>
 
               {/* Previously Generated Documents */}
