@@ -13,6 +13,12 @@ https://payroll-mgmt-app.preview.emergentagent.com
 
 ## Recent Changes
 
+### Feb 2026 — Manual Salary Slip: Auto Working Details + CL/LWP Payable Adjustment
+- **Auto-compute Working Days / Weekoff / Pay Holiday** on month or year change: uses `/api/holidays` (admin-managed in Settings). Present Days = daysInMonth − weekoff − holidays − CL − PL − SL − ML − LWP.
+- **Auto-adjust Payable** (Basic/HRA/SP.ALL/DA) when CL or LWP changes: `payable = round(actual × (numDays − CL − LWP) / numDays)`. Incentive unaffected.
+- **Toggle** `data-testid='manual-auto-adjust-toggle'` at top of Manual page lets admin turn off auto-adjust for manual override.
+- Verified in browser (Milan, June 2026, salary=65000): CL=3 → basic_p=29250 (32500×27/30 ✓), then LWP=2 → basic_p=27083 (32500×25/30 ✓). Toggle OFF preserves manual value.
+
 ### Feb 2026 — Salary Slip: Mar-2026 Auto Floor + Manual Any-Year + Employee Picker in Manual Page
 - **Auto endpoint** now enforces `(year, month) >= (2026, 3)` — matches system's actual data availability. Error message points admin to Manual Salary Slip for earlier months.
 - **Manual endpoint** relaxed floor to year >= 2000. Still blocks current/future.
