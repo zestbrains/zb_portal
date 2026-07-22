@@ -33,6 +33,8 @@ export default function ManualSalarySlip({ user, onLogout }) {
   const [selectedEmpId, setSelectedEmpId] = useState('');
   const [banks, setBanks] = useState([]);
   const [departments, setDepartments] = useState([]);
+  const [holidays, setHolidays] = useState([]);
+  const [autoAdjustPayable, setAutoAdjustPayable] = useState(true);
 
   const [company, setCompany] = useState({ name: 'ZESTBRAINS', address: '' });
   const [emp, setEmp] = useState({
@@ -59,19 +61,90 @@ export default function ManualSalarySlip({ user, onLogout }) {
   useEffect(() => {
     (async () => {
       try {
-        const [empRes, bankRes, deptRes] = await Promise.all([
+        const [empRes, bankRes, deptRes, holRes] = await Promise.all([
           api.get('/employees'),
           api.get('/banks'),
           api.get('/departments'),
+          api.get('/holidays'),
         ]);
         setEmployeesList(empRes.data || []);
         setBanks(bankRes.data || []);
         setDepartments(deptRes.data || []);
+        setHolidays(holRes.data || []);
       } catch (e) {
-        toast.error('Failed to load employees list');
+        toast.error('Failed to load initial data');
       }
     })();
   }, []);
+
+  // Auto-compute Working Days / Weekoff / Pay Holiday / Present Days based on selected month, year and CL/LWP
+  useEffect(() => {
+    const mm = String(month).padStart(2, '0');
+    const yPrefix = `${year}-${mm}`;
+    const numDays = new Date(year, month, 0).getDate();
+    let weekoffCount = 0;
+    let holidayCount = 0;
+    const holidaySet = new Set((holidays || []).filter(h => (h.date || '').startsWith(yPrefix)).map(h => h.date));
+    for (let d = 1; d <= numDays; d++) {
+      const dt = new Date(year, month - 1, d);
+      const dow = dt.getDay();
+      const dateStr = `${year}-${mm}-${String(d).padStart(2, '0')}`;
+      const isWeekend = dow === 0 || dow === 6;
+      const isHoliday = holidaySet.has(dateStr);
+      if (isWeekend) weekoffCount++;
+      else if (isHoliday) holidayCount++;
+    }
+    setWorking(w => {
+      const cl = Number(w.cl) || 0;
+      const pl = Number(w.pl) || 0;
+      const sl = Number(w.sl) || 0;
+      const ml = Number(w.ml) || 0;
+      const lwp = Number(w.lwp) || 0;
+      const presentDays = Math.max(numDays - weekoffCount - holidayCount - cl - pl - sl - ml - lwp, 0);
+      return {
+        ...w,
+        working_days: numDays,
+        weekoff: weekoffCount,
+        pay_holiday: holidayCount,
+        present_days: presentDays,
+      };
+    });
+  }, [month, year, holidays]);
+
+  // Recompute Present Days when unpaid/paid leave counts change
+  useEffect(() => {
+    setWorking(w => {
+      const numDays = Number(w.working_days) || 0;
+      const weekoff = Number(w.weekoff) || 0;
+      const holiday = Number(w.pay_holiday) || 0;
+      const cl = Number(w.cl) || 0;
+      const pl = Number(w.pl) || 0;
+      const sl = Number(w.sl) || 0;
+      const ml = Number(w.ml) || 0;
+      const lwp = Number(w.lwp) || 0;
+      const presentDays = Math.max(numDays - weekoff - holiday - cl - pl - sl - ml - lwp, 0);
+      if (presentDays === w.present_days) return w;
+      return { ...w, present_days: presentDays };
+    });
+  }, [working.cl, working.pl, working.sl, working.ml, working.lwp, working.working_days, working.weekoff, working.pay_holiday]);
+
+  // Auto-adjust Payable earnings when Actual or CL/LWP change (only when toggle is on)
+  useEffect(() => {
+    if (!autoAdjustPayable) return;
+    const numDays = Number(working.working_days) || 0;
+    if (numDays <= 0) return;
+    const cl = Number(working.cl) || 0;
+    const lwp = Number(working.lwp) || 0;
+    const paidDays = Math.max(numDays - cl - lwp, 0);
+    const ratio = paidDays / numDays;
+    setEarnings(e => ({
+      ...e,
+      basic_p: Math.round((Number(e.basic_a) || 0) * ratio),
+      da_p: Math.round((Number(e.da_a) || 0) * ratio),
+      hra_p: Math.round((Number(e.hra_a) || 0) * ratio),
+      sp_p: Math.round((Number(e.sp_a) || 0) * ratio),
+    }));
+  }, [earnings.basic_a, earnings.da_a, earnings.hra_a, earnings.sp_a, working.cl, working.lwp, working.working_days, autoAdjustPayable]);
 
   const handleEmployeeSelect = (id) => {
     setSelectedEmpId(id);
@@ -206,7 +279,7 @@ export default function ManualSalarySlip({ user, onLogout }) {
         <p className="text-sm text-slate-500">Use this for months before March 2026 (when auto data isn&apos;t available) or for employees who no longer exist in the system.</p>
 
         {/* Month/Year + Employee picker */}
-        <div className="bg-white rounded-xl border border-slate-200 p-4 flex flex-wrap items-end gap-3">
+        <div className="bg-white rounded-xl border border-slate-200 p-4 flex flex-wrap items-end gap-3" data-testid="manual-header-panel">
           <div>
             <Label className="text-xs text-slate-500 mb-1">Month</Label>
             <select value={month} onChange={e => setMonth(Number(e.target.value))} className="w-32 h-9 px-2 border border-slate-200 rounded-md text-sm bg-white" data-testid="manual-slip-month">
@@ -237,6 +310,19 @@ export default function ManualSalarySlip({ user, onLogout }) {
                 </optgroup>
               )}
             </select>
+          </div>
+          <div className="w-full flex items-center gap-2 pt-1">
+            <input
+              id="auto-adjust-toggle"
+              type="checkbox"
+              checked={autoAdjustPayable}
+              onChange={e => setAutoAdjustPayable(e.target.checked)}
+              className="h-4 w-4 accent-emerald-600"
+              data-testid="manual-auto-adjust-toggle"
+            />
+            <label htmlFor="auto-adjust-toggle" className="text-xs text-slate-600">
+              Auto-adjust Payable earnings when CL / LWP change (unchecked = manual override)
+            </label>
           </div>
         </div>
 
@@ -270,11 +356,14 @@ export default function ManualSalarySlip({ user, onLogout }) {
 
         {/* Working */}
         <section className="bg-white rounded-xl border border-slate-200 p-5">
-          <h3 className="text-sm font-semibold text-slate-700 mb-3">Working Details</h3>
+          <h3 className="text-sm font-semibold text-slate-700 mb-2 flex items-center gap-2">
+            Working Details
+            <span className="text-xs font-normal text-emerald-600">(Working / Weekoff / Holidays auto-filled from Settings)</span>
+          </h3>
           <div className="grid grid-cols-3 md:grid-cols-5 gap-3">
             <N label="Working Days" value={working.working_days} onChange={v => setWorking({ ...working, working_days: v })} testid="manual-wd" />
-            <N label="Weekoff" value={working.weekoff} onChange={v => setWorking({ ...working, weekoff: v })} testid="manual-wo" />
-            <N label="Pay Holiday" value={working.pay_holiday} onChange={v => setWorking({ ...working, pay_holiday: v })} testid="manual-ph" />
+            <N label="Weekoff (auto)" value={working.weekoff} onChange={v => setWorking({ ...working, weekoff: v })} testid="manual-wo" />
+            <N label="Pay Holiday (auto)" value={working.pay_holiday} onChange={v => setWorking({ ...working, pay_holiday: v })} testid="manual-ph" />
             <N label="Present Days" value={working.present_days} onChange={v => setWorking({ ...working, present_days: v })} testid="manual-pd" />
             <N label="CL" value={working.cl} onChange={v => setWorking({ ...working, cl: v })} testid="manual-cl" />
             <N label="PL" value={working.pl} onChange={v => setWorking({ ...working, pl: v })} testid="manual-pl" />

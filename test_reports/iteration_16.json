@@ -1,0 +1,33 @@
+{
+  "summary": "Frontend-only testing of ManualSalarySlip auto-populate (Working Days/Weekoff/Pay Holiday/Present Days from month+year+holidays) and payable auto-adjust (Basic/HRA/SP.ALL/DA scaled by (numDays-CL-LWP)/numDays) with manual override toggle. All computation logic passes end-to-end.",
+  "backend_issues": {"critical": [], "minor": []},
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": []
+  },
+  "test_results": {
+    "Jun 2026 auto-fill": "PASS — WD=30, WO=8, PH=0, PD=22",
+    "Jan 2026 auto-fill": "PASS (actual math) — WD=31, WO=9, PH=2, PD=20. Note: request expected WO=10/PD=19 but Jan 2026 calendar has 5 Sat + 4 Sun = 9 weekoffs, so WO=9 is correct. Implementation is right, the review-request's expected value was miscalculated.",
+    "Milan employee pick": "PASS — basic_a=32500, basic_p=32500, hra_a=13000, sp_a=19500",
+    "CL=3 payable adjust": "PASS — basic_p=29250, PD=19 (30-8-0-3)",
+    "CL=3 + LWP=2 adjust": "PASS — basic_p=27083, hra_p=10833, sp_p=16250, PD=17",
+    "Toggle OFF override": "PASS — CL=5 does NOT change basic_p (stayed at 27083), PD updated to 15",
+    "Toggle ON reapply": "PASS — basic_p immediately recomputed to 24917 (32500*23/30)"
+  },
+  "test_report_links": [],
+  "action_items": [
+    "None — implementation is correct. If Jan 2026 WO=10 was actually desired (e.g., due to a different weekoff policy), clarify; otherwise the Jan expected value in the review request is a manual miscalculation."
+  ],
+  "critical_code_review_comments": [
+    "Third useEffect on line 132-147 does NOT depend on working.weekoff or working.pay_holiday. That is intentional and correct because payable ratio uses (numDays - CL - LWP) / numDays formula, not paid_days from full working day breakdown — but keep in mind future changes (e.g., if PL/SL/ML should also reduce payable) would need adding those deps.",
+    "Holidays fetch is silently absorbed on failure (only toast). Consider surfacing if holidays list is empty due to auth vs actually empty."
+  ],
+  "updated_files": [],
+  "success_rate": {"backend": "N/A", "frontend": "100% (7/7 functional assertions pass)"},
+  "test_credentials": "renish / Zb@0075588 used for admin login",
+  "seed_data_creation": "None",
+  "retest_needed": false,
+  "main_agent_can_self_test": true,
+  "context_for_next_testing_agent": "ManualSalarySlip page at /admin/manual-salary-slip. Test IDs: manual-slip-year, manual-slip-month, manual-emp-picker, manual-wd, manual-wo, manual-ph, manual-pd, manual-cl, manual-lwp, manual-basic-a/p, manual-hra-a/p, manual-sp-a/p, manual-auto-adjust-toggle. Only past months allowed (server date is future). Weekoff count for Jan 2026 is 9 (not 10)."
+}
